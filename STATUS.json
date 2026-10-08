@@ -1,0 +1,46 @@
+{
+  "stage": "skeleton",
+  "code": true,
+  "wave": "W20",
+  "plan": "OpenVibe.MediaHub starts from the OpenVibe service skeleton; the product's own plan is written here when it is",
+  "runtime": "node 22, express 4, PostgreSQL 18 (openvibe-sdk/db, async) + Valkey 9",
+  "port": "4990",
+  "domain": "openvibe.download",
+  "contracts": "openvibe-contracts v0.115.0",
+  "sdk": "openvibe-sdk v0.35.2",
+  "shared": "openvibe-shared v2.14.0",
+  "packages": [
+    "openvibe-contracts v0.115.0",
+    "openvibe-sdk v0.35.2",
+    "openvibe-shared v2.14.0"
+  ],
+  "summary": "OpenVibe.MediaHub — Your files, shared on your terms. A new OpenVibe service on the shared skeleton, not deployed yet: sign-in with OpenVibe.Network (OAuth 2 + PKCE, httpOnly session cookies), server-rendered pages through the OpenVibe Frame, the /api/v1 mount with per-caller limits, crawl artifacts, PostgreSQL migrations applied at boot, the nginx and systemd deploy files and a test suite on PGlite with a mock Network.",
+  "works": [
+    "Sign-in with OpenVibe.Network (PKCE S256, server-side code exchange, httpOnly session cookies)",
+    "Server-rendered pages: the home page and /updates, through the OpenVibe Frame, complete without JavaScript",
+    "Crawl artifacts: robots.txt, sitemap.xml, llms.txt, llms-full.txt and the home page's JSON-LD",
+    "The API mount at /api/v1 with the problem+json error shape, the per-address limits and the per-caller limits",
+    "Capability verification for app, agent and service tokens (audience openvibe.download) and for a person's own token",
+    "Truthful readiness (/api/ready: the database is required) and Prometheus metrics on loopback",
+    "PostgreSQL with migrations/NNNN_*.sql (openvibe-sdk/db); PGlite in development",
+    "Deploy files: deploy/nginx/openvibe.download.conf and deploy/systemd/openvibe-media-hub.service",
+    "Tests on a temp PGlite database with an in-process mock of OpenVibe.Network"
+  ],
+  "notYet": [
+    "The product itself: its tables and migrations, its capabilities, its routes in server/http/api.js and its pages in server/http/pages.js",
+    "Its service and capability manifests in openvibe-contracts (contracts-service is media-hub)",
+    "A deployment: the service is not registered with OpenVibe.Services nor deployed by OpenVibe.Host"
+  ],
+  "capabilitiesRegistered": false,
+  "serviceManifestRegistered": false,
+  "deployed": false,
+  "placeholderInSites": false,
+  "features": [
+    "Network sign-in",
+    "server-rendered pages",
+    "api mount",
+    "limits and readiness",
+    "deploy files"
+  ],
+  "updated": "2026-10-08"
+}

@@ -1,0 +1,13 @@
+-- phase: expand
+-- OpenVibe.MediaHub: the first migration, applied at boot by openvibe-sdk/db (one file per phase, NNNN_name.sql, in order).
+-- Nothing written here is ever a credential, a key or a token.
+--
+-- The skeleton has no tables yet; the product adds its own. Example:
+--
+--   CREATE TABLE things (
+--       id         text COLLATE "C" PRIMARY KEY,          -- thg_<ULID>
+--       owner      text COLLATE "C" NOT NULL,             -- user:usr_… | app:app_…
+--       body       text NOT NULL,
+--       created_at text COLLATE "C" NOT NULL
+--   );
+--   CREATE INDEX things_by_owner ON things (owner, id DESC);

@@ -1,0 +1,30 @@
+[Unit]
+Description=OpenVibe.MediaHub — Your files, shared on your terms.
+# Network (sign-in, JWKS) should be up first, but OpenVibe.MediaHub degrades honestly without it: the pages and the API's
+# public routes serve; sign-in and the guarded routes wait for the signing key (see /api/ready).
+After=network.target postgresql.service pgbouncer.service valkey-server.service
+Wants=openvibe-network.service postgresql.service pgbouncer.service valkey-server.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/openvibe.download
+EnvironmentFile=/etc/openvibe/media-hub.env
+Environment=NODE_ENV=production
+Environment=PORT=4990
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env node /opt/openvibe.download/server/index.js
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+# In-flight requests get the 10 s drain.
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# OpenVibe.MediaHub's own database is PostgreSQL on the host's data role; the code tree stays read-only.
+
+[Install]
+WantedBy=multi-user.target
