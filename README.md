@@ -2,85 +2,117 @@
 
 > Your files, shared on your terms.
 
-**Status:** skeleton. It runs, it is tested, and its pages and API are live — but the product itself is not written yet.
-**Domain:** `openvibe.download` · **Port:** 4990 · **Service id:** `media-hub` · **Env prefix:** `MEDIAHUB`
-**License:** AGPL-3.0 (same as every OpenVibe service).
+**Status:** alpha. One service behind three domains: **openvibe.download** (a private drive, live in v1),
+**openvibe.pics** and **openvibe.video** (honest "coming" pages: no uploads until the safety tooling exists).
+**Port:** 4990 · **Service id:** `media-hub` · **Env prefix:** `MEDIAHUB` · **License:** AGPL-3.0.
 
-## What is already here
+## Why v1 is narrow
 
-| Piece | Where | What it does |
+Public file hosting is the riskiest surface on the network: OpenVibe.Media has no malware or CSAM scanning yet. So
+OpenVibe.Download v1 is a **private drive**, not a public host:
+
+- Every upload and every file page needs a signed-in OpenVibe person. Apps, agents and anonymous callers cannot upload.
+- Files are private to their owner: another person's file id answers 404.
+- A share link (`/s/<slug>`, 24 random url-safe characters) expires in 1 hour to 7 days (7 by default), can be revoked,
+  counts downloads, and **needs the downloader to be signed in**. It may be limited to named OpenVibe accounts. The names
+  are resolved through OpenVibe.Network to account subjects, and only subjects are matched, because a username can
+  change hands. A name no account has is refused.
+- Every share page has a Report form (malware, illegal content, copyright, something else). Three distinct reports,
+  or any report of illegal content, suspend the share at once. Staff (Network role `admin` or `global_mod`) then
+  restore it, or remove the file, which also deletes the object in Media.
+- Downloads are always attachments, with `X-Content-Type-Options: nosniff`,
+  `Content-Security-Policy: default-src 'none'; sandbox` and a real `Content-Type` only for a short safe list (images
+  except SVG, audio, video, PDF, plain text, zip). HTML, SVG and anything executable come back as
+  `application/octet-stream`. The name survives in any script (`filename*=UTF-8''…`) and can never break the header.
+- Per-person limits, all from the environment: 2 GB stored, 512 MB per file, 50 uploads a day, 20 live share links.
+
+## How it works
+
+Bytes live in **OpenVibe.Media** (`MEDIAHUB_MEDIA_URL`, app `media-hub`, app key `MEDIAHUB_MEDIA_APP_KEY`). MediaHub
+calls Media server-side only, naming the person with `X-OV-Subject`, and never hands a browser a Media URL:
+
+- **Small files:** the plain form (`POST /files/upload`, no JavaScript needed) streams the file to a temp file with
+  its sha256, then into Media. The ceiling is `MEDIAHUB_SINGLE_UPLOAD_BYTES`, 256 MB.
+- **Big files:** the page's small script uploads in parts (`/api/v1/uploads/:id/parts/:n`, 8 MB each) that can
+  resume after a dropped connection.
+- **Downloads:** MediaHub checks access, then streams from Media with its own headers. Range requests pass through,
+  so downloads resume.
+
+MediaHub owns the drive: `mh_files`, `mh_folders`, `mh_shares`, `mh_reports`, `mh_usage` (migrations/0002_mediahub.sql).
+
+## Pages
+
+| Path | Who | What |
 |---|---|---|
-| Config | [server/config.js](server/config.js) | Every value from the environment; `load(env)` is pure so tests build a config without touching `process.env` |
-| App | [server/app.js](server/app.js) | helmet (CSP, frame-ancestors none), the Network session middleware, `/auth`, the legal pages, static assets, the `/api/v1` mount, the 404 and the error handler |
-| Sign-in | [server/auth/sso.js](server/auth/sso.js) | OAuth 2 authorization code with PKCE (S256) against OpenVibe.Network; httpOnly `media-hub_at` / `media-hub_rt` cookies; `/auth/me` for the shared navbar |
-| Signing key | [server/auth/keys.js](server/auth/keys.js) | The Network JWKS through `openvibe-sdk/auth`, kept fresh, verified offline |
-| Who is calling | [server/http/principal.js](server/http/principal.js) | `req.principal`: a person, an app/agent/service with a capability, or anonymous |
-| API | [server/http/api.js](server/http/api.js) | `GET /api/v1/ping`; the router, the problem+json errors and the guards are wired for the product's routes |
-| Pages | [server/http/pages.js](server/http/pages.js), [server/render/](server/render/) | The home page and `/updates`, server-rendered through `openvibe-shared/shell`, readable without JavaScript |
-| Discovery | [server/http/discovery.js](server/http/discovery.js) | `robots.txt`, `sitemap.xml`, `llms.txt`, `llms-full.txt` and the home page's JSON-LD |
-| Limits | [server/http/caller-limits.js](server/http/caller-limits.js), [deploy/nginx/](deploy/nginx/) | Per-caller limits at the API and per-address limits at nginx |
-| Health | [server/observability.js](server/observability.js) | `/api/health`, a truthful `/api/ready` (the database is required) and Prometheus metrics on loopback only |
-| Database | [server/db.js](server/db.js), [migrations/](migrations/) | PostgreSQL through `openvibe-sdk/db`; `NNNN_*.sql` applied at boot; PGlite in development |
-| Process | [server/index.js](server/index.js) | Listens on `PORT`, and stops gracefully through `openvibe-sdk/service` |
-| Deploy | [deploy/nginx/openvibe.download.conf](deploy/nginx/openvibe.download.conf), [deploy/systemd/openvibe-media-hub.service](deploy/systemd/openvibe-media-hub.service) | nginx vhost and systemd unit (port 4990, `/opt/openvibe.download`, `/etc/openvibe/media-hub.env`) |
-| Tests | [test/](test/) | `npm test`: every `test/*.test.js` in its own process, on a temp PGlite database with an in-process mock of OpenVibe.Network |
+| `/` | anyone | openvibe.download's home: what it is, the safety rules, sign in. On openvibe.pics and openvibe.video, their "coming" pages |
+| `/files`, `/files/:id` | the owner | your drive: folders, files, the usage bar, upload, share, delete |
+| `/s/:slug` | a signed-in person | a share page: the name, the size, who shared it (their username), the expiry, Download, Report |
+| `/staff` | staff | the reports queue: restore or remove |
+| `/safety` | anyone | what is not allowed, how reports work, abuse@openvibe.network |
+| `/updates` | anyone | what shipped |
 
-## API
+## API (`/api/v1`, a signed-in person only)
 
-| Route | Who | |
-|---|---|---|
-| `GET /api/v1/ping` | anyone | `{ ok: true, service: "media-hub" }` |
+| Route | |
+|---|---|
+| `GET /files`, `POST /files`, `GET /files/:id`, `DELETE /files/:id` | your files |
+| `GET /folders`, `POST /folders` | your folders |
+| `POST /shares`, `DELETE /shares/:slug` | make (`{ file_id \| folder_id, hours, usernames? }`) and revoke share links |
+| `GET /uploads/:id`, `PUT /uploads/:id/parts/:n`, `POST /uploads/:id/complete`, `DELETE /uploads/:id` | resumable uploads |
+| `GET /usage` | your usage against the limits |
 
-Everything else the site serves is a page. The product adds its routes in [server/http/api.js](server/http/api.js), naming
-each route's capability in [server/http/principal.js](server/http/principal.js) (`CAPABILITIES`) and its numbers in
-[server/http/caller-limits.js](server/http/caller-limits.js) (`BUDGETS`).
+Session-cookie writes must be same-origin. Errors are RFC 9457 problem+json with a stable `code`.
 
-**Who can call it:** a person, with their Network token as a Bearer or this site's session; or an app, agent or service
-with a Network token for audience `openvibe.download` that holds the route's capability. A write made with the session cookie
-must come from `openvibe.download` itself. **Errors** are RFC 9457 `application/problem+json` with a stable `code`.
+## Account export and deletion (ADR-033)
+
+`POST /internal/events` (v2 signature under `MEDIAHUB_EVENTS_SECRET`, loopback only; nginx answers `/internal/` with 404)
+takes `network.account.export_requested` and `network.account.deleted`, and the subscriptions are created at boot
+(`MEDIAHUB_EVENTS_URL`).
+
+- **Export:** the person's files, folders, shares, the reports they made and their usage.
+- **Deletion:** all of it is erased, and each object is deleted in Media too.
 
 ## Configuration
 
-See [.env.example](.env.example). Required in production: `OV_OAUTH_CLIENT_SECRET` (the `media-hub` OAuth client on the
-Network), `BASE_URL`, `DATABASE_URL` and `DATABASE_DIRECT_URL`. The database is the only required readiness check; the
-Network signing key, the OAuth client and Valkey are optional (the service says so, per check, on `/api/ready`).
+Every name is in [.env.example](.env.example): the Network client (`OV_OAUTH_CLIENT_ID=media-hub`, secret, internal
+URL), PostgreSQL and Valkey (written by the host's data role), Media (`MEDIAHUB_MEDIA_URL`, `MEDIAHUB_MEDIA_APP`,
+`MEDIAHUB_MEDIA_APP_KEY`), Events, and the limits (`MEDIAHUB_QUOTA_BYTES`, `MEDIAHUB_MAX_FILE_BYTES`,
+`MEDIAHUB_UPLOADS_PER_DAY`, `MEDIAHUB_MAX_SHARES`, `MEDIAHUB_SINGLE_UPLOAD_BYTES`, `MEDIAHUB_PART_BYTES`).
 
 ## Development
 
 ```bash
 npm install
-fnm exec --using=22 npm test        # every test/*.test.js, on temp PGlite databases with a mock Network
-fnm exec --using=22 npm run dev     # http://localhost:4990
+cp .env.example .env
+npm run dev        # http://127.0.0.1:4990, PGlite under data/
+npm test           # every test/*.test.js on PGlite, with stand-ins for Network and Media
 ```
 
-Without `DATABASE_URL` development uses an embedded PGlite database in `data/pglite` (one process only). `npm run
-test:pg` runs the same suite through PostgreSQL and PgBouncer (see [.github/workflows/ci.yml](.github/workflows/ci.yml)).
+## Deploy
 
-## Deploy (for the lead)
-
-- **Deploy:** `sudo ovhost deploy media-hub` on the host (git checkout at `/opt/openvibe.download`, unit
-  `openvibe-media-hub.service` on 127.0.0.1:4990, env `/etc/openvibe/media-hub.env`, database `ov_media-hub` on the data role).
-- **nginx:** [deploy/nginx/openvibe.download.conf](deploy/nginx/openvibe.download.conf), installed with `ov-vhost-install`.
-- **Rollback:** ovhost puts the previous sha back by itself when `/api/ready` does not answer after the restart.
-- Register the service and its capabilities in **OpenVibe.Contracts** (`contracts-service: media-hub` in CI) and with
-  **OpenVibe.Services** before the first deploy.
+`sudo ovhost deploy media-hub` on the host (unit [deploy/systemd/openvibe-media-hub.service](deploy/systemd/openvibe-media-hub.service),
+env `/etc/openvibe/media-hub.env`). The vhost [deploy/nginx/openvibe.download.conf](deploy/nginx/openvibe.download.conf)
+serves all three domains, each with its own certificate, and is installed with `ov-vhost-install`. Uploads stream
+through nginx unbuffered; downloads are not buffered either.
 
 ## Security (threat notes)
 
 Reporting a vulnerability: [SECURITY.md](SECURITY.md).
 
-- Session tokens are httpOnly cookies; a FedCM assertion or an app or service token is never a session.
-- Secrets live only in the env file; only environment variable names appear in code and docs, and no secret is logged.
-- Request bodies are never logged.
-- Nothing in a request may decide a URL this service fetches: a caller's URL goes to OpenVibe.Tools, whose own guard
-  decides what may be fetched.
+- Uploads are account-only, files are private, and share links need a signed-in downloader. Every download is
+  attributable, and none renders as a page.
+- The form reader streams files to disk. A text field over 64 KB, a second file, or a body cut off before its last
+  boundary is refused.
+- Session tokens are httpOnly cookies. Secrets live only in the env file, and no secret or request body is logged.
+- Next, before Pics or Video take uploads: scanning (hash lists, malware), a DMCA agent, and abuse intake shared
+  with OpenVibe.Media's holds.
 
 ---
 
 Part of the [OpenVibe network](https://openvibe.network). Built in the open by [OpenVibers](https://github.com/OpenVibers).
 
 <!-- versions:start -->
-- openvibe-contracts: v0.115.0
-- openvibe-sdk: v0.35.2
-- openvibe-shared: v2.14.0
+- openvibe-contracts: v0.118.0
+- openvibe-sdk: v0.36.0
+- openvibe-shared: v2.15.0
 <!-- versions:end -->
