@@ -3,8 +3,12 @@
 /**
  * Who is calling /api/v1 — req.principal:
  *
- *   { kind: 'user', requester: 'user:usr_…', project: null, viaSession }    a person: their Network token as a Bearer,
- *                                                                           or this site's session cookie
+ *   { kind: 'user', requester: 'user:usr_…', project: null, viaSession, username, role }
+ *                                                                           a person: their Network token as a Bearer,
+ *                                                                           or this site's session cookie. `username`
+ *                                                                           and `role` are the token's own claims, so
+ *                                                                           a share's allow-list and the staff check
+ *                                                                           read the same thing whichever door was used.
  *   { kind: 'app', requester: 'app:app_…' | 'agent:agt_…' | 'service:x', project: 'prj_…' | null, claims }
  *                                                                           a Network app, agent or service token for
  *                                                                           audience openvibe.download; each route names
@@ -30,6 +34,12 @@ function decodePayload(token) {
     if (parts.length !== 3) return null;
     try { return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')); } catch { return null; }
 }
+
+/** The person's Network username claim, as a plain string — what a share's allow-list is matched against. */
+function usernameClaim(claims) {
+    return claims && typeof claims.username === 'string' && claims.username ? claims.username.slice(0, 64) : null;
+}
+const roleClaim = (claims) => (claims && typeof claims.role === 'string' && claims.role ? claims.role.slice(0, 32) : 'user');
 
 function requesterOfSub(sub) {
     if (sub.startsWith('svc:')) return `service:${sub.slice(4)}`;
@@ -63,11 +73,21 @@ function createPrincipal({ config, keys }) {
             if (!v.ok) return { error: [401, v.expired ? 'token.expired' : 'token.invalid', v.reason] };
             if (v.claims.typ === 'fedcm' || v.claims.actor_type !== undefined) return { error: [401, 'token.invalid', 'not a person\'s token'] };
             if (!ids.isSubjectId('user', v.claims.subject_id)) return { error: [403, 'identity.no_subject', 'this account has no canonical subject yet; sign in again'] };
-            return { principal: { kind: 'user', requester: `user:${v.claims.subject_id}`, project: null, viaSession: false } };
+            return {
+                principal: {
+                    kind: 'user', requester: `user:${v.claims.subject_id}`, project: null, viaSession: false,
+                    username: usernameClaim(v.claims), role: roleClaim(v.claims),
+                },
+            };
         }
         const viewer = req.viewer;
         if (viewer && viewer.kind === 'user' && ids.isSubjectId('user', viewer.subject)) {
-            return { principal: { kind: 'user', requester: `user:${viewer.subject}`, project: null, viaSession: true } };
+            return {
+                principal: {
+                    kind: 'user', requester: `user:${viewer.subject}`, project: null, viaSession: true,
+                    username: usernameClaim(viewer), role: roleClaim(viewer),
+                },
+            };
         }
         return { principal: { kind: 'anonymous' } };
     }
@@ -98,4 +118,4 @@ function createPrincipal({ config, keys }) {
     return { middleware, resolve, requireCapability: require_ };
 }
 
-module.exports = { createPrincipal, CAPABILITIES, decodePayload, sameOrigin };
+module.exports = { createPrincipal, CAPABILITIES, decodePayload, sameOrigin, usernameClaim, roleClaim };

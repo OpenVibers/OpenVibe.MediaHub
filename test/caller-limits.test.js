@@ -5,7 +5,7 @@
  * window reopens on the clock. A person counts as themselves, anyone else by address. Reads take
  * MEDIAHUB_LIMITS_MINUTE/MEDIAHUB_LIMITS_HOUR; the product's expensive routes get their own numbers in BUDGETS.
  * Health, ready, release.json and metrics are never limited; refusals are logged (no token) and counted in
- * media-hub_rate_limited_total.
+ * media_hub_rate_limited_total.
  */
 const assert = require('assert');
 const { boot, check, done } = require('./helpers/boot');
@@ -20,8 +20,14 @@ const READ = 'media-hub.api.read';
     const rosa = t.network.addUser('rosa');
     const sam = t.network.addUser('sam');
 
-    await check('BUDGETS starts empty: the product declares its own expensive routes', () => {
-        assert.deepStrictEqual(BUDGETS, {});
+    await check('BUDGETS names the product\'s own expensive routes, and nothing else', () => {
+        assert.deepStrictEqual(Object.keys(BUDGETS).sort(), [
+            'media-hub.folder.create', 'media-hub.share.create',
+            'media-hub.upload.complete', 'media-hub.upload.part', 'media-hub.upload.start',
+        ]);
+        for (const [name, own] of Object.entries(BUDGETS)) {
+            assert.ok(own.minute > 0 && own.hour >= own.minute, `${name}: minute and hour`);
+        }
     });
 
     await check('a read: 3 a minute per address, then 429 rate_limited with Retry-After; another address passes', async () => {
@@ -62,10 +68,10 @@ const READ = 'media-hub.api.read';
         }
     });
 
-    await check('refusals are counted in media-hub_rate_limited_total and logged without a token', async () => {
+    await check('refusals are counted in media_hub_rate_limited_total and logged without a token', async () => {
         const m = (await t.get('/metrics')).text;
-        const counted = m.split('\n').filter((l) => l.includes('media-hub_rate_limited_total')).join('\n');
-        assert.ok(/media-hub_rate_limited_total\{limit="media-hub\.api\.read",window="minute"\} 2/.test(m), counted);
+        const counted = m.split('\n').filter((l) => l.includes('media_hub_rate_limited_total')).join('\n');
+        assert.ok(/media_hub_rate_limited_total\{limit="media-hub\.api\.read",window="minute"\} 2/.test(m), counted);
         const logs = t.logs();
         assert.ok(logs.includes(`[Limits] ${READ}: user:${rosa.subject} refused`), 'one log line per refusal');
         assert.ok(logs.includes(`[Limits] ${READ}: ip:203.0.113.7 refused`), 'the address refusal is logged');

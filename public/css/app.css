@@ -42,3 +42,20 @@ form.inline { display: inline; }
 .page .sc-ic .ov-icon { --ovi-size: 28px !important; }
 button.sc-btn { background: transparent; }
 button.sc-btn.sc-primary { border: 0; }
+
+/* The drive: the usage bar, one folder or file per row, and the upload form. */
+.card { background: var(--bg-card, #131c2e); border: 1px solid var(--border, #1f2d47); border-radius: 10px; padding: 14px 16px; margin: 14px 0; }
+.usage { margin: 10px 0 16px; }
+.usage progress { width: 100%; max-width: 420px; height: 12px; display: block; }
+.file-list, .report-list { list-style: none; margin: 0; padding: 0; }
+.file-list .file { display: flex; align-items: center; gap: 12px; padding: 9px 2px; border-bottom: 1px solid var(--border, #1f2d47); }
+.file-list .file:last-child { border-bottom: 0; }
+.file-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.file-name { font-weight: 600; overflow-wrap: anywhere; }
+.file-meta { margin-top: 2px; }
+.upload progress { max-width: 420px; }
+.staff-item h2 { margin-top: 0; }
+.report-list li { padding: 3px 0; }
+.field { margin: 8px 0; display: flex; flex-direction: column; gap: 4px; max-width: 520px; }
+.field input[type=text], .field input[type=search], .field select, .field textarea, form.inline input[type=text] { font: inherit; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border-light, #2c3d5c); background: var(--bg-secondary, #0f1729); color: inherit; }
+.field-row { display: flex; flex-wrap: wrap; gap: 12px; }

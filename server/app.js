@@ -32,6 +32,13 @@ const { createServiceReadiness } = require('./observability');
 const { createCallerLimits } = require('./http/caller-limits');
 const { assetVersion, send } = require('./render/layout');
 const { html } = require('./render/html');
+const brand = require('./brand');
+const store = require('./drive/store');
+const { createMediaClient } = require('./media/client');
+const { createIdentity } = require('./network/identity');
+const { createService } = require('./drive/service');
+const { createUploads } = require('./drive/upload');
+const { createAccount, createSender } = require('./account');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const VERSION = require('../package.json').version;
@@ -49,7 +56,13 @@ async function createApp(opts = {}) {
     const keys = createKeyStore({ config, fetchImpl, log });
     const sso = createSso({ config, keys, fetchImpl, now: s.now, log });
     const principal = createPrincipal({ config, keys });
-    const ctx = { config, s, keys, sso, principal, log };
+    // The product: bytes in OpenVibe.Media, the drive's own rules, and the two upload flows.
+    const media = createMediaClient({ config, fetchImpl, log });
+    const identity = createIdentity({ config, fetchImpl, log });
+    const drive = createService({ s, media, identity, config, log });
+    const uploads = createUploads({ s, media, config, service: drive, log });
+    const account = createAccount({ db: s.db, config, media, log });
+    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, log };
 
     const app = express();
     app.disable('x-powered-by');
@@ -88,11 +101,19 @@ async function createApp(opts = {}) {
     }));
     app.use(cookieParser());
 
+    // ── Which brand this request is for (the Host header decides; server/brand.js) ──
+    app.use(brand.middleware());
+
     // ── Machine endpoints ───────────────────────────────────
     app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'openvibe-media-hub', version: VERSION }));
     release.mount(app, { registry: metrics.registry });
     const readiness = createServiceReadiness({ s, config, release: release.release, valkey });
     app.get('/api/ready', readiness.handler);
+
+    // ── Account export and deletion (ADR-033) ───────────────
+    // Mounted before every body parser: the Events signature covers the raw bytes. It refuses anything that came
+    // through a proxy, so only loopback can reach it even though nginx proxies this path.
+    app.use('/internal/events', account.consumer({ send: createSender({ config, fetchImpl }) }));
 
     // ── Who is asking (verified offline; refreshed when expired) ──
     app.use(sso.middleware());

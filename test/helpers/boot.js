@@ -14,6 +14,7 @@ process.env.MEDIAHUB_API_RATE_LIMIT_PER_MIN = process.env.MEDIAHUB_API_RATE_LIMI
  */
 const http = require('http');
 const { startNetwork } = require('./mocks');
+const { startMedia, KEY } = require('./media');
 
 const captured = [];
 for (const m of ['log', 'info', 'warn', 'error']) {
@@ -23,10 +24,13 @@ for (const m of ['log', 'info', 'warn', 'error']) {
 
 async function boot(opts = {}) {
     const network = await startNetwork(opts.network || {});
+    // The stand-in for OpenVibe.Media (test/helpers/media.js): the bytes' real home, in this process.
+    const media = opts.media === false ? null : await startMedia(opts.media || {});
     const env = {
         NODE_ENV: 'test', PORT: '0', BASE_URL: 'https://openvibe.download', TRUST_PROXY: '1',
         OV_NETWORK_URL: network.url, OV_NETWORK_INTERNAL_URL: network.url,
         OV_OAUTH_CLIENT_ID: 'media-hub', OV_OAUTH_CLIENT_SECRET: 'media-hub-secret', COOKIE_SECURE: 'false',
+        ...(media ? { MEDIAHUB_MEDIA_URL: media.url, MEDIAHUB_MEDIA_APP_KEY: KEY } : {}),
         ...(opts.env || {}),
     };
     for (const [k, v] of Object.entries(opts.env || {})) if (v === null) delete env[k];
@@ -52,8 +56,10 @@ async function boot(opts = {}) {
         if (o.bearer) headers.authorization = `Bearer ${o.bearer}`;
         let body = o.body;
         if (o.json !== undefined) { body = JSON.stringify(o.json); headers['content-type'] = 'application/json'; }
-        if (o.form) { body = new URLSearchParams({ ...o.form }).toString(); headers['content-type'] = 'application/x-www-form-urlencoded'; }
-        const res = await fetch(base + p, { method: o.method || (body ? 'POST' : 'GET'), headers, body, redirect: 'manual' });
+        // An empty form is still a POST with a body (urlencoded ""), not a GET: the route is a write either way.
+        if (o.form !== undefined) { body = new URLSearchParams({ ...o.form }).toString(); headers['content-type'] = 'application/x-www-form-urlencoded'; }
+        const sendsBody = body !== undefined && body !== null;
+        const res = await fetch(base + p, { method: o.method || (sendsBody ? 'POST' : 'GET'), headers, body: sendsBody ? body : undefined, redirect: 'manual' });
         const buf = Buffer.from(await res.arrayBuffer());
         const text = buf.toString('utf8');
         return { status: res.status, headers: res.headers, text, buffer: buf, json() { return JSON.parse(text); } };
@@ -66,13 +72,14 @@ async function boot(opts = {}) {
     }
 
     const t = {
-        base, network, config, ctx: built.ctx, get, signIn, dbDump,
+        base, network, media, config, ctx: built.ctx, get, signIn, dbDump,
         logs: () => captured.join('\n'),
         async close() {
             await new Promise((r) => server.close(r));
             built.ctx.keys.client.stop();
             await testdb.close();
             await network.close();
+            if (media) await media.close();
         },
     };
     return t;

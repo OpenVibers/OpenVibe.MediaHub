@@ -15,10 +15,12 @@ const { asyncRouter } = require('./router');
 
 const SITE_NAME = 'OpenVibe.MediaHub';
 const DESCRIPTION = 'OpenVibe.MediaHub — Your files, shared on your terms.';
-const DISALLOW = ['/auth/', '/api/'];
+// /s/ (with the slash) rather than /s, or the rule would also swallow /safety, which is a public page.
+const DISALLOW = ['/auth/', '/api/', '/files', '/s/', '/staff'];
 
 const PAGE_TEXT = {
-    '/': ['OpenVibe.MediaHub home', 'OpenVibe.MediaHub: Your files, shared on your terms.'],
+    '/': ['OpenVibe.MediaHub home', 'OpenVibe.MediaHub: Your files, shared on your terms. A private drive for a signed-in OpenVibe account, with share links that expire, can be revoked and need the downloader to be signed in too.'],
+    '/safety': ['Safety rules', 'What OpenVibe.Download allows and does not, who can upload and download, how reports work, and who to write to about abuse or copyright.'],
     '/updates': ['What shipped on OpenVibe.MediaHub', 'This site\'s update log, from the network changelog feed.'],
 };
 
@@ -39,8 +41,13 @@ function homeJsonLd(config) {
     ];
 }
 
+/**
+ * The pages a crawler may read: this brand's homes, the safety rules and the update log — nothing behind sign-in.
+ * /files, /s/… and /staff are a person's own, so they are disallowed above and left out here.
+ */
 const publicPages = () => [
     { path: '/', changefreq: 'weekly', priority: 1.0 },
+    { path: '/safety', changefreq: 'monthly', priority: 0.6 },
     { path: '/updates', changefreq: 'daily', priority: 0.5 },
 ];
 
@@ -65,6 +72,7 @@ function createDiscoveryRoutes(ctx) {
             sections: [
                 { title: 'Start here', links: [
                     { title: 'OpenVibe.MediaHub', url: abs('/'), note: 'Your files, shared on your terms.' },
+                    { title: 'Safety rules', url: abs('/safety'), note: 'what is allowed, how reports work, who to write to' },
                     { title: 'What shipped on OpenVibe.MediaHub', url: abs('/updates') },
                 ] },
                 { title: 'Machine-readable', links: [

@@ -56,6 +56,7 @@ async function startNetwork({ sandboxAudiences = ['openvibe.events', 'openvibe.m
         users: new Map(), byUsername: new Map(), projects: new Map(), members: new Map(), apps: new Map(), creds: new Map(),
         grants: new Map(), quotas: new Map(), usage: new Map(), audit: [], codes: new Map(), refresh: new Map(),
         catalog: null, down: false, requests: [], tokenRequests: [], exportTokens: [], exportTtl: 300,
+        accountParts: [], accountConfirmations: [],
     };
     let issuer = null;
     let nextUserId = 1;
@@ -256,6 +257,17 @@ async function startNetwork({ sandboxAudiences = ['openvibe.events', 'openvibe.m
             return json(200, { services: [{ id: 'network', name: 'OpenVibe.Network', status: 'stable', domains: ['openvibe.network'], capabilities: [], runtime: { status: 'up', basis: 'ready', checked_at: new Date().toISOString() } }] });
         }
         if (url.pathname === '/oauth/revoke') return json(200, {});
+        // ADR-033: the internal routes a service's account export and deletion answers come back to
+        // (openvibe-sdk/account-data). Recorded in `.accountParts` and `.accountConfirmations`, as Events' side is
+        // what a service test needs to see.
+        if (/^\/internal\/account-exports\/exp_[0-9A-HJKMNP-TV-Z]{26}\/parts$/.test(url.pathname)) {
+            st.accountParts.push({ path: url.pathname, body: JSON.parse(raw.toString('utf8') || '{}') });
+            return json(200, { ok: true });
+        }
+        if (/^\/internal\/account-deletions\/del_[0-9A-HJKMNP-TV-Z]{26}\/confirmations$/.test(url.pathname)) {
+            st.accountConfirmations.push({ path: url.pathname, body: JSON.parse(raw.toString('utf8') || '{}') });
+            return json(200, { ok: true });
+        }
         if (url.pathname === '/oauth/token' && req.method === 'POST') {
             const ct = String(req.headers['content-type'] || '');
             const body = ct.includes('json') ? JSON.parse(raw.toString('utf8') || '{}') : Object.fromEntries(new URLSearchParams(raw.toString('utf8')));
@@ -312,6 +324,7 @@ async function startNetwork({ sandboxAudiences = ['openvibe.events', 'openvibe.m
 
     return {
         url: srv.url, publicPem, privatePem, state: st, requests: st.requests, tokenRequests: st.tokenRequests,
+        accountParts: st.accountParts, accountConfirmations: st.accountConfirmations,
         addUser, userToken,
         /** An authorization code the mock will exchange for this user if the verifier matches. */
         issueCode(user, challenge) { const code = `code_${crypto.randomBytes(8).toString('hex')}`; st.codes.set(code, { user, challenge }); return code; },

@@ -43,7 +43,8 @@ const BOOST = /<script src="\/shared\/boost\.js\?v=[0-9a-f]{12}" data-main="#mai
         assert.ok(head.includes('<meta name="robots" content="index, follow">'), 'robots');
         const ld = [...head.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])['@type']);
         assert.deepStrictEqual(ld, ['WebSite', 'WebApplication', 'WebPage'], 'the home JSON-LD');
-        for (const tag of ['<meta property="og:title"', 'data-ov-icon="media-hub"', '/css/app.css?v=', '/shared/theme-loader.js', '/shared/navbar.js', '/shared/footer.js', '<meta name="referrer"']) {
+        // openvibe-shared/app-icon slugs the site id to lower-case letters (media-hub → mediahub) in data-ov-icon.
+        for (const tag of ['<meta property="og:title"', 'data-ov-icon="mediahub"', '/css/app.css?v=', '/shared/theme-loader.js', '/shared/navbar.js', '/shared/footer.js', '<meta name="referrer"']) {
             assert.ok(head.includes(tag), `head has ${tag}`);
         }
         assert.ok(r.text.includes('id="ov-footer"'), 'the server-rendered footer');

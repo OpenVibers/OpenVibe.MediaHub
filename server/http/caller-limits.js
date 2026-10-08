@@ -9,7 +9,7 @@
  *   anyone else            ip:<address>
  *
  * Past a limit the route answers 429 problem+json `rate_limited` with Retry-After before it does any work; the
- * refusal is logged once and counted in media-hub_rate_limited_total{limit,window}. Reads take MEDIAHUB_LIMITS_MINUTE /
+ * refusal is logged once and counted in media_hub_rate_limited_total{limit,window}. Reads take MEDIAHUB_LIMITS_MINUTE /
  * MEDIAHUB_LIMITS_HOUR (120 and 3000); the product's expensive routes get their own numbers in BUDGETS below.
  * Counters live in this process unless VALKEY_URL is set.
  *
@@ -31,12 +31,25 @@ function caller(req) {
  * not declared here. The empty object is the skeleton's starting point:
  *
  *   'media-hub.thing.create': { minute: 6, hour: 60 },
+ *
+ * The form on a page and its API route take the same entry: the form is the same action through another door, so
+ * it cannot be a way round a limit (see http/pages.js budgeted()).
+ *
+ * These are the per-caller rates. The product's own caps (2 GB, 512 MB a file, 50 uploads a day, 20 live shares)
+ * are enforced in server/drive/service.js — both, because they mean different things.
  */
-const BUDGETS = {};
+const BUDGETS = {
+    // A 512 MB file is 64 parts of 8 MB: a part every two seconds is a fast line, not a runaway loop.
+    'media-hub.upload.start': { minute: 20, hour: 200 },
+    'media-hub.upload.part': { minute: 300, hour: 5_000 },
+    'media-hub.upload.complete': { minute: 30, hour: 300 },
+    'media-hub.folder.create': { minute: 20, hour: 120 },
+    'media-hub.share.create': { minute: 20, hour: 200 },
+};
 
 function createCallerLimits({ config, now = () => Date.now(), registry = null, log = console, enabled = true, valkey = null }) {
     const refused = registry
-        ? registry.counter({ name: 'media-hub_rate_limited_total', help: 'Requests refused 429 by a per-caller limit, by limit name and window', labelNames: ['limit', 'window'] })
+        ? registry.counter({ name: 'media_hub_rate_limited_total', help: 'Requests refused 429 by a per-caller limit, by limit name and window', labelNames: ['limit', 'window'] })
         : null;
     const limiter = createActorLimiter({
         limits: { minute: config.limits.minute, hour: config.limits.hour },
