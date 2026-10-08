@@ -65,7 +65,7 @@ const HOUR = 3_600_000;
         assert.strictEqual((await t.get(`/api/v1/files/${file.id}`, { as: kim })).json().shares.find((x) => x.slug === slug).downloads, 0);
         const dl = await t.get(`/s/${slug}/download`, { as: sam });
         assert.strictEqual(dl.status, 200);
-        assert.strictEqual(dl.headers.get('content-disposition'), 'attachment; filename="holiday.bin"');
+        assert.strictEqual(dl.headers.get('content-disposition'), `attachment; filename="holiday.bin"; filename*=UTF-8''holiday.bin`);
         assert.strictEqual((await t.get(`/api/v1/files/${file.id}`, { as: kim })).json().shares.find((x) => x.slug === slug).downloads, 1, 'the download is counted');
     });
 
@@ -97,8 +97,8 @@ const HOUR = 3_600_000;
         const r = await share(t, kim, { file_id: file.id, hours: 24, usernames: ['sam'] });
         assert.strictEqual(r.status, 201, r.text);
         const slug = r.json().share.slug;
-        assert.deepStrictEqual(r.json().share.allowed, { subjects: [], usernames: ['sam'] }, 'Network could not resolve the name, so it is kept as typed');
-        assert.deepStrictEqual(r.json().unresolved, ['sam']);
+        assert.deepStrictEqual(r.json().share.allowed, { subjects: [sam.subject], usernames: ['sam'] }, 'the name is resolved to the account; only the subject is matched');
+        assert.deepStrictEqual(r.json().unresolved, []);
         assert.strictEqual((await t.get(`/s/${slug}`, { as: sam })).status, 200, 'sam is named');
         assert.strictEqual((await t.get(`/s/${slug}/download`, { as: sam })).status, 200);
         const adaPage = await t.get(`/s/${slug}`, { as: ada });
@@ -108,6 +108,10 @@ const HOUR = 3_600_000;
         assert.ok(!adaPage.text.includes('holiday.bin'), 'not even the name');
         // The owner is named too, when they name themselves.
         assert.strictEqual((await share(t, kim, { file_id: file.id, hours: 24, usernames: ['not a name!'] })).status, 422);
+        // A name no account has is refused: a typed name is never matched later (whoever registers it would get in).
+        const nobody = await share(t, kim, { file_id: file.id, hours: 24, usernames: ['nobody_yet'] });
+        assert.strictEqual(nobody.status, 422, nobody.text);
+        assert.strictEqual(nobody.json().code, 'share.unknown_user');
     });
 
     await check('a folder can be shared, one file at a time', async () => {

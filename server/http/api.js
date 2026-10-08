@@ -217,9 +217,6 @@ function createApi(ctx) {
         return res.status(201).json({
             share: wireShare(out.share),
             unresolved: out.unresolved,
-            note: (out.unresolved || []).length
-                ? 'Network could not turn these names into subjects; the share still allows them by their username claim.'
-                : undefined,
         });
     });
 

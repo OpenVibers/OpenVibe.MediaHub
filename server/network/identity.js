@@ -4,17 +4,12 @@
  * Resolving the OpenVibe usernames a person names on a share link to canonical subjects, through
  * OpenVibe.Network's identity.subject.resolve (network/identity/internal-routes.js):
  *
- *   GET {OV_NETWORK_INTERNAL_URL}/internal/identity/resolve?system=&type=&id=
+ *   GET {OV_NETWORK_INTERNAL_URL}/internal/identity/resolve?username=<name>   (any case; the person's current name)
  *
  * A service token with audience openvibe.network and scope identity.subject.resolve is required, so it only runs
- * where the OAuth client is configured. Network keys a subject by its id or by a service-local (system, type, id)
- * pair; a username is asked for as type=username, and when Network does not know that key the answer is 404 and the
- * name stays unresolved.
- *
- * That is not a dead end: a share's allow-list holds both the subjects we could resolve and the names as typed, and
- * a download is allowed when the signed-in person's own *subject* is in the resolved list or their Network
- * *username claim* is in the typed one. The claim is signed by Network, so matching on it needs no directory at
- * all — the resolve call only sharpens the list (it survives a rename and reaches guests, who have no username).
+ * where the OAuth client is configured. A name Network does not know (404) is unresolved, and a share naming it is
+ * refused: an allow-list holds subjects only. Matching on a typed name would hand the link to whoever registers that
+ * name later, or takes it after a rename.
  */
 const { serviceAuth } = require('openvibe-contracts');
 
@@ -34,7 +29,7 @@ function createIdentity({ config, fetchImpl = globalThis.fetch, log = console })
         if (!tokens) return null;
         try {
             const res = await fetchImpl(
-                `${config.networkInternalUrl}/internal/identity/resolve?system=network&type=username&id=${encodeURIComponent(username)}`,
+                `${config.networkInternalUrl}/internal/identity/resolve?username=${encodeURIComponent(username)}`,
                 { headers: { Accept: 'application/json', ...(await tokens.authHeaders()) }, signal: AbortSignal.timeout(5000) });
             if (res.status === 401 && tokens.invalidate) tokens.invalidate();
             if (res.status === 404) return null;
@@ -53,8 +48,8 @@ function createIdentity({ config, fetchImpl = globalThis.fetch, log = console })
 
     /**
      * names → { subjects: ['usr_…'], names: ['kim'], unresolved: ['kim'] }.
-     * `names` keeps every typed username (matched against the viewer's claim); `unresolved` is what Network could
-     * not turn into a subject, which the caller reports back to the owner without refusing the share.
+     * `names` keeps every typed username (shown to the owner, never matched); `unresolved` is what Network could not
+     * turn into a subject, and the caller refuses a share that names any.
      */
     async function resolveUsernames(list) {
         const names = [];

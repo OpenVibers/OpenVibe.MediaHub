@@ -22,6 +22,7 @@
  * a refusal: it answers { ok: false, status, code, detail } so the caller can show the problem as it came.
  */
 const { ids } = require('openvibe-contracts');
+const { headerSafeName } = require('../drive/rules');
 
 /** A user subject as Media wants it in X-OV-Subject: the bare usr_…, or null when it cannot be one. */
 function subjectHeader(requester) {
@@ -70,7 +71,9 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
                 headers: { 'X-OV-Subject': subject },
                 json: {
                     kind: 'file', visibility: 'private', size_bytes: size,
-                    mime_type: contentType || null, filename: name, multipart: multipart === true,
+                    // Media only needs a label: the real name (any script) is MediaHub's, and Media's own download
+                    // header takes a filename as is, so it gets the printable-ASCII rendering.
+                    mime_type: contentType || null, filename: headerSafeName(name), multipart: multipart === true,
                     ...(multipart && partSize ? { part_size: partSize } : {}),
                 },
             });

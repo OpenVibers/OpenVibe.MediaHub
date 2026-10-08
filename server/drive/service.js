@@ -38,17 +38,14 @@ function parseAllow(value) {
 
 /**
  * May this viewer open the share? `viewer` is { subject, username } of a signed-in person — the caller has already
- * refused everyone else. An allow-list is satisfied by the person's canonical subject (resolved when the share was
- * made) or by their Network username claim (signed, so it needs no directory).
+ * refused everyone else. An allow-list is satisfied only by the person's canonical subject, resolved when the share
+ * was made: a username is a label that can change hands, a subject is the account.
  */
 function allowedFor(share, viewer) {
     const allow = parseAllow(share.allowed_subjects);
     if (!allow) return true;
     const subject = viewer && viewer.subject;
-    const username = viewer && viewer.username ? String(viewer.username).toLowerCase() : null;
-    if (subject && allow.subjects.includes(subject)) return true;
-    if (username && allow.usernames.includes(username)) return true;
-    return false;
+    return Boolean(subject && allow.subjects.includes(subject));
 }
 
 /** Where a share stands right now: what the page shows and what a download checks. */
@@ -195,6 +192,9 @@ function createService({ s, media, identity, config, log = console }) {
             if (!rules.isUsername(n)) return { ok: false, code: 'share.bad_username', detail: `"${rules.cleanName(n, 40)}" is not an OpenVibe username.` };
         }
         const resolved = wanted.length ? await identity.resolveUsernames(wanted) : { subjects: [], names: [], unresolved: [] };
+        if (resolved.unresolved.length) {
+            return { ok: false, code: 'share.unknown_user', detail: `No OpenVibe account is called ${resolved.unresolved.map((n) => `@${rules.cleanName(n, 40)}`).join(', ')} (or OpenVibe.Network could not be asked just now). Check the spelling and try again.` };
+        }
         const allowed = wanted.length ? { subjects: resolved.subjects, usernames: resolved.names } : null;
         const expiresAt = new Date(s.now() + rules.expiryHours(hours) * 3_600_000).toISOString();
         const share = await store.insertShare(s, {

@@ -70,9 +70,19 @@ const { SAME, bytes, sha256, upload, share } = require('./helpers/drive');
         const dl = await t.get(`/files/${file.id}/download`, { as: kim });
         assert.strictEqual(dl.status, 200);
         const dispo = dl.headers.get('content-disposition');
-        assert.match(dispo, /^attachment; filename="[^"]*"$/, dispo);
+        assert.match(dispo, /^attachment; filename="[^"]*"; filename\*=UTF-8''[A-Za-z0-9%._~!$&+,=@-]*$/, dispo);
         assert.ok(!dispo.includes('\n') && !dispo.includes('\r'), dispo);
         assert.strictEqual(dl.headers.get('x-injected'), null, 'no header was injected');
+    });
+
+    await check('a name in any script downloads under that name, and the bytes run in a sandbox', async () => {
+        const file = await put('日本の写真.png', bytes(30, 'jp'), 'image/png');
+        const dl = await t.get(`/files/${file.id}/download`, { as: kim });
+        assert.strictEqual(dl.status, 200);
+        const dispo = dl.headers.get('content-disposition');
+        assert.ok(dispo.startsWith('attachment; filename="'), dispo);
+        assert.ok(dispo.includes(`filename*=UTF-8''${encodeURIComponent('日本の写真.png')}`), dispo);
+        assert.strictEqual(dl.headers.get('content-security-policy'), "default-src 'none'; sandbox");
     });
 
     await check('a download resumes: a Range is passed through and answered 206', async () => {
@@ -83,7 +93,7 @@ const { SAME, bytes, sha256, upload, share } = require('./helpers/drive');
         assert.strictEqual(part.buffer.length, 100);
         assert.strictEqual(sha256(part.buffer), sha256(data.subarray(100, 200)));
         assert.strictEqual(part.headers.get('content-range'), 'bytes 100-199/4096');
-        assert.strictEqual(part.headers.get('content-disposition'), 'attachment; filename="slice.bin"');
+        assert.strictEqual(part.headers.get('content-disposition'), `attachment; filename="slice.bin"; filename*=UTF-8''slice.bin`);
     });
 
     await check('nothing is served to anybody who is not signed in', async () => {

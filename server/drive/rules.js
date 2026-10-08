@@ -83,7 +83,7 @@ function cleanText(value, max = 500) {
 
 /** A file name as it is stored: one line, no path, never empty. A name is not a path: its slashes become _ . */
 function cleanName(value, max = NAME_MAX) {
-    return cleanText(value, max).replace(/[\\/]+/g, '_');
+    return cleanText(value, max).replace(/[\r\n\t]+/g, ' ').replace(/[\\/]+/g, '_').trim();
 }
 
 /** The name a file gets: what the person typed, or what the browser said, or a fallback. */
@@ -92,9 +92,16 @@ function fileName(value, fallback = 'file') {
     return s || cleanName(fallback) || 'file';
 }
 
-/** A header-safe rendering of a name for Content-Disposition. */
+/** A header-safe rendering of a name for Content-Disposition: printable ASCII only (the fallback filename=). */
 function headerSafeName(name) {
-    return String(name || 'file').replace(/["\\\r\n\t]/g, '_').slice(0, 200) || 'file';
+    return String(name || 'file').replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_').slice(0, 200) || 'file';
+}
+
+/** attachment; filename="ascii fallback"; filename*=UTF-8''<the real name> — so 日本.pdf downloads as 日本.pdf. */
+function contentDisposition(name) {
+    const real = String(name || 'file').slice(0, 200);
+    const encoded = encodeURIComponent(real).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+    return `attachment; filename="${headerSafeName(real)}"; filename*=UTF-8''${encoded}`;
 }
 
 /** An expiry: whole hours, clamped to the product's own range; anything unusable is the default. */
@@ -131,5 +138,5 @@ module.exports = {
     ID_RE, SLUG_RE, isFileId, isFolderId, isUploadId, isSlug, isUsername,
     NAME_MAX, FOLDER_NAME_MAX, REASONS, REASON_TEXT, SUSPEND_AT_REPORTS, SUSPEND_IMMEDIATELY,
     EXPIRY_MIN_HOURS, EXPIRY_MAX_HOURS, EXPIRY_DEFAULT_HOURS, EXPIRY_CHOICES,
-    normalizeType, safeContentType, cleanName, cleanText, fileName, headerSafeName, expiryHours, formatBytes,
+    normalizeType, safeContentType, cleanName, cleanText, fileName, headerSafeName, contentDisposition, expiryHours, formatBytes,
 };

@@ -408,7 +408,7 @@ ${shares.length ? html`<h3>Its links</h3><ul class="file-list">${shares.map((sh)
             crumbs: [{ label: 'Home', href: '/' }, { label: 'Your files', href: '/files' }, { label: row.name, href: `/files/${row.id}` }],
             body: html`<h1>Share link made</h1>
 <p>The link is <a href="/s/${out.share.slug}"><code>/s/${out.share.slug}</code></a> — it expires ${time(out.share.expires_at)}${out.share.allowed_subjects ? ' and only the people you named can open it' : ''}.</p>
-${out.unresolved && out.unresolved.length ? notice(html`Network could not turn these names into subjects: ${out.unresolved.join(', ')}. The link still allows them by username.`, 'warn') : ''}
+
 <p class="muted">Everyone who opens it has to be signed in to OpenVibe before they can download.</p>
 <p><a class="sc-btn sc-primary" href="/s/${out.share.slug}">Open the share page</a> <a class="sc-btn" href="/files/${row.id}">Back to the file</a></p>`,
         });
@@ -458,8 +458,10 @@ ${out.unresolved && out.unresolved.length ? notice(html`Network could not turn t
             // (HTML, SVG, XML, scripts) is an opaque blob. It is an attachment either way: nothing here is ever
             // rendered in a page, on this site or anywhere else.
             'Content-Type': rules.safeContentType(row.content_type) || 'application/octet-stream',
-            'Content-Disposition': `attachment; filename="${rules.headerSafeName(row.name)}"`,
+            'Content-Disposition': rules.contentDisposition(row.name),
             'X-Content-Type-Options': 'nosniff',
+            // Even a browser that ignored the attachment would run nothing from these bytes.
+            'Content-Security-Policy': "default-src 'none'; sandbox",
             'X-Robots-Tag': 'noindex',
             'Cache-Control': 'private, no-store',
         });
@@ -582,7 +584,8 @@ ${mine ? '' : reportForm(share)}`,
 
     r.get('/s/:slug/f/:fileId/download', mustSignIn('here', 'A share link still needs an OpenVibe account before anything can be downloaded.'), async (req, res) => {
         const share = await openShare(req, res);
-        if (!share || !share.folder_id) return undefined;
+        if (!share) return undefined;
+        if (!share.folder_id) return res.redirect(303, `/s/${share.slug}`);   // a file share has no files inside it
         const files = await drive.listFiles(share.owner, { folderId: share.folder_id, limit: 1000 });
         const file = files.find((f) => f.id === String(req.params.fileId || ''));
         if (!file) {

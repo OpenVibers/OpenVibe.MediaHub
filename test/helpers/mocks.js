@@ -260,6 +260,11 @@ async function startNetwork({ sandboxAudiences = ['openvibe.events', 'openvibe.m
         // ADR-033: the internal routes a service's account export and deletion answers come back to
         // (openvibe-sdk/account-data). Recorded in `.accountParts` and `.accountConfirmations`, as Events' side is
         // what a service test needs to see.
+        // identity.subject.resolve by username, as Network answers it (network/identity/internal-routes.js).
+        if (url.pathname === '/internal/identity/resolve' && url.searchParams.get('username')) {
+            const u = st.byUsername.get(String(url.searchParams.get('username')).toLowerCase());
+            return u ? json(200, { subject: { id: u.subject, type: 'user' } }) : problem(json, 404, 'identity.not_found', 'no such username');
+        }
         if (/^\/internal\/account-exports\/exp_[0-9A-HJKMNP-TV-Z]{26}\/parts$/.test(url.pathname)) {
             st.accountParts.push({ path: url.pathname, body: JSON.parse(raw.toString('utf8') || '{}') });
             return json(200, { ok: true });

@@ -102,7 +102,7 @@ async function startMedia({ key = KEY, maxSingle = 256 * 1024 * 1024 } = {}) {
             const name = String(obj.filename || obj.id).replace(/["\\\r\n]/g, '_');
             const headers = {
                 'Content-Type': obj.mime_type || 'application/octet-stream',
-                'Content-Disposition': `attachment; filename="${name}"`,
+                'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}`,   // Media encodes; MediaHub never forwards it
                 'X-Content-Type-Options': 'nosniff',
                 'Accept-Ranges': 'bytes',
             };
