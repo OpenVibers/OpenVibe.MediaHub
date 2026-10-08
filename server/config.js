@@ -74,7 +74,12 @@ function load(env = process.env) {
 
         // OpenVibe.Events: the ADR-033 account export/deletion events (network.account.export_requested and
         // network.account.deleted). Without the secret the route answers 503 and Network retries.
-        events: { secrets: [env.MEDIAHUB_EVENTS_SECRET, env.OV_EVENTS_SECRET].filter(Boolean) },
+        events: {
+            secrets: [env.MEDIAHUB_EVENTS_SECRET, env.OV_EVENTS_SECRET].filter(Boolean).flatMap((x) => String(x).split(',')).map((x) => x.trim()).filter(Boolean),
+            // Where the two ADR-033 subscriptions are created at boot (server/events-consumer.js); off when unset.
+            url: String(env.MEDIAHUB_EVENTS_URL || env.EVENTS_URL || '').replace(/\/+$/, ''),
+            endpoint: env.MEDIAHUB_EVENTS_ENDPOINT || '',
+        },
 
         // OpenVibe.Network: SSO (OAuth2 authorization server with PKCE) and its JWKS.
         networkUrl,
