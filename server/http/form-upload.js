@@ -16,6 +16,8 @@ const crypto = require('crypto');
 const fs = require('fs');
 
 const CRLF = '\r\n';
+// A text field is a name or a choice: anything longer than this is not a form we serve, and it would sit in memory.
+const FIELD_MAX = 64 * 1024;
 
 /** The boundary of a multipart body, or null. */
 function boundaryOf(contentType) {
@@ -72,12 +74,16 @@ function readFormData(req, { boundary, filePath, maxBytes }) {
         const take = (data) => {
             if (!data || !data.length) return;
             if (!part || part.filename == null) {
-                if (!part) part = { field: null, filename: null, contentType: null, data: [] };
+                if (!part) part = { field: null, filename: null, contentType: null, data: [], size: 0 };
+                part.size = (part.size || 0) + data.length;
+                if (part.size > FIELD_MAX) return fail('bad_request', 'a form field is longer than this form takes');
                 part.data.push(data);
                 return;
             }
-            if (!sink) sink = fs.createWriteStream(filePath, { flags: 'w' });
-            sink.on('error', (err) => fail('write_failed', (err && err.message) || 'the upload could not be written'));
+            if (!sink) {
+                sink = fs.createWriteStream(filePath, { flags: 'w' });
+                sink.on('error', (err) => fail('write_failed', (err && err.message) || 'the upload could not be written'));
+            }
             file.size += data.length;
             hash.update(data);
             if (!sink.write(data)) { req.pause(); sink.once('drain', () => req.resume()); }
@@ -120,7 +126,11 @@ function readFormData(req, { boundary, filePath, maxBytes }) {
                         contentType: type ? type.slice(type.indexOf(':') + 1).trim() : null,
                         data: [],
                     };
-                    if (part.filename != null && !file) file = { field: null, filename: null, contentType: null, path: filePath, size: 0 };
+                    if (part.filename != null) {
+                        // One file per form: a second file part would otherwise be appended to the first.
+                        if (file) return fail('bad_request', 'one file per upload');
+                        file = { field: null, filename: null, contentType: null, path: filePath, size: 0 };
+                    }
                     buf = buf.subarray(end + 4);
                     state = 'body';
                     continue;
@@ -155,10 +165,12 @@ function readFormData(req, { boundary, filePath, maxBytes }) {
             return collected;
         };
 
-        // The sink is closed once, whether the last boundary arrived or the request simply ended.
+        // The sink is closed once, when the last boundary arrived. A body that ends before it is a cut-off upload,
+        // not a shorter file: it is refused rather than stored truncated.
         let closing = false;
         const wrapUp = () => {
             if (closing || settled) return;
+            if (state !== 'done') return fail('bad_request', 'the upload ended before the form did');
             closing = true;
             endPart();
             if (sink) sink.end(() => finish(collect()));
@@ -176,7 +188,6 @@ function readFormData(req, { boundary, filePath, maxBytes }) {
         }
 
         req.on('data', onData);
-        // A body that ends without its last boundary is still the form we were sent: what arrived is used.
         req.on('end', wrapUp);
         req.on('aborted', () => fail('aborted', 'the upload was interrupted'));
         req.on('error', () => fail('aborted', 'the upload was interrupted'));
