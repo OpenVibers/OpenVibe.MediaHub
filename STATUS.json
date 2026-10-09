@@ -2,16 +2,16 @@
   "stage": "alpha",
   "code": true,
   "wave": "W20",
-  "plan": "plan T10/T19: one media-hub service, three brands; v1 = openvibe.download as a private drive, pics and video wait for scanning and abuse intake",
+  "plan": "plan T10/T19: media-hub serves openvibe.download as a private drive in v1; openvibe.pics and openvibe.video are parked (302 to openvibe.network) until scanning and abuse intake exist",
   "runtime": "node 22, express 4, PostgreSQL 18 (openvibe-sdk/db, async) + Valkey 9",
   "port": "4990",
-  "domain": "openvibe.download (openvibe.pics and openvibe.video answer with coming pages)",
+  "domain": "openvibe.download (openvibe.pics and openvibe.video are parked: they redirect to openvibe.network)",
   "packages": [
     "openvibe-contracts v0.122.1",
     "openvibe-sdk v0.36.0",
     "openvibe-shared v2.20.0"
   ],
-  "summary": "OpenVibe.MediaHub: openvibe.download as a private drive. Account-only uploads stream into OpenVibe.Media (a plain form up to 256 MB, resumable parts beyond). Files are private. Share links expire in 1 hour to 7 days, need a signed-in downloader and can be limited to named accounts (matched by subject). Reports suspend a share for staff. Downloads are always sandboxed attachments. Per-person quotas, and account export and deletion (ADR-033). openvibe.pics and openvibe.video are coming pages.",
+  "summary": "OpenVibe.MediaHub: openvibe.download as a private drive. Account-only uploads stream into OpenVibe.Media (a plain form up to 256 MB, resumable parts beyond). Files are private. Share links expire in 1 hour to 7 days, need a signed-in downloader and can be limited to named accounts (matched by subject). Reports suspend a share for staff. Downloads are always sandboxed attachments. Per-person quotas, and account export and deletion (ADR-033). openvibe.pics and openvibe.video are parked and redirect to openvibe.network.",
   "works": [
     "Sign-in with OpenVibe.Network (PKCE S256, httpOnly session cookies); pages server-rendered, complete without JavaScript",
     "Uploads: a plain form streamed to disk with its sha256 (up to 256 MB), and resumable chunked uploads (8 MB parts) through Media multipart",
@@ -19,12 +19,12 @@
     "Share links: 1 hour to 7 days, revocable, counted, sign-in required, optional named accounts (Network subjects only)",
     "Reports: 3 distinct people or one report of illegal content suspend a share; staff restore or remove (Media object deleted)",
     "Downloads: attachment, nosniff, sandbox CSP, real type only for a safe list, filename* for any script, Range resume",
-    "Host-header brands: openvibe.pics and openvibe.video coming pages, no upload there",
+    "Parked domains: openvibe.pics and openvibe.video redirect to openvibe.network in nginx; no request reaches the app",
     "Account export and deletion (ADR-033) through openvibe-sdk/account-data; subscriptions created at boot",
     "Per-caller and per-address limits; readiness (database required); metrics on loopback"
   ],
   "notYet": [
-    "Uploads on openvibe.pics (images, albums, embeds) and openvibe.video (watch pages, captions, playlists): they wait for scanning (hash lists, malware) and abuse intake shared with Media holds",
+    "Uploads on openvibe.pics (images, albums, embeds) and openvibe.video (watch pages, captions, playlists): both domains are parked until scanning (hash lists, malware) and abuse intake shared with Media holds exist",
     "Public (signed-out) share links: deliberately not offered while there is no scanning",
     "Previews and thumbnails of files"
   ],

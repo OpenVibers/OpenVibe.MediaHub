@@ -1,8 +1,7 @@
 'use strict';
 
 /**
- * The pages of openvibe.download, plus the honest "coming" homes of openvibe.pics and openvibe.video (the host
- * decides which, see server/brand.js).
+ * The pages of openvibe.download.
  *
  *   /                    what this is, the safety rules and how to sign in
  *   /files               your drive: folders, files, the usage bar, the upload form
@@ -42,7 +41,6 @@ const { send } = require('../render/layout');
 const rules = require('../drive/rules');
 const { isStaff } = require('../drive/staff');
 const { boundaryOf, readFormData } = require('./form-upload');
-const { brandOf, COMING } = require('../brand');
 
 const SITE_NAME = 'OpenVibe.MediaHub';
 const TAGLINE = 'Your files, shared on your terms.';
@@ -142,66 +140,7 @@ ${notice(p && p.detail ? p.detail : 'You are over the limit for this.', 'warn')}
                 body: html`<h1>Sign in first</h1>${signInPrompt(why, back === 'here' ? req.originalUrl : back)}`,
             }, 401));
 
-    // ── The unlaunched brands ────────────────────────────────
-    /**
-     * openvibe.pics and openvibe.video answer an honest "coming" page and nothing else: no drive, no share links,
-     * no uploads. /updates and the crawl artifacts are the same on every brand, and everything else 404s — the
-     * product has not shipped there, so there is nothing to offer but the truth.
-     */
-    const PASS_THROUGH = new Set(['/robots.txt', '/sitemap.xml', '/llms.txt', '/llms-full.txt', '/release.json', '/auth/me', '/favicon.ico']);
-    r.use((req, res, next) => {
-        if (brandOf(req) === 'download') return next();
-        if (PASS_THROUGH.has(req.path)) return next();
-        if (req.path === '/') return next();     // the brand's own home, below
-        if (req.path === '/updates') return next();
-        const brand = COMING[brandOf(req)];
-        return page(req, res, {
-            title: `${brand.name} is coming`,
-            crumbs: [{ label: 'Home', href: '/' }, { label: 'Coming' }],
-            body: html`<h1>${brand.name} is not open yet</h1>
-${notice(`${brand.name} has no uploads and no file pages yet. The only brand of this service that has launched is OpenVibe.Download.`, 'warn')}
-<p class="muted">This host serves ${brand.domain}, one of the three brands of the same OpenVibe.MediaHub service. <a href="https://openvibe.download">Go to OpenVibe.Download</a> for the part that works today.</p>`,
-        }, 404);
-    });
-
     // ── Home ─────────────────────────────────────────────────
-    const comingBody = (brand) => html`${raw(showcase.hero({
-        eyebrow: `${brand.name} · ${brand.tagline}`,
-        title: brand.name,
-        accent: 'coming soon',
-        lede: brand.what,
-        actions: [{ label: 'OpenVibe.Download is open', href: 'https://openvibe.download', primary: true }, { label: 'What shipped', href: '/updates' }],
-        note: 'Nothing is uploaded here yet and there is no way to sign in on this brand.',
-    }))}
-${raw(showcase.features({
-        title: 'What it will be',
-        lede: 'The shape of it, from the product\'s own plan.',
-        items: brand.pillars.map((p) => ({ icon: 'ov:page', title: p, text: '' })),
-    }))}
-${raw(showcase.features({
-        title: 'Why it is not open yet',
-        lede: 'Two things have to be true before OpenVibe runs a public place for other people\'s pictures and videos.',
-        items: [
-            { icon: 'ov:shield', title: 'Safety tooling first', text: 'There is no malware or CSAM scanning on the network yet, so uploads here wait for it. OpenVibe.Download opens first precisely because it is a private drive whose share links only signed-in people can open.' },
-            { icon: 'ov:page', title: 'One service, three brands', text: `${brand.name} is served by the same process as openvibe.download — the same file store, the same account and the same rules. This host answers only this page until that tooling is here.` },
-        ],
-    }))}
-${raw(showcase.cta({ title: 'In the meantime', text: 'OpenVibe.Media already stores and serves the network\'s pictures and video, and OpenVibe.Download is open for private files.', actions: [{ label: 'OpenVibe.Media', href: 'https://openvibe.media' }, { label: 'OpenVibe.Download', href: 'https://openvibe.download' }] }))}`;
-
-    r.get('/', (req, res, next) => {
-        const brand = COMING[brandOf(req)];
-        if (brand) {
-            return page(req, res, {
-                index: true, cache: PUBLIC_CACHE, styles: [showcase.STYLESHEET],
-                title: `${brand.name} — coming soon`,
-                description: `${brand.name}: ${brand.tagline} Not open yet — uploads here wait for safety tooling. OpenVibe.Download is the brand of this service that has launched.`,
-                crumbs: [{ label: 'Home', href: '/' }],
-                body: comingBody(brand),
-            });
-        }
-        return next();
-    });
-
     r.get('/', (req, res) => {
         const hero = showcase.hero({
             eyebrow: `${SITE_NAME} · ${TAGLINE}`,

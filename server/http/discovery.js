@@ -42,7 +42,7 @@ function homeJsonLd(config) {
 }
 
 /**
- * The pages a crawler may read: this brand's homes, the safety rules and the update log — nothing behind sign-in.
+ * The pages a crawler may read: the home page, the safety rules and the update log — nothing behind sign-in.
  * /files, /s/… and /staff are a person's own, so they are disallowed above and left out here.
  */
 const publicPages = () => [

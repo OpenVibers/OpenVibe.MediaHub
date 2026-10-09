@@ -57,10 +57,6 @@ function createApi(ctx) {
     const problem = (req, res, status, code, detail) => contracts.http.sendProblem(res, status, code, { detail, ctx: req.ov });
 
     r.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
-    // openvibe.pics and openvibe.video have no API: no upload, no drive, no share links (server/brand.js).
-    r.use((req, res, next) => (req.brand && req.brand !== 'download'
-        ? contracts.http.sendProblem(res, 404, 'route.not_found', { detail: 'This brand of the hub has no API yet; OpenVibe.Download is the one that has launched.', ctx: req.ov })
-        : next()));
     r.use(principal.middleware);
 
     /**
