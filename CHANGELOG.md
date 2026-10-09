@@ -2,6 +2,11 @@
 
 What changed in OpenVibe.MediaHub, newest first. Each site also publishes its patch notes at /updates.
 
+## Unreleased
+
+- openvibe.pics and openvibe.video are parked: their vhosts answer 302 to https://openvibe.network/ and proxy
+  nothing. The app no longer has "coming" pages or host-based brand handling.
+
 ## 0.1.0 — 2026-10-08
 
 - openvibe.download v1, a private drive. Account-only uploads go into OpenVibe.Media: a plain form, or resumable

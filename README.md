@@ -2,8 +2,9 @@
 
 > Your files, shared on your terms.
 
-**Status:** alpha. One service behind three domains: **openvibe.download** (a private drive, live in v1),
-**openvibe.pics** and **openvibe.video** (honest "coming" pages: no uploads until the safety tooling exists).
+**Status:** alpha. **openvibe.download** (a private drive, live in v1) is the one domain this service serves.
+**openvibe.pics** and **openvibe.video** are parked: they redirect to `https://openvibe.network/` until Pics and
+Video are built, so no request for either host reaches the app.
 **Port:** 4990 · **Service id:** `media-hub` · **Env prefix:** `MEDIAHUB` · **License:** AGPL-3.0.
 
 ## Why v1 is narrow
@@ -44,7 +45,7 @@ MediaHub owns the drive: `mh_files`, `mh_folders`, `mh_shares`, `mh_reports`, `m
 
 | Path | Who | What |
 |---|---|---|
-| `/` | anyone | openvibe.download's home: what it is, the safety rules, sign in. On openvibe.pics and openvibe.video, their "coming" pages |
+| `/` | anyone | openvibe.download's home: what it is, the safety rules, sign in. (openvibe.pics and openvibe.video are parked in nginx, not served here) |
 | `/files`, `/files/:id` | the owner | your drive: folders, files, the usage bar, upload, share, delete |
 | `/s/:slug` | a signed-in person | a share page: the name, the size, who shared it (their username), the expiry, Download, Report |
 | `/staff` | staff | the reports queue: restore or remove |
@@ -92,8 +93,9 @@ npm test           # every test/*.test.js on PGlite, with stand-ins for Network 
 
 `sudo ovhost deploy media-hub` on the host (unit [deploy/systemd/openvibe-media-hub.service](deploy/systemd/openvibe-media-hub.service),
 env `/etc/openvibe/media-hub.env`). The vhost [deploy/nginx/openvibe.download.conf](deploy/nginx/openvibe.download.conf)
-serves all three domains, each with its own certificate, and is installed with `ov-vhost-install`. Uploads stream
-through nginx unbuffered; downloads are not buffered either.
+serves openvibe.download and parks openvibe.pics and openvibe.video with a 302 to `https://openvibe.network/` (each
+name with its own certificate); it is installed with `ov-vhost-install`. Uploads stream through nginx unbuffered;
+downloads are not buffered either.
 
 ## Security (threat notes)
 

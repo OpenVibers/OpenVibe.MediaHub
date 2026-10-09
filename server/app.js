@@ -32,7 +32,6 @@ const { createServiceReadiness } = require('./observability');
 const { createCallerLimits } = require('./http/caller-limits');
 const { assetVersion, send } = require('./render/layout');
 const { html } = require('./render/html');
-const brand = require('./brand');
 const store = require('./drive/store');
 const { createMediaClient } = require('./media/client');
 const { createIdentity } = require('./network/identity');
@@ -100,9 +99,6 @@ async function createApp(opts = {}) {
         referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     }));
     app.use(cookieParser());
-
-    // ── Which brand this request is for (the Host header decides; server/brand.js) ──
-    app.use(brand.middleware());
 
     // ── Machine endpoints ───────────────────────────────────
     app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'openvibe-media-hub', version: VERSION }));
