@@ -39,8 +39,8 @@
     "limits and readiness",
     "deploy files"
   ],
-  "updated": "2026-10-08",
   "contracts": "openvibe-contracts v0.118.0",
   "sdk": "openvibe-sdk v0.36.0",
-  "shared": "openvibe-shared v2.15.0"
+  "shared": "openvibe-shared v2.17.0",
+  "updated": "2026-10-09"
 }
