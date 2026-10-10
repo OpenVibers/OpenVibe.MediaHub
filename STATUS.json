@@ -8,7 +8,7 @@
   "port": "4990",
   "domain": "openvibe.download (openvibe.pics and openvibe.video are parked: they redirect to openvibe.network)",
   "packages": [
-    "openvibe-contracts v0.127.0",
+    "openvibe-contracts v0.129.0",
     "openvibe-sdk v0.38.0",
     "openvibe-shared v3.0.0"
   ],
@@ -40,7 +40,7 @@
     "limits and readiness",
     "deploy files"
   ],
-  "contracts": "openvibe-contracts v0.127.0",
+  "contracts": "openvibe-contracts v0.129.0",
   "sdk": "openvibe-sdk v0.38.0",
   "shared": "openvibe-shared v3.0.0",
   "deployment": "openvibe-ovh: unit openvibe-media-hub.service on 127.0.0.1:4990 (git checkout /opt/openvibe.download, env /etc/openvibe/media-hub.env, database ov_media_hub), deployed with `sudo ovhost deploy media-hub`; public at https://openvibe.download since 2026-10-08.",
