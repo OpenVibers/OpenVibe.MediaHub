@@ -31,7 +31,7 @@
   ],
   "capabilitiesRegistered": false,
   "serviceManifestRegistered": true,
-  "deployed": false,
+  "deployed": true,
   "placeholderInSites": false,
   "features": [
     "Network sign-in",
@@ -43,5 +43,6 @@
   "contracts": "openvibe-contracts v0.127.0",
   "sdk": "openvibe-sdk v0.37.2",
   "shared": "openvibe-shared v2.21.2",
-  "updated": "2026-10-10"
+  "updated": "2026-10-10",
+  "deployment": "openvibe-ovh: unit openvibe-media-hub.service on 127.0.0.1:4990 (git checkout /opt/openvibe.download, env /etc/openvibe/media-hub.env, database ov_media_hub), deployed with `sudo ovhost deploy media-hub`; public at https://openvibe.download since 2026-10-08."
 }
