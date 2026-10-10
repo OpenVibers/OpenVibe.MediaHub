@@ -7,6 +7,68 @@
 Video are built, so no request for either host reaches the app.
 **Port:** 4990 · **Service id:** `media-hub` · **Env prefix:** `MEDIAHUB` · **License:** AGPL-3.0.
 
+## Purpose
+
+OpenVibe.MediaHub is the network's file service: it serves **openvibe.download** as a private drive where a
+signed-in person can upload, organise, share and delete their own files. The bytes live in OpenVibe.Media; MediaHub
+keeps the metadata, the per-person limits, the share links and the report queue. It also answers OpenVibe.Network's
+account export and deletion events (ADR-033). openvibe.pics and openvibe.video are parked in nginx and redirect to
+openvibe.network, so v1 is the drive and nothing else.
+
+## Owns
+
+The drive's own tables, and it is the authority for them (`migrations/0002_mediahub.sql`; `migrations/0001_initial.sql`
+creates none):
+
+- `mh_files` — one row per file the person uploaded, naming its `med_…` object in Media (a soft delete keeps the row
+  until the bytes are gone).
+- `mh_folders` — the person's folders and their nesting.
+- `mh_shares` — the share links: slug, expiry, allow-list, download count, report high-water mark, revocation and
+  suspension.
+- `mh_reports` — one report per person per share.
+- `mh_usage` — the per-person upload count for the UTC day.
+- `mh_uploads` — an in-flight chunked upload session (Media's multipart id, the parts expected, the expiry).
+- `account_data_events` — the once-per-event record of applied account export and deletion deliveries
+  (openvibe-sdk/account-data, ADR-033).
+
+## Does not own
+
+- The bytes are **OpenVibe.Media**'s: MediaHub stores an object id and asks Media to create, read and delete the
+  object; Media's own retention decides when the bytes actually go.
+- Identity, usernames and canonical account subjects are **OpenVibe.Network**'s, resolved through Network's
+  `identity.subject.resolve`.
+- Event delivery, and the account export/deletion topics, are **OpenVibe.Events**': MediaHub only creates its
+  subscriptions and consumes the two deliveries.
+- The **openvibe.pics** and **openvibe.video** products (image hosting, albums, video watch pages) are not built
+  here yet: those domains are parked in nginx. Previews and thumbnails are not built either.
+
+## Depends on
+
+- **OpenVibe.Network** — SSO (OAuth 2 with PKCE S256, client id `media-hub`) and its JWKS: `OV_NETWORK_URL`,
+  `OV_NETWORK_INTERNAL_URL`, `OV_OAUTH_CLIENT_ID`, `OV_OAUTH_CLIENT_SECRET`, `OV_OAUTH_REDIRECT_URI`,
+  `MEDIAHUB_AUDIENCE`. It calls `identity.subject.resolve` on the internal URL with a service token of its own.
+- **OpenVibe.Media** — where the bytes live: `MEDIAHUB_MEDIA_URL`, `MEDIAHUB_MEDIA_APP`, `MEDIAHUB_MEDIA_APP_KEY`
+  (and `MEDIAHUB_MEDIA_TIMEOUT_MS`).
+- **OpenVibe.Events** — `MEDIAHUB_EVENTS_URL` (the two subscriptions are created at boot) and
+  `MEDIAHUB_EVENTS_SECRET` (the v2 signature on `POST /internal/events`).
+- **PostgreSQL** and **Valkey** — `DATABASE_URL` / `DATABASE_DIRECT_URL`, `VALKEY_URL` / `VALKEY_PREFIX`, read
+  through openvibe-sdk/db and openvibe-sdk/valkey.
+- **Packages** — openvibe-contracts, openvibe-sdk and openvibe-shared (versions below), with express, helmet,
+  cookie-parser and express-rate-limit.
+
+## Capabilities
+
+The service manifest (openvibe-contracts, `manifests/services/media-hub.json`) lists ten capabilities it owns —
+`video.vod.read`, `video.playlist.read`, `video.playlist.manage`, `pics.image.read`, `pics.image.upload`,
+`pics.album.read`, `pics.album.manage`, `download.file.read`, `download.file.upload`, `download.share.create` — but
+no route guards one yet: `CAPABILITIES` in `server/http/principal.js` is empty, and every `/api/v1` route requires a
+signed-in person, never an app, agent or service token.
+
+On other services it calls:
+
+- OpenVibe.Network `identity.subject.resolve` — to turn the usernames a share names into canonical account subjects.
+- OpenVibe.Events `events.subscription.manage` — to create its account export/deletion subscriptions at boot.
+
 ## Why v1 is narrow
 
 Public file hosting is the riskiest surface on the network: OpenVibe.Media has no malware or CSAM scanning yet. So
@@ -88,6 +150,34 @@ cp .env.example .env
 npm run dev        # http://127.0.0.1:4990, PGlite under data/
 npm test           # every test/*.test.js on PGlite, with stand-ins for Network and Media
 ```
+
+## Acceptance
+
+`npm test` ([test/run.js](test/run.js)) runs every `test/*.test.js` in its own process on a temporary PGlite
+database, with in-process stand-ins for OpenVibe.Network and OpenVibe.Media. The main files:
+
+- `auth-ops.test.js`, `auth-jwks.test.js` — sign-in redirects with PKCE S256 and cookies, truthful readiness, and
+  JWKS fetch/verify through an outage.
+- `drive-upload.test.js` — the plain form and the chunked path, resume after a dropped part, and the 512 MB / 2 GB /
+  50-a-day caps.
+- `drive-download.test.js` — every download is an attachment with nosniff and a sandbox CSP, the real type only for
+  the safe list, and Range resumes.
+- `drive-shares.test.js` — a share is 24 random characters, expires in 1 hour to 7 days, is revocable, counted and
+  sign-in only, and matches its allow-list on subjects.
+- `drive-reports.test.js` — one report per person per share, three distinct reports or one illegal report suspend
+  it, and staff restore or remove.
+- `drive-pages.test.js` — every page renders without JavaScript and everything typed is escaped everywhere shown.
+- `form-upload.test.js` — the multipart reader streams to disk and refuses an over-long field, a second file and a
+  cut-off body.
+- `account-data.test.js` — signed export and deletion on the loopback route, with the Media objects deleted.
+- `caller-limits.test.js` — one caller's 429 arrives before the route runs, another caller still passes, and the
+  window reopens on the clock.
+- `security-secrets.test.js`, `security-session.test.js`, `no-internal-key.test.js`, `open-redirect.test.js` —
+  secrets never leave in a body, header or log, the session cookie holds a person's Network session, no
+  `X-Internal-Key` path exists, and the sign-in `next` never leaves the site.
+- `nginx-auth-limit.test.js`, `nginx-parked-domains.test.js` — the nginx rate zones and the parked-domain redirects.
+- `discovery.test.js`, `layout.test.js`, `asset-cache.test.js`, `perf-budget.test.js`, `service-kit.test.js` — crawl
+  artifacts, page layout, asset cache headers, home-page size budgets and the graceful stop.
 
 ## Deploy
 
