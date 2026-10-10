@@ -10,7 +10,7 @@
   "packages": [
     "openvibe-contracts v0.126.0",
     "openvibe-sdk v0.36.0",
-    "openvibe-shared v2.20.0"
+    "openvibe-shared v2.20.3"
   ],
   "summary": "OpenVibe.MediaHub: openvibe.download as a private drive. Account-only uploads stream into OpenVibe.Media (a plain form up to 256 MB, resumable parts beyond). Files are private. Share links expire in 1 hour to 7 days, need a signed-in downloader and can be limited to named accounts (matched by subject). Reports suspend a share for staff. Downloads are always sandboxed attachments. Per-person quotas, and account export and deletion (ADR-033). openvibe.pics and openvibe.video are parked and redirect to openvibe.network.",
   "works": [
@@ -42,6 +42,6 @@
   ],
   "contracts": "openvibe-contracts v0.126.0",
   "sdk": "openvibe-sdk v0.36.0",
-  "shared": "openvibe-shared v2.20.0",
+  "shared": "openvibe-shared v2.20.3",
   "updated": "2026-10-10"
 }
