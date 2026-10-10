@@ -8,7 +8,7 @@
   "port": "4990",
   "domain": "openvibe.download (openvibe.pics and openvibe.video are parked: they redirect to openvibe.network)",
   "packages": [
-    "openvibe-contracts v0.126.0",
+    "openvibe-contracts v0.127.0",
     "openvibe-sdk v0.36.0",
     "openvibe-shared v2.20.3"
   ],
@@ -40,7 +40,7 @@
     "limits and readiness",
     "deploy files"
   ],
-  "contracts": "openvibe-contracts v0.126.0",
+  "contracts": "openvibe-contracts v0.127.0",
   "sdk": "openvibe-sdk v0.36.0",
   "shared": "openvibe-shared v2.20.3",
   "updated": "2026-10-10"
