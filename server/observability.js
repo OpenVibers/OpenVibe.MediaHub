@@ -5,7 +5,7 @@
  *
  *   db              required  a real round trip to OpenVibe.MediaHub's PostgreSQL store
  *   network_jwks    optional  the Network signing key is loaded; without it nobody can sign in or call the API
- *   oauth_client    optional  OV_OAUTH_CLIENT_SECRET is set (sign-in needs it)
+ *   oauth_client    optional  OV_OAUTH_CLIENT_SECRET is set (sign-in and Media calls need it)
  *   valkey          optional  shared per-caller limit counters
  *
  * The product adds its own required checks here (a queue, a model provider, a worker) with a real round trip,
@@ -37,7 +37,7 @@ function createServiceReadiness({ s, config, valkey = null, release = null }) {
                     return { ok: true, detail: { keys: first.keys, failures: first.failures, stale: first.stale, fetched_at: first.fetchedAt } };
                 },
             },
-            { name: 'oauth_client', required: false, check: () => (config.oauth.clientSecret ? true : 'OV_OAUTH_CLIENT_SECRET unset: sign-in cannot complete') },
+            { name: 'oauth_client', required: false, check: () => (config.oauth.clientSecret ? true : 'OV_OAUTH_CLIENT_SECRET unset: sign-in and Media calls cannot complete') },
         ],
     });
 }

@@ -41,6 +41,10 @@ const MB = 1024 * 1024;
         const dl = await t.get(`/files/${id}/download`, { as: kim });
         assert.strictEqual(dl.status, 200);
         assert.strictEqual(sha256(dl.buffer), sha256(data), 'the bytes round-trip');
+        const mediaCalls = t.media.requests.filter((request) => request.path.startsWith('/api/v2/'));
+        assert.ok(mediaCalls.length > 0);
+        assert.ok(mediaCalls.every((request) => request.authorization === 'Bearer svc-media'));
+        assert.ok(t.network.tokenRequests.some((request) => request.grant_type === 'client_credentials' && request.audience === 'openvibe.media'));
     });
 
     await check('the chunked upload the page script uses: start, parts, complete', async () => {

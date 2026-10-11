@@ -14,7 +14,7 @@ process.env.MEDIAHUB_API_RATE_LIMIT_PER_MIN = process.env.MEDIAHUB_API_RATE_LIMI
  */
 const http = require('http');
 const { startNetwork } = require('./mocks');
-const { startMedia, KEY } = require('./media');
+const { startMedia } = require('./media');
 
 const captured = [];
 for (const m of ['log', 'info', 'warn', 'error']) {
@@ -30,7 +30,7 @@ async function boot(opts = {}) {
         NODE_ENV: 'test', PORT: '0', BASE_URL: 'https://openvibe.download', TRUST_PROXY: '1',
         OV_NETWORK_URL: network.url, OV_NETWORK_INTERNAL_URL: network.url,
         OV_OAUTH_CLIENT_ID: 'media-hub', OV_OAUTH_CLIENT_SECRET: 'media-hub-secret', COOKIE_SECURE: 'false',
-        ...(media ? { MEDIAHUB_MEDIA_URL: media.url, MEDIAHUB_MEDIA_APP_KEY: KEY } : {}),
+        ...(media ? { MEDIAHUB_MEDIA_URL: media.url } : {}),
         ...(opts.env || {}),
     };
     for (const [k, v] of Object.entries(opts.env || {})) if (v === null) delete env[k];

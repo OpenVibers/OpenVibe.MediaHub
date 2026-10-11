@@ -16,28 +16,28 @@
  *   DELETE /api/v2/:app/objects/:id                      soft delete
  *   GET    /o/:id?exp&sig                                the bytes, with the signature checked
  *
- * The app key is required on everything under /api/v2 (x-ov-subject names the owner at init), exactly as Media
- * requires it, so a test can prove MediaHub never asks Media for anything with the wrong credential. `.requests`
+ * The Network service token is required on everything under /api/v2 (x-ov-subject names the owner at init), so a
+ * test can prove MediaHub never asks Media for anything with the wrong credential. `.requests`
  * records every call ({ method, path, query, authorization, subject, bytes }) for the assertions that need it.
  *
- * Behaviour knobs: `setDown(true)` makes every call answer 503; `setKeyRejects(true)` answers 401 as a bad key
+ * Behaviour knobs: `setDown(true)` makes every call answer 503; `setTokenRejects(true)` answers 401 as a bad token
  * would; `objects`/`bytesOf(id)` are what the store holds; `deleted` lists the ids Media was asked to delete.
  */
 const http = require('http');
 const crypto = require('crypto');
 const { ids } = require('openvibe-contracts');
 
-const KEY = 'media-hub-test-key';
+const SERVICE_TOKEN = 'svc-media';
 const SIGN_SECRET = 'stand-in-media-signing-secret';
 
 const sign = (objectId, exp) => crypto.createHmac('sha256', SIGN_SECRET).update(`get\n${objectId}\n${exp}`).digest('base64url');
 
-async function startMedia({ key = KEY, maxSingle = 256 * 1024 * 1024 } = {}) {
+async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
     const objects = new Map();     // id → { id, size_bytes, mime_type, content_hash, lifecycle_status, visibility, owner_subject, filename, bytes }
     const sessions = new Map();    // id → { id, object_id, part_size, total_size, parts_expected, status, parts: Map }
     const requests = [];
     const deleted = [];
-    const state = { down: false, keyRejects: false };
+    const state = { down: false, tokenRejects: false };
     let seq = 0;
 
     const json = (res, status, body) => {
@@ -119,9 +119,8 @@ async function startMedia({ key = KEY, maxSingle = 256 * 1024 * 1024 } = {}) {
             return res.end(obj.bytes);
         }
 
-        // ── Everything else is the tenant API, and needs the app key ──
-        const keyed = String(req.headers.authorization || '').startsWith('Bearer ') ? String(req.headers.authorization).slice(7) : null;
-        if (state.keyRejects || keyed !== key) return problem(res, 401, 'auth.required', 'Authentication required');
+        // ── Everything else is the tenant API, and needs the Network service token ──
+        if (state.tokenRejects || req.headers.authorization !== `Bearer ${SERVICE_TOKEN}`) return problem(res, 401, 'auth.required', 'Authentication required');
 
         const rest = path.replace(/^\/api\/v2\//, '').split('/').filter(Boolean).map(decodeURIComponent);
         if (rest.length < 2 || rest[1] !== 'objects') return problem(res, 404, 'route.not_found', 'no such route');
@@ -254,14 +253,14 @@ async function startMedia({ key = KEY, maxSingle = 256 * 1024 * 1024 } = {}) {
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     const url = `http://127.0.0.1:${server.address().port}`;
     return {
-        url, key, objects, sessions, requests, deleted, state,
+        url, objects, sessions, requests, deleted, state,
         bytesOf: (id) => (objects.get(id) && objects.get(id).bytes) || null,
         objectOf: (id) => objects.get(id) || null,
         setDown: (v) => { state.down = v; },
-        setKeyRejects: (v) => { state.keyRejects = v; },
+        setTokenRejects: (v) => { state.tokenRejects = v; },
         reset: () => { requests.length = 0; },
         close: () => new Promise((r) => server.close(r)),
     };
 }
 
-module.exports = { startMedia, KEY, sign };
+module.exports = { startMedia, SERVICE_TOKEN, sign };

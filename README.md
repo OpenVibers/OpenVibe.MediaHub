@@ -47,8 +47,10 @@ creates none):
 - **OpenVibe.Network** — SSO (OAuth 2 with PKCE S256, client id `media-hub`) and its JWKS: `OV_NETWORK_URL`,
   `OV_NETWORK_INTERNAL_URL`, `OV_OAUTH_CLIENT_ID`, `OV_OAUTH_CLIENT_SECRET`, `OV_OAUTH_REDIRECT_URI`,
   `MEDIAHUB_AUDIENCE`. It calls `identity.subject.resolve` on the internal URL with a service token of its own.
-- **OpenVibe.Media** — where the bytes live: `MEDIAHUB_MEDIA_URL`, `MEDIAHUB_MEDIA_APP`, `MEDIAHUB_MEDIA_APP_KEY`
-  (and `MEDIAHUB_MEDIA_TIMEOUT_MS`).
+- **OpenVibe.Media** — where the bytes live: `MEDIAHUB_MEDIA_URL`, `MEDIAHUB_MEDIA_APP`
+  (and `MEDIAHUB_MEDIA_TIMEOUT_MS`). Media calls use the service's Network service token. Grant
+  `[media-hub, media.object.upload, openvibe.media]` and `[media-hub, media.object.read, openvibe.media]`
+  on namespace `media-hub`.
 - **OpenVibe.Events** — `MEDIAHUB_EVENTS_URL` (the two subscriptions are created at boot) and
   `MEDIAHUB_EVENTS_SECRET` (the v2 signature on `POST /internal/events`).
 - **PostgreSQL** and **Valkey** — `DATABASE_URL` / `DATABASE_DIRECT_URL`, `VALKEY_URL` / `VALKEY_PREFIX`, read
@@ -91,7 +93,7 @@ OpenVibe.Download v1 is a **private drive**, not a public host:
 
 ## How it works
 
-Bytes live in **OpenVibe.Media** (`MEDIAHUB_MEDIA_URL`, app `media-hub`, app key `MEDIAHUB_MEDIA_APP_KEY`). MediaHub
+Bytes live in **OpenVibe.Media** (`MEDIAHUB_MEDIA_URL`, app `media-hub`). MediaHub uses its Network service token and
 calls Media server-side only, naming the person with `X-OV-Subject`, and never hands a browser a Media URL:
 
 - **Small files:** the plain form (`POST /files/upload`, no JavaScript needed) streams the file to a temp file with
@@ -138,8 +140,8 @@ takes `network.account.export_requested` and `network.account.deleted`, and the 
 ## Configuration
 
 Every name is in [.env.example](.env.example): the Network client (`OV_OAUTH_CLIENT_ID=media-hub`, secret, internal
-URL), PostgreSQL and Valkey (written by the host's data role), Media (`MEDIAHUB_MEDIA_URL`, `MEDIAHUB_MEDIA_APP`,
-`MEDIAHUB_MEDIA_APP_KEY`), Events, and the limits (`MEDIAHUB_QUOTA_BYTES`, `MEDIAHUB_MAX_FILE_BYTES`,
+URL), PostgreSQL and Valkey (written by the host's data role), Media (`MEDIAHUB_MEDIA_URL`, `MEDIAHUB_MEDIA_APP`),
+Events, and the limits (`MEDIAHUB_QUOTA_BYTES`, `MEDIAHUB_MAX_FILE_BYTES`,
 `MEDIAHUB_UPLOADS_PER_DAY`, `MEDIAHUB_MAX_SHARES`, `MEDIAHUB_SINGLE_UPLOAD_BYTES`, `MEDIAHUB_PART_BYTES`).
 
 ## Development
