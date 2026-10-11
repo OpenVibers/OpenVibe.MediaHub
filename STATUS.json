@@ -9,7 +9,7 @@
   "domain": "openvibe.download (openvibe.pics and openvibe.video are parked: they redirect to openvibe.network)",
   "packages": [
     "openvibe-contracts v0.129.0",
-    "openvibe-sdk v0.43.0",
+    "openvibe-sdk v0.44.0",
     "openvibe-shared v3.0.1"
   ],
   "summary": "OpenVibe.MediaHub: openvibe.download as a private drive. Account-only uploads stream into OpenVibe.Media (a plain form up to 256 MB, resumable parts beyond). Files are private. Share links expire in 1 hour to 7 days, need a signed-in downloader and can be limited to named accounts (matched by subject). Reports suspend a share for staff. Downloads are always sandboxed attachments. Per-person quotas, and account export and deletion (ADR-033). openvibe.pics and openvibe.video are parked and redirect to openvibe.network.",
@@ -41,7 +41,7 @@
     "deploy files"
   ],
   "contracts": "openvibe-contracts v0.129.0",
-  "sdk": "openvibe-sdk v0.43.0",
+  "sdk": "openvibe-sdk v0.44.0",
   "shared": "openvibe-shared v3.0.1",
   "deployment": "openvibe-ovh: unit openvibe-media-hub.service on 127.0.0.1:4990 (git checkout /opt/openvibe.download, env /etc/openvibe/media-hub.env, database ov_media_hub), deployed with `sudo ovhost deploy media-hub`; public at https://openvibe.download since 2026-10-08.",
   "updated": "2026-10-11"
