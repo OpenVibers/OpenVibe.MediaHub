@@ -2,7 +2,8 @@
 
 /**
  * OpenVibe.Media: where the bytes live. MediaHub calls Media's object API v2 **server-side only**, with its own
- * app key (audience `media-hub`), and never hands that key, an upload token or a signed URL to a browser.
+ * Network service token (audience `openvibe.media`), and never hands that token, an upload token or a signed URL
+ * to a browser.
  *
  *   init({ size, contentType, name, ownerSubject, multipart })  POST  /api/v2/media-hub/objects
  *   putContent(objectId, buffer)                                PUT   …/objects/:id/content
@@ -22,6 +23,7 @@
  * a refusal: it answers { ok: false, status, code, detail } so the caller can show the problem as it came.
  */
 const { ids } = require('openvibe-contracts');
+const { createServiceTokenClient } = require('openvibe-sdk/auth');
 const { headerSafeName } = require('../drive/rules');
 
 /** A user subject as Media wants it in X-OV-Subject: the bare usr_…, or null when it cannot be one. */
@@ -35,12 +37,31 @@ function subjectHeader(requester) {
 function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console }) {
     const media = config.media;
     const base = () => `${media.url}/api/v2/${encodeURIComponent(media.app)}/objects`;
-    const enabled = Boolean(media.appKey);
+    const enabled = Boolean(config.oauth.clientSecret);
+    let tokens;
+
+    function tokenClient() {
+        if (!tokens) tokens = createServiceTokenClient({
+            tokenUrl: `${config.networkInternalUrl}/oauth/token`,
+            clientId: config.oauth.clientId,
+            clientSecret: config.oauth.clientSecret,
+            audience: 'openvibe.media',
+            fetch: fetchImpl,
+        });
+        return tokens;
+    }
 
     /** One JSON call. Never throws for a Media refusal; throws only when Media cannot be reached at all. */
     async function call(path, { method = 'GET', body, json, headers = {}, raw = false } = {}) {
-        if (!enabled) return { ok: false, status: 503, code: 'media.not_configured', detail: 'MEDIAHUB_MEDIA_APP_KEY is not set' };
-        const h = { Accept: 'application/json', Authorization: `Bearer ${media.appKey}`, ...headers };
+        if (!enabled) return { ok: false, status: 503, code: 'media.not_configured', detail: 'OV_OAUTH_CLIENT_SECRET is not set' };
+        let token;
+        try {
+            token = await tokenClient().getToken();
+        } catch {
+            log.warn('[MediaHub] Media service token unavailable');
+            return { ok: false, status: 502, code: 'media.unreachable', detail: 'OpenVibe.Network could not issue a Media token' };
+        }
+        const h = { Accept: 'application/json', ...headers, Authorization: `Bearer ${token}` };
         let payload = body;
         if (json !== undefined) { payload = JSON.stringify(json); h['Content-Type'] = 'application/json'; }
         let res;

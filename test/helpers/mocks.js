@@ -298,6 +298,7 @@ async function startNetwork({ sandboxAudiences = ['openvibe.events', 'openvibe.m
                     return json(200, { access_token: userToken(user), refresh_token: rt, token_type: 'Bearer' });
                 }
                 if (body.grant_type === 'client_credentials') {
+                    if (body.audience === 'openvibe.media') return json(200, { access_token: 'svc-media', token_type: 'Bearer', expires_in: 300 });
                     const now = Math.floor(Date.now() / 1000);
                     return json(200, { access_token: serviceAuth.signServiceToken({ iss: issuer, sub: 'svc:media-hub', actor_type: 'service', aud: [body.audience || 'openvibe.events'], cap: String(body.scope || '').split(/\s+/).filter(Boolean), iat: now, exp: now + 300, jti: crypto.randomUUID() }, privatePem), token_type: 'Bearer', expires_in: 300 });
                 }

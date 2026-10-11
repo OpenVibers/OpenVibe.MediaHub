@@ -44,13 +44,12 @@ function load(env = process.env) {
         db: { url: env.DATABASE_URL || '', directUrl: env.DATABASE_DIRECT_URL || '', pgliteDir: env.MEDIAHUB_PGLITE_DIR || '' },
         valkey: { url: env.VALKEY_URL || '', prefix: env.VALKEY_PREFIX || 'ov:media-hub:' },
 
-        // OpenVibe.Media: the only place bytes live. MediaHub talks to it server-side with its own app key
-        // (Media's `:app` segment `media-hub`); no browser ever holds that key. MEDIAHUB_MEDIA_URL is the
+        // OpenVibe.Media: the only place bytes live. MediaHub talks to it server-side with its Network service
+        // token (Media's `:app` segment `media-hub`); no browser ever holds it. MEDIAHUB_MEDIA_URL is the
         // host-internal address (127.0.0.1:4100 in production), never the public origin.
         media: {
             url: trim(env.MEDIAHUB_MEDIA_URL || 'http://127.0.0.1:4100'),
             app: env.MEDIAHUB_MEDIA_APP || 'media-hub',
-            appKey: env.MEDIAHUB_MEDIA_APP_KEY || '',
             timeoutMs: int(env.MEDIAHUB_MEDIA_TIMEOUT_MS, 30_000),
         },
 
