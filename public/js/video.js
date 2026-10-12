@@ -29,6 +29,14 @@
         const t = startSeconds();
         if (t != null) seek(video, t);
 
+        // A playlist's watch page (?list=…) carries the next item on the player; move to it when this ends.
+        const nextUrl = video.getAttribute('data-ovv-next');
+        if (nextUrl) {
+            video.addEventListener('ended', function () {
+                window.location.href = nextUrl;
+            });
+        }
+
         document.querySelectorAll('[data-ovv-seek]').forEach(function (el) {
             el.addEventListener('click', function () {
                 seek(video, Number(el.getAttribute('data-ovv-seek')));

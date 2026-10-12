@@ -13,6 +13,10 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
 - OpenVibe.Video step B: the VOD watch page now shows a chat replay of the stream (read from OpenVibe.Chat,
   oldest first, the first 1,000 messages) and read-only comments with the OpenVibe.Community thread link, plus the
   `MEDIAHUB_CHAT_URL` setting.
+- OpenVibe.Video step C: playlists. Signed-in people can save recordings and clips into playlists (100 playlists per
+  person, 500 items each), share them by link (public/unlisted), and watch them back with the `?list=` up-next flow.
+  Sign-in now works on the video host with its own callback URI, and the playlists are part of account export and
+  deletion.
 - openvibe.pics is still parked: its vhost answers 302 to https://openvibe.network/ and proxies nothing. The app
   no longer has "coming" pages or host-based brand handling.
 

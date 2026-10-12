@@ -37,11 +37,11 @@ function sanitizeNext(next) {
     return next;
 }
 
-function authorizeUrl(config, { state, challenge, silent = false }) {
+function authorizeUrl(config, { state, challenge, silent = false, redirectUri = null }) {
     const q = new URLSearchParams({
         response_type: 'code',
         client_id: config.oauth.clientId,
-        redirect_uri: config.oauth.redirectUri,
+        redirect_uri: redirectUri || config.oauth.redirectUri,
         scope: config.oauth.scope,
         state,
         code_challenge: challenge,
@@ -53,6 +53,15 @@ function authorizeUrl(config, { state, challenge, silent = false }) {
 
 function createSso({ config, keys, fetchImpl = globalThis.fetch, now = () => Date.now(), log = console }) {
     const cookieBase = () => ({ sameSite: 'lax', secure: config.cookies.secure, httpOnly: true, path: '/' });
+
+    // openvibe.video signs in through the same Network client, but with its own callback URI: the Network
+    // registered https://openvibe.video/auth/callback for client media-hub next to the drive's. Cookies are
+    // host-only (no Domain), so each host keeps its own session.
+    const videoRedirectUri = (() => { try { return `${String(config.video.url).replace(/\/+$/, '')}/auth/callback`; } catch { return null; } })();
+    const videoHostname = (() => { try { return new URL(config.video.url).hostname; } catch { return null; } })();
+    const redirectUriFor = (req) => (videoRedirectUri && videoHostname && req && req.hostname === videoHostname
+        ? videoRedirectUri
+        : config.oauth.redirectUri);
 
     function setSession(res, data) {
         res.cookie(ACCESS_COOKIE, data.access_token, { ...cookieBase(), maxAge: 24 * 60 * 60 * 1000 });
@@ -175,7 +184,7 @@ function createSso({ config, keys, fetchImpl = globalThis.fetch, now = () => Dat
             const { verifier, challenge } = pkcePair();
             res.cookie(FLOW_COOKIE, JSON.stringify({ state, verifier, next: sanitizeNext(req.query.next), silent }), flowOpts());
             res.set('Cache-Control', cache.htmlHeaders({ private: true }));
-            res.redirect(authorizeUrl(config, { state, challenge, silent }));
+            res.redirect(authorizeUrl(config, { state, challenge, silent, redirectUri: redirectUriFor(req) }));
         });
 
         r.get('/callback', async (req, res) => {
@@ -195,7 +204,7 @@ function createSso({ config, keys, fetchImpl = globalThis.fetch, now = () => Dat
             }
             if (!code) return res.status(400).type('text/plain').send('The Network sent no authorization code.');
             try {
-                const data = await tokenGrant({ grant_type: 'authorization_code', code: String(code), redirect_uri: config.oauth.redirectUri, code_verifier: flow.verifier });
+                const data = await tokenGrant({ grant_type: 'authorization_code', code: String(code), redirect_uri: redirectUriFor(req), code_verifier: flow.verifier });
                 setSession(res, data);
                 return res.redirect(next);
             } catch (err) {

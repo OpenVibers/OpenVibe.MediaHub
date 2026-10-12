@@ -29,6 +29,9 @@ const TABLES = [
     { table: 'mh_usage', subject: 'owner', value: AS_REQUESTER, file: 'usage.json' },
     { table: 'mh_files', subject: 'owner', value: AS_REQUESTER, file: 'files.json' },
     { table: 'mh_folders', subject: 'owner', value: AS_REQUESTER, file: 'folders.json' },
+    // A playlist's items have no owner column of their own; they are exported with extraExport below and erased
+    // by the playlists' ON DELETE CASCADE, so only the playlists table is listed here.
+    { table: 'video_playlists', subject: 'owner', value: AS_REQUESTER, file: 'playlists.json' },
     // An upload that never finished is this service's own state, not something the person made: it is erased with
     // the account but is not part of the export.
     { table: 'mh_uploads', subject: 'owner', value: AS_REQUESTER, file: null },
@@ -42,7 +45,16 @@ function createAccount({ db, config, media, log = console }) {
         db,
         service: 'media-hub',
         tables: TABLES,
-        note: 'OpenVibe.MediaHub: your files, folders, share links, the reports you filed and your upload counts. The bytes of your files live in OpenVibe.Media.',
+        note: 'OpenVibe.MediaHub: your files, folders, share links, the reports you filed, your upload counts and your playlists. The bytes of your files live in OpenVibe.Media.',
+        extraExport: async (db, subject) => {
+            const rows = await db.many(
+                `SELECT i.playlist_id, i.kind, i.item_id, i.position, i.added_at
+                   FROM video_playlist_items i
+                   JOIN video_playlists p ON p.id = i.playlist_id
+                  WHERE p.owner = $1
+                  ORDER BY i.playlist_id, i.position ASC`, [`user:${subject}`]);
+            return rows.length ? [{ name: 'playlist_items.json', content: rows }] : [];
+        },
         extraErase: async () => {
             const ids = pendingObjects;
             pendingObjects = [];

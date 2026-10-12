@@ -63,6 +63,9 @@ function load(env = process.env) {
             liveUrl: trim(env.MEDIAHUB_LIVE_URL || 'https://openvibe.live'),
             livePublicUrl: trim(env.MEDIAHUB_LIVE_PUBLIC_URL || 'https://openvibe.live'),
             chatUrl: trim(env.MEDIAHUB_CHAT_URL || 'https://openvibe.live'),
+            // Playlists (step C): the per-person caps the pages and the API enforce together.
+            playlistsMax: size(env.MEDIAHUB_VIDEO_PLAYLISTS_MAX, 100),
+            playlistItemsMax: size(env.MEDIAHUB_VIDEO_PLAYLIST_ITEMS_MAX, 500),
         },
 
         // What one person may keep and do here. Media's own quotas are per tenant (this whole service is one
