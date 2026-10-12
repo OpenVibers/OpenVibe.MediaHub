@@ -2,9 +2,12 @@
 
 /**
  * The OpenVibe.Video page shell. Same composition as the drive's layout (openvibe-shared/shell,
- * the OpenVibe Frame navbar and footer, the shared app icon), but public and read-only: no sign-in
- * bar, no drive navigation, and every canonical URL is on the video host. The brand here is
- * OpenVibe.Video.
+ * the OpenVibe Frame navbar and footer, the shared app icon), but public and read-only: no drive
+ * navigation, and every canonical URL is on the video host. The brand here is OpenVibe.Video.
+ *
+ * A page rendered for a signed-in person names them (and a session cookie is present), so it is
+ * private and never cached; every other page stays public. Cloudflare ignores Vary, so the cache
+ * decision is made from the session cookie's presence rather than Vary.
  */
 const crypto = require('crypto');
 const fs = require('fs');
@@ -29,9 +32,11 @@ function assetVersion(rel) {
 }
 const asset = (rel) => `/${rel}?v=${assetVersion(rel)}`;
 
-/** o: title, description, body (html), config, path, index, noindex, crumbs [{label, href}], scripts [rel] */
+/** o: title, description, body (html), config, path, index, noindex, viewer, private, crumbs [{label, href}], scripts [rel] */
 function renderPage(o) {
     const title = o.title || SITE_NAME;
+    const viewer = o.viewer || { kind: 'anonymous' };
+    const signedIn = viewer.kind === 'user';
     const pathNow = o.path || '/';
     const canonical = `${String(o.baseUrl).replace(/\/+$/, '')}${pathNow.split('?')[0]}`;
     const crumbs = (o.crumbs || []).length
@@ -43,8 +48,12 @@ ${appIcon.headTags({ site: 'media-hub' })}
 <link rel="stylesheet" href="${asset('css/video.css')}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 ${(o.scripts || []).map((rel) => `<script src="${asset(rel)}" defer></script>`).join('\n')}`;
+    const account = signedIn
+        ? html`Signed in as <strong>${viewer.displayName || viewer.username || 'you'}</strong> · <a href="/auth/logout?next=${encodeURIComponent(pathNow)}">Sign out</a>`
+        : html`<a href="/auth/login?next=${encodeURIComponent(pathNow)}">Sign in with OpenVibe</a>`;
     const body = `<a class="skip" href="#main">Skip to content</a>
 <div id="navbar-mount"></div>
+<noscript><div class="account-bar" role="navigation" aria-label="Account">${render(account)}</div></noscript>
 <main id="main" class="page ovv-page">
 ${render(crumbs)}
 ${render(o.body)}
@@ -60,16 +69,24 @@ ${render(o.body)}
         robots: o.noindex ? 'noindex' : (o.index ? 'index, follow' : 'noindex, nofollow'),
         home: '/',
         navLinks: [],
-        navbar: { service: 'media-hub', apiBase: NETWORK_URL, history: { type: 'page', title } },
+        navbar: {
+            service: 'media-hub',
+            apiBase: NETWORK_URL,
+            history: { type: 'page', title },
+            sessionUrl: '/auth/me',
+            loginUrl: '/auth/login?next={path}',
+            logoutUrl: '/auth/logout?next={path}',
+            silentLogin: `${String(o.baseUrl).replace(/\/+$/, '')}/auth/login?silent=1&next={url}`,
+        },
         footer: { service: 'media-hub', variant: 'compact', brandName: SITE_NAME },
         head,
         body,
     });
 }
 
-/** Send a video page. Video pages are public; unlisted pages are noindex but still cached. */
+/** Send a video page. Signed-out pages are public; a session cookie makes a page private, no-store. */
 function send(res, status, o) {
-    if (!res.get('Cache-Control')) res.set('Cache-Control', o.cache || cache.htmlHeaders({ maxAge: 300 }));
+    if (!res.get('Cache-Control')) res.set('Cache-Control', o.cache || cache.htmlHeaders({ private: o.private, maxAge: 300 }));
     res.set('Vary', 'Host');
     res.status(status).type('html').send(renderPage(o));
 }

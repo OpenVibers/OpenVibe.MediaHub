@@ -39,6 +39,7 @@ const { createIdentity } = require('./network/identity');
 const { createService } = require('./drive/service');
 const { createUploads } = require('./drive/upload');
 const { createAccount, createSender } = require('./account');
+const { createPlaylists } = require('./video/playlists');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const VERSION = require('../package.json').version;
@@ -62,7 +63,8 @@ async function createApp(opts = {}) {
     const drive = createService({ s, media, identity, config, log });
     const uploads = createUploads({ s, media, config, service: drive, log });
     const account = createAccount({ db: s.db, config, media, log });
-    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, fetchImpl, log };
+    const playlists = createPlaylists({ s, config, log });
+    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, fetchImpl, log };
 
     const app = express();
     app.disable('x-powered-by');
@@ -103,8 +105,19 @@ async function createApp(opts = {}) {
     }));
     app.use(cookieParser());
 
+    // ── Who is asking (verified offline; refreshed when expired) ──
+    // Mounted before the host routing so both openvibe.download and openvibe.video see req.viewer; the video
+    // pages use it for the signed-in navbar and their private, no-store cache rule.
+    app.use(sso.middleware());
+
+    // ── Sign-in (OAuth2 + PKCE client of OpenVibe.Network) ──
+    // Mounted before the host routing too: both hosts sign in through the same routes, and createSso picks the
+    // callback URI from the Host header (the drive's, or the video host's).
+    app.use('/auth/', rateLimit({ windowMs: 15 * 60_000, limit: 60, standardHeaders: true, legacyHeaders: false }));
+    app.use('/auth', sso.routes());
+
     // ── Host routing: openvibe.video is OpenVibe.Video; every other host (openvibe.download) stays
-    // the drive. On the video host the drive's pages, API and /auth routes never answer.
+    // the drive. On the video host the drive's pages, API and legal pages never answer.
     const videoHost = (() => { try { return new URL(config.video.url).hostname; } catch { return null; } })();
     const videoRoutes = createVideoRoutes(ctx);
     app.use((req, res, next) => {
@@ -123,12 +136,6 @@ async function createApp(opts = {}) {
     // through a proxy, so only loopback can reach it even though nginx proxies this path.
     app.use('/internal/events', account.consumer({ send: createSender({ config, fetchImpl }) }));
 
-    // ── Who is asking (verified offline; refreshed when expired) ──
-    app.use(sso.middleware());
-
-    // ── Sign-in (OAuth2 + PKCE client of OpenVibe.Network) ──
-    app.use('/auth/', rateLimit({ windowMs: 15 * 60_000, limit: 60, standardHeaders: true, legacyHeaders: false }));
-    app.use('/auth', sso.routes());
     { const legal = require('openvibe-shared/legal'); app.get(legal.PATHS, legal.handler({ id: 'media-hub', service: 'media-hub', host: 'openvibe.download', name: 'OpenVibe.MediaHub', profile: 'ugc' })); }
 
     // ── Static assets (content-hashed ?v= → immutable) ──────

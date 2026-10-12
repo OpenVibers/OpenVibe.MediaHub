@@ -3,7 +3,7 @@
 > Your files, shared on your terms.
 
 **Status:** alpha. One process serves **openvibe.download** (a private drive, live in v1) and
-**openvibe.video** (public watch pages for OpenVibe.Live's stream recordings and clips, step A), chosen by Host
+**openvibe.video** (public watch pages and playlists for OpenVibe.Live's stream recordings and clips), chosen by Host
 header. **openvibe.pics** is still parked: it redirects to `https://openvibe.network/` until Pics is built.
 **Port:** 4990 · **Service id:** `media-hub` · **Env prefix:** `MEDIAHUB` · **License:** AGPL-3.0.
 
@@ -31,6 +31,8 @@ creates none):
 - `mh_uploads` — an in-flight chunked upload session (Media's multipart id, the parts expected, the expiry).
 - `account_data_events` — the once-per-event record of applied account export and deletion deliveries
   (openvibe-sdk/account-data, ADR-033).
+- `video_playlists` and `video_playlist_items` — the person's playlists and their ordered Live items
+  (`migrations/0003_video_playlists.sql`); the items cascade from their playlist.
 
 ## Does not own
 
@@ -110,33 +112,43 @@ MediaHub owns the drive: `mh_files`, `mh_folders`, `mh_shares`, `mh_reports`, `m
 
 ## OpenVibe.Video (openvibe.video)
 
-OpenVibe.Video v1 is public and read-only: it serves watch pages for the recordings and clips people already made
-public on OpenVibe.Live. There are no uploads and no new storage — the media files stay on OpenVibe.Media
-(`playback_url`), and the pages read Live's public JSON API server-side, signed out (Live already applies
-visibility: a private item answers 404, an unlisted one is reachable by id but noindex and never listed).
+OpenVibe.Video is public and read-only: it serves watch pages for the recordings and clips people already made
+public on OpenVibe.Live, plus playlists. There are no uploads and no new storage — the media files stay on
+OpenVibe.Media (`playback_url`), and the pages read Live's public JSON API server-side, signed out (Live already
+applies visibility: a private item answers 404, an unlisted one is reachable by id but noindex and never listed).
 
 The VOD page also shows a chat replay of the stream (from OpenVibe.Chat) and read-only comments with a link to
-the OpenVibe.Community thread.
+the OpenVibe.Community thread. The video host signs in through the same Network SSO as the drive, with its own
+callback URI (`https://openvibe.video/auth/callback`); each host's session cookie is host-only, so signing in on one
+does not sign in on the other.
 
-| Path | What |
-|---|---|
-| `/` | what OpenVibe.Video is, then the latest recordings and clips |
-| `/v/:id` | a VOD watch page: player, AI chapters and captions, chat replay, comments, its clips |
-| `/c/:id` | a clip watch page: player, attribution, the full-recording link, the Community thread link |
-| `/@:username` | a channel's recordings (and clips), newest first, 24 per page |
-| `/v/:id/captions.vtt` | the AI transcript as WebVTT captions |
-| `/v/:id/chapters.vtt` | the AI moments as WebVTT chapters: at most twelve, a twelfth of the stream apart, titled by what was seen |
-| `/sitemap.xml`, `/robots.txt`, `/llms.txt` | crawl artifacts for the video host |
+| Path | Who | What |
+|---|---|---|
+| `/` | anyone | what OpenVibe.Video is, then the latest recordings and clips |
+| `/v/:id` | anyone | a VOD watch page: player, AI chapters and captions, chat replay, comments, its clips, add-to-playlist |
+| `/c/:id` | anyone | a clip watch page: player, attribution, the full-recording link, add-to-playlist |
+| `/@:username` | anyone | a channel's recordings (and clips), newest first, 24 per page |
+| `/playlists` | the owner | their playlists: create, rename, change visibility, delete |
+| `/playlists/:id` | anyone with the link | one playlist: public and unlisted are open by link (unlisted noindex), private only to the owner |
+| `/v/:id/captions.vtt` | anyone | the AI transcript as WebVTT captions |
+| `/v/:id/chapters.vtt` | anyone | the AI moments as WebVTT chapters |
+| `/sitemap.xml`, `/robots.txt`, `/llms.txt` | anyone | crawl artifacts for the video host |
 
 Configuration: `MEDIAHUB_VIDEO_URL` (default `https://openvibe.video`; its hostname is the video host),
 `MEDIAHUB_LIVE_URL` (default `https://openvibe.live`; production points it at the loopback address),
 `MEDIAHUB_LIVE_PUBLIC_URL` (default `https://openvibe.live`; links people click) and `MEDIAHUB_CHAT_URL`
 (default `https://openvibe.live`, which proxies `/api/chat/` to OpenVibe.Chat; production points it at the loopback
-address). The video host is chosen by `Host` header in `server/app.js`, so the drive's pages, API and `/auth` never
-answer there. Only https URLs from Live (player source, thumbnails, the thread link) reach a page; anything else is
-dropped.
+address). The video host is chosen by `Host` header in `server/app.js`, so the drive's pages, API and legal pages
+never answer there. Only https URLs from Live (player source, thumbnails, the thread link) reach a page; anything
+else is dropped.
 
-Not built yet: playlists and uploads.
+Playlists: 100 per person and 500 items per playlist, from `MEDIAHUB_VIDEO_PLAYLISTS_MAX` and
+`MEDIAHUB_VIDEO_PLAYLIST_ITEMS_MAX`. A playlist holds Live ids only (`vod` or `clip` plus the numeric id); the
+watch pages fetch the cards through the cached Live client, and an item Live no longer answers is "No longer
+available" to the owner and hidden for everyone else. "Play all" starts the first item with `?list=<id>`, and each
+watch page opened with `?list=` shows "Up next" and advances when the video ends.
+
+Not built yet: uploads, and public playlists of a channel.
 
 ## Pages
 
@@ -158,6 +170,17 @@ Not built yet: playlists and uploads.
 | `POST /shares`, `DELETE /shares/:slug` | make (`{ file_id \| folder_id, hours, usernames? }`) and revoke share links |
 | `GET /uploads/:id`, `PUT /uploads/:id/parts/:n`, `POST /uploads/:id/complete`, `DELETE /uploads/:id` | resumable uploads |
 | `GET /usage` | your usage against the limits |
+
+On the video host (openvibe.video), the playlist API is browser-session only — the owner is the signed-in person,
+never an app, agent or service token:
+
+| Route | |
+|---|---|
+| `GET /api/v1/video/playlists`, `POST /api/v1/video/playlists` | list and create playlists |
+| `GET /api/v1/video/playlists/:id`, `PATCH /api/v1/video/playlists/:id`, `DELETE /api/v1/video/playlists/:id` | one playlist: read, rename/describe/change visibility, delete |
+| `POST /api/v1/video/playlists/:id/items` | add one `{ kind: 'vod'|'clip', id }` |
+| `PATCH /api/v1/video/playlists/:id/items` | reorder: the full ordered list `{ items: [{ kind, id }, …] }` |
+| `DELETE /api/v1/video/playlists/:id/items/:kind/:itemId` | remove one |
 
 Session-cookie writes must be same-origin. Errors are RFC 9457 problem+json with a stable `code`.
 
