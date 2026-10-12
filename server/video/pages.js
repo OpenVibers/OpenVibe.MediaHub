@@ -63,6 +63,47 @@ function durationLabel(s) {
     return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
 }
 
+/** Seconds → an ISO 8601 duration (PT1H2M3S), or undefined. */
+function isoDuration(seconds) {
+    const n = Math.floor(Number(seconds));
+    if (!Number.isFinite(n) || n <= 0) return undefined;
+    const h = Math.floor(n / 3600);
+    const m = Math.floor((n % 3600) / 60);
+    const s = n % 60;
+    return `PT${h ? `${h}H` : ''}${m ? `${m}M` : ''}${s || (!h && !m) ? `${s}S` : ''}`;
+}
+
+const isoTime = (v) => { const t = Date.parse(String(v || '')); return Number.isFinite(t) ? new Date(t).toISOString() : undefined; };
+
+/**
+ * schema.org VideoObject for a public watch page (Google's video results): the page, the thumbnail, the upload time,
+ * the duration, the file, the view count, the channel and, for a recording, its chapters as Clip parts (key moments).
+ */
+function videoLd({ base, path, item, title, description, chapterList, partOf }) {
+    const pageUrl = `${base}${path}`;
+    const thumb = httpsUrl(item.thumbnail_url);
+    const channel = item.display_name || item.username;
+    const parts = (chapterList || []).map((m, i, all) => ({
+        '@type': 'Clip',
+        name: String(m.description || `Chapter ${i + 1}`).slice(0, 110),
+        startOffset: m.offset_seconds,
+        ...(all[i + 1] ? { endOffset: all[i + 1].offset_seconds } : (Number(item.duration_seconds) > m.offset_seconds ? { endOffset: Math.floor(Number(item.duration_seconds)) } : {})),
+        url: `${pageUrl}?t=${m.offset_seconds}`,
+    }));
+    return {
+        ...seo.jsonLd.video({
+            name: title, url: pageUrl, description: String(description || title).slice(0, 500),
+            thumbnailUrl: thumb ? [thumb] : undefined, uploadDate: isoTime(item.created_at),
+            duration: isoDuration(item.duration_seconds), contentUrl: httpsUrl(item.playback_url) || undefined, embedUrl: pageUrl,
+        }),
+        ...(item.view_count != null ? { interactionStatistic: { '@type': 'InteractionCounter', interactionType: 'https://schema.org/WatchAction', userInteractionCount: Number(item.view_count) || 0 } } : {}),
+        ...(channel ? { author: { '@type': 'Person', name: channel, ...(item.username ? { url: `${base}/@${item.username}` } : {}) } } : {}),
+        publisher: { '@type': 'Organization', name: 'OpenVibe', url: 'https://openvibe.network' },
+        ...(parts.length ? { hasPart: parts } : {}),
+        ...(partOf ? { isPartOf: { '@type': 'VideoObject', url: `${base}${partOf}` } } : {}),
+    };
+}
+
 function dateLabel(iso) {
     if (!iso) return '';
     const d = new Date(iso);
@@ -630,6 +671,10 @@ ${kind === 'vod' ? html`<p class="ovv-fine">New clips are still cut on <a href="
             ...(ownOnly ? { cache: cache.htmlHeaders({ private: true }) } : {}),
             title: vod.title || 'Stream recording',
             description: vod.description || vod.ai_overview || '',
+            ...(ownOnly || vod.is_recording ? {} : {
+                jsonLd: videoLd({ base, path: `/v/${id}`, item: vod, title: vod.title || 'Stream recording', description: vod.description || vod.ai_overview, chapterList: mems }),
+                image: httpsUrl(vod.thumbnail_url) || undefined, ogType: 'video.other',
+            }),
             scripts: ['js/video.js'],
             body: html`<div class="ovv-watch">
 <div class="ovv-main">
@@ -680,6 +725,8 @@ ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 i
         } catch { threadUrl = null; }
 
         const unlisted = clip.visibility === 'unlisted';
+        // AI clips stay out of search, as on Live: noindex and no structured data.
+        const aiClip = Boolean(clip.auto_generated);
         const fullRecording = clip.vod_id ? `/v/${clip.vod_id}${clip.start_time != null ? `?t=${clip.start_time}` : ''}` : null;
         const sourceName = clip.source_streamer_display_name || clip.source_streamer_username || 'the streamer';
         const madeBy = clip.display_name || clip.username || 'an OpenVibe member';
@@ -692,11 +739,15 @@ ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 i
         const hlsAttr = hlsAttrs(clip);
 
         return page(req, res, {
-            index: !unlisted && !ownOnly,
-            noindex: unlisted || ownOnly,
+            index: !unlisted && !ownOnly && !aiClip,
+            noindex: unlisted || ownOnly || aiClip,
             ...(ownOnly ? { cache: cache.htmlHeaders({ private: true }) } : {}),
             title: clip.title || 'Clip',
             description: clip.ai_overview || '',
+            ...(ownOnly || aiClip ? {} : {
+                jsonLd: videoLd({ base, path: `/c/${id}`, item: clip, title: clip.title || 'Clip', description: clip.ai_overview || attribution, partOf: clip.vod_id ? `/v/${clip.vod_id}` : null }),
+                image: httpsUrl(clip.thumbnail_url) || undefined, ogType: 'video.other',
+            }),
             scripts: ['js/video.js'],
             body: html`<div class="ovv-watch ovv-watch--clip">
 <div class="ovv-main">
@@ -921,6 +972,7 @@ ${rows.length ? html`<ul class="ovv-playlist-list">${rows.map(playlistRow)}</ul>
 
         const items = await playlists.items(pl.id);
         const rows = [];
+        const listLd = [];
         for (const it of items) {
             const itemId = Number(it.item_id);
             let info = null;
@@ -933,6 +985,7 @@ ${rows.length ? html`<ul class="ovv-playlist-list">${rows.map(playlistRow)}</ul>
                 continue;
             }
             const href = it.kind === 'vod' ? `/v/${itemId}` : `/c/${itemId}`;
+            listLd.push({ '@type': 'ListItem', position: listLd.length + 1, url: `${base}${href}`, name: String(info.title || (it.kind === 'vod' ? 'Stream recording' : 'Clip')).slice(0, 110) });
             const thumb = httpsUrl(info.thumbnail_url);
             const title = info.title || (it.kind === 'clip' ? 'Clip' : 'Stream recording');
             const channel = info.username || info.display_name || null;
@@ -950,6 +1003,7 @@ ${isOwner ? itemControls(pl.id, it) : ''}
         return page(req, res, {
             index: pl.visibility === 'public',
             noindex: pl.visibility === 'unlisted',
+            ...(pl.visibility === 'public' && listLd.length ? { jsonLd: { '@context': 'https://schema.org', '@type': 'ItemList', name: pl.title, numberOfItems: listLd.length, itemListElement: listLd } } : {}),
             title: pl.title,
             description: pl.description || undefined,
             crumbs: [{ label: 'Home', href: '/' }, { label: 'Playlists', href: '/playlists' }, { label: pl.title }],

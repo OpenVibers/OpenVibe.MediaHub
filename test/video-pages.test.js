@@ -237,6 +237,17 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('playsinline'));
         assert.ok(r.text.includes('data-ovv-video'));
         assert.ok(r.text.includes('data-ovv-view="https://openvibe.live/api/views/vod/101"'), 'playback counts a view on Live');
+        const ld = [...r.text.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])).find((x) => x['@type'] === 'VideoObject');
+        assert.ok(ld, 'a VideoObject');
+        assert.strictEqual(ld.url, 'https://openvibe.video/v/101');
+        assert.strictEqual(ld.name, 'A public recording');
+        assert.strictEqual(ld.uploadDate, '2026-10-12T10:00:00.000Z');
+        assert.strictEqual(ld.duration, 'PT45S');
+        assert.deepStrictEqual(ld.thumbnailUrl, ['https://openvibe.media/t/101.jpg']);
+        assert.strictEqual(ld.contentUrl, 'https://openvibe.media/v/101');
+        assert.deepStrictEqual(ld.author, { '@type': 'Person', name: 'Streamer', url: 'https://openvibe.video/@streamer' });
+        assert.ok(Array.isArray(ld.hasPart) && ld.hasPart.length >= 1 && ld.hasPart.every((c) => c['@type'] === 'Clip' && Number.isInteger(c.startOffset) && c.url.startsWith('https://openvibe.video/v/101?t=')), 'chapters as key moments');
+        assert.match(r.text, /<meta property="og:image" content="https:\/\/openvibe\.media\/t\/101\.jpg"/, 'the thumbnail is the share image');
         assert.ok(r.text.includes('data-ovv-hls="https://openvibe.media/o/med_101/master.m3u8"'), 'the timeline playlist');
         assert.ok(/data-ovv-hls-lib="\/vendor\/hls\.light\.min\.js\?v=[0-9a-f]{10}"/.test(r.text), 'hls.js, self-hosted and content-hashed');
         assert.ok(/media-src[^;]*blob:/.test(String(r.headers['content-security-policy'])), 'MSE plays from blob:');
@@ -257,6 +268,10 @@ function countOccurrences(haystack, needle) {
         const r = await getVideo('/c/201');
         assert.strictEqual(r.status, 200);
         assert.ok(r.text.includes('data-ovv-view="https://openvibe.live/api/views/clip/201"'), 'playback counts a clip view on Live');
+        const cld = [...r.text.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])).find((x) => x['@type'] === 'VideoObject');
+        assert.ok(cld && cld.url === 'https://openvibe.video/c/201', 'a clip VideoObject');
+        assert.deepStrictEqual(cld.isPartOf, { '@type': 'VideoObject', url: 'https://openvibe.video/v/101' }, 'part of its recording');
+        assert.strictEqual(cld.duration, 'PT10S');
         assert.ok(r.text.includes('src="https://openvibe.media/c/201"'), 'the clip playback url');
         assert.ok(r.text.includes('Made by Clipper'), 'attributed to the person who made it');
         assert.ok(r.text.includes('Watch in the full recording'));
