@@ -45,6 +45,8 @@ const BUDGETS = {
     'media-hub.upload.complete': { minute: 30, hour: 300 },
     'media-hub.folder.create': { minute: 20, hour: 120 },
     'media-hub.share.create': { minute: 20, hour: 200 },
+    'media-hub.playlist.create': { minute: 30, hour: 300 },
+    'media-hub.playlist.write': { minute: 120, hour: 1_200 },
 };
 
 function createCallerLimits({ config, now = () => Date.now(), registry = null, log = console, enabled = true, valkey = null }) {

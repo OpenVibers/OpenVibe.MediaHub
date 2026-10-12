@@ -6,11 +6,12 @@
  * the card and player details through the existing, cached Live client.
  *
  * The rules here are shared by the pages (server/video/pages.js) and the API (server/video/api.js) so a form and
- * a POST enforce the same numbers: 100 playlists per person, 500 items per playlist (both from the environment),
+ * a POST enforce the same numbers: 100 playlists per owner, 500 items per playlist (both from the environment),
  * a title of 1-120 characters, a description of at most 2,000, and a visibility of public | unlisted | private.
  *
- * Nothing here trusts a caller's identity: the caller passes the requester it already established, and this module
- * only ever compares it with what the rows say.
+ * A playlist belongs to a person (owner user:usr_…) or, through the API, to an app, agent or service
+ * (owner app:app_… / agent:agt_… / service:<slug>). Nothing here trusts a caller's identity: the caller passes
+ * the requester it already established, and this module only ever compares it with what the rows say.
  */
 
 const TITLE_MAX = 120;
@@ -60,9 +61,49 @@ function createPlaylists({ s, config, log = console }) {
           WHERE p.owner = $1
           ORDER BY p.updated_at DESC, p.id DESC`, [owner]);
 
+    /**
+     * A person's public playlists, newest first, paged by an opaque keyset cursor over (updated_at, id). Unlisted
+     * and private playlists never appear here. `limit` is clamped to 1-50 by the caller and again here.
+     */
+    async function publicByOwner(owner, { limit, cursor = null } = {}) {
+        const n = Math.min(50, Math.max(1, Number(limit) || 20));
+        let after = null;
+        if (cursor) {
+            try {
+                const parsed = JSON.parse(Buffer.from(String(cursor), 'base64url').toString('utf8'));
+                if (parsed && typeof parsed.updated_at === 'string' && typeof parsed.id === 'string' && PLAYLIST_ID_RE.test(parsed.id)) after = parsed;
+            } catch { after = null; }
+        }
+        const params = [owner];
+        let where = "p.owner = $1 AND p.visibility = 'public'";
+        if (after) {
+            params.push(after.updated_at, after.id);
+            where += ` AND (p.updated_at, p.id) < ($${params.length - 1}, $${params.length})`;
+        }
+        const rows = await s.db.many(
+            `SELECT p.*, (SELECT count(*) FROM video_playlist_items i WHERE i.playlist_id = p.id)::int AS item_count
+               FROM video_playlists p
+              WHERE ${where}
+              ORDER BY p.updated_at DESC, p.id DESC
+              LIMIT ${n + 1}`, params);
+        const hasMore = rows.length > n;
+        const page = hasMore ? rows.slice(0, n) : rows;
+        const last = page.length ? page[page.length - 1] : null;
+        const next = hasMore && last ? Buffer.from(JSON.stringify({ updated_at: last.updated_at, id: last.id })).toString('base64url') : null;
+        return { playlists: page, next };
+    }
+
     const count = (owner) => s.db.value('SELECT count(*) FROM video_playlists WHERE owner = $1', [owner]).then(Number);
 
-    async function create(owner, { title, description = '', visibility = 'private' }) {
+    /** A person's public name on their playlists follows their account: playlists made before the column existed, or
+     *  before a rename, get the current username when the person next opens their playlists. */
+    async function refreshOwnerUsername(owner, username) {
+        if (!String(owner || '').startsWith('user:') || !username) return;
+        await s.db.query('UPDATE video_playlists SET owner_username = $2 WHERE owner = $1 AND owner_username IS DISTINCT FROM $2',
+            [owner, String(username).slice(0, 64)]);
+    }
+
+    async function create(owner, { title, description = '', visibility = 'private', ownerUsername = null, projectId = null }) {
         const t = cleanTitle(title);
         const terr = titleError(t);
         if (terr) return { ok: false, code: 'playlist.invalid_title', detail: terr };
@@ -74,11 +115,16 @@ function createPlaylists({ s, config, log = console }) {
             return { ok: false, code: 'playlist.limit', detail: `You have ${max()} playlists (the most one person may have). Delete one first.` };
         }
         const now = nowIso();
-        const row = { id: s.newId('vpl'), owner, title: t, description: d, visibility, created_at: now, updated_at: now };
+        const row = {
+            id: s.newId('vpl'), owner, title: t, description: d, visibility,
+            owner_username: ownerUsername ? String(ownerUsername).slice(0, 64) : null,
+            project_id: projectId ? String(projectId) : null,
+            created_at: now, updated_at: now,
+        };
         await s.db.query(
-            `INSERT INTO video_playlists (id, owner, title, description, visibility, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [row.id, row.owner, row.title, row.description, row.visibility, row.created_at, row.updated_at]);
+            `INSERT INTO video_playlists (id, owner, title, description, visibility, owner_username, project_id, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [row.id, row.owner, row.title, row.description, row.visibility, row.owner_username, row.project_id, row.created_at, row.updated_at]);
         return { ok: true, playlist: row };
     }
 
@@ -184,7 +230,7 @@ function createPlaylists({ s, config, log = console }) {
 
     return {
         TITLE_MAX, DESCRIPTION_MAX, VISIBILITIES, KINDS, isItemId, isPlaylistId: (id) => PLAYLIST_ID_RE.test(String(id || '')),
-        list, get, own, create, update, remove, items, getItem, addItem, removeItem, reorder,
+        list, publicByOwner, refreshOwnerUsername, get, own, create, update, remove, items, getItem, addItem, removeItem, reorder,
     };
 }
 

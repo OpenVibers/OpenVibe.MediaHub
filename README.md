@@ -67,9 +67,11 @@ creates none):
 
 The service manifest (openvibe-contracts, `manifests/services/media-hub.json`) lists ten capabilities it owns —
 `video.vod.read`, `video.playlist.read`, `video.playlist.manage`, `pics.image.read`, `pics.image.upload`,
-`pics.album.read`, `pics.album.manage`, `download.file.read`, `download.file.upload`, `download.share.create` — but
-no route guards one yet: `CAPABILITIES` in `server/http/principal.js` is empty, and every `/api/v1` route requires a
-signed-in person, never an app, agent or service token.
+`pics.album.read`, `pics.album.manage`, `download.file.read`, `download.file.upload`, `download.share.create`.
+The two playlist capabilities are registered in `server/http/principal.js` and guarded on the video host's API
+(see **Playlist API**): `video.playlist.read` lets an app, agent or service list and read the playlists it owns and
+any public or unlisted playlist by id, and `video.playlist.manage` lets it create, edit, reorder and delete its own.
+Every other `/api/v1` route still requires a signed-in person, never an app, agent or service token.
 
 On other services it calls:
 
@@ -150,13 +152,14 @@ address). The video host is chosen by `Host` header in `server/app.js`, so the d
 never answer there. Only https URLs from Live (player source, thumbnails, the thread link) reach a page; anything
 else is dropped.
 
-Playlists: 100 per person and 500 items per playlist, from `MEDIAHUB_VIDEO_PLAYLISTS_MAX` and
+Playlists: 100 per owner and 500 items per playlist, from `MEDIAHUB_VIDEO_PLAYLISTS_MAX` and
 `MEDIAHUB_VIDEO_PLAYLIST_ITEMS_MAX`. A playlist holds Live ids only (`vod` or `clip` plus the numeric id); the
 watch pages fetch the cards through the cached Live client, and an item Live no longer answers is "No longer
 available" to the owner and hidden for everyone else. "Play all" starts the first item with `?list=<id>`, and each
-watch page opened with `?list=` shows "Up next" and advances when the video ends.
+watch page opened with `?list=` shows "Up next" and advances when the video ends. A playlist may also be owned by
+an app, agent or service through the API below; its public page attributes it "Curated by an app".
 
-Not built yet: uploads, and public playlists of a channel.
+A channel page (`/@user`) lists that person's public playlists (newest twelve). Not built yet: uploads.
 
 ## Pages
 
@@ -179,18 +182,63 @@ Not built yet: uploads, and public playlists of a channel.
 | `GET /uploads/:id`, `PUT /uploads/:id/parts/:n`, `POST /uploads/:id/complete`, `DELETE /uploads/:id` | resumable uploads |
 | `GET /usage` | your usage against the limits |
 
-On the video host (openvibe.video), the playlist API is browser-session only — the owner is the signed-in person,
-never an app, agent or service token:
+On the video host (openvibe.video), the playlist API accepts a person Bearer token, an app/agent/service token
+with the right capability, or (for public reads) no token — see **Playlist API** below. The drive's `/api/v1`
+routes are unchanged and remain a signed-in person only.
 
-| Route | |
-|---|---|
-| `GET /api/v1/video/playlists`, `POST /api/v1/video/playlists` | list and create playlists |
-| `GET /api/v1/video/playlists/:id`, `PATCH /api/v1/video/playlists/:id`, `DELETE /api/v1/video/playlists/:id` | one playlist: read, rename/describe/change visibility, delete |
-| `POST /api/v1/video/playlists/:id/items` | add one `{ kind: 'vod'|'clip', id }` |
-| `PATCH /api/v1/video/playlists/:id/items` | reorder: the full ordered list `{ items: [{ kind, id }, …] }` |
-| `DELETE /api/v1/video/playlists/:id/items/:kind/:itemId` | remove one |
+## Playlist API
 
-Session-cookie writes must be same-origin. Errors are RFC 9457 problem+json with a stable `code`.
+The video host's playlist API is `/api/v1/video/*`. The caller is the existing principal
+(`server/http/principal.js`): a person's own Network token as `Authorization: Bearer` works exactly like the
+session, an app/agent/service token needs the capability the route names, and public reads are open to anyone.
+
+| Route | Who | What |
+|---|---|---|
+| `GET /api/v1/video/playlists` | person, or app with `video.playlist.read` | the caller's own playlists, newest first |
+| `POST /api/v1/video/playlists` | person, or app with `video.playlist.manage` | create one from `{ title, description?, visibility? }` |
+| `GET /api/v1/video/playlists/:id` | owner (private too); anyone for public/unlisted; app with `video.playlist.read` for others' public/unlisted | one playlist and its items |
+| `PATCH /api/v1/video/playlists/:id` | owner, or app with `video.playlist.manage` | rename / describe / change visibility |
+| `DELETE /api/v1/video/playlists/:id` | owner, or app with `video.playlist.manage` | delete it (its items go with it) |
+| `POST /api/v1/video/playlists/:id/items` | owner, or app with `video.playlist.manage` | add one `{ kind: 'vod'|'clip', id }` |
+| `PATCH /api/v1/video/playlists/:id/items` | owner, or app with `video.playlist.manage` | reorder: the full ordered list `{ items: [{ kind, id }, …] }` |
+| `DELETE /api/v1/video/playlists/:id/items/:kind/:itemId` | owner, or app with `video.playlist.manage` | remove one |
+| `GET /api/v1/video/users/:username/playlists` | anyone | that person's public playlists, newest first, `limit` (default 20, max 50) and an opaque `cursor` |
+
+An app/agent/service owns a playlist under its requester (`app:app_…`, `agent:agt_…`, `service:<slug>`) and the
+playlist records its `project_id`. Its Network token is minted for the media hub's audience, `openvibe.download`, as
+for the drive (one service, one audience). A person's session-cookie writes must be same-origin; a person Bearer token needs
+no capability. A private playlist answers `404 playlist.not_found` to anyone but its owner (never 403). Errors are
+RFC 9457 problem+json with a stable code (`token.required`, `capability.denied`, `playlist.not_found`, and the
+playlist validation codes).
+
+Create with an app token:
+
+```bash
+curl -sS https://openvibe.video/api/v1/video/playlists \
+  -H 'Authorization: Bearer <app token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Clipped moments","visibility":"unlisted"}'
+```
+
+A public read (no token) returns the playlist and its items:
+
+```bash
+curl -sS https://openvibe.video/api/v1/video/playlists/<id>
+```
+
+```json
+{
+  "playlist": {
+    "id": "vpl_…", "title": "…", "description": "…", "visibility": "unlisted",
+    "owner": { "kind": "user", "username": "kim" },
+    "item_count": 2, "created_at": "…", "updated_at": "…"
+  },
+  "items": [{ "kind": "vod", "id": 101, "position": 0, "added_at": "…" }]
+}
+```
+
+`owner` is `{ kind: 'user', username }` for a person, or `{ kind: 'app' | 'agent' | 'service' }` otherwise. Items
+are Live ids only; the watch pages resolve their display fields lazily through the cached Live client.
 
 ## Account export and deletion (ADR-033)
 

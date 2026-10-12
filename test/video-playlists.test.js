@@ -48,6 +48,8 @@ function startLive() {
             if (clipDetail[1] === '201') return json(200, { clip: publicClip });
             return json(404, { error: 'not found' });
         }
+        if (url.pathname === '/api/vods') return json(200, { vods: [publicVod], hasMore: false });
+        if (url.pathname === '/api/clips') return json(200, { clips: [] });
         return json(404, { error: 'not found' });
     });
     return new Promise((resolve) => {
@@ -184,6 +186,26 @@ const videoEnv = (live) => ({
         assert.strictEqual(u.status, 200);
         assert.ok(u.text.includes('<meta name="robots" content="noindex">'), 'unlisted is noindex');
         assert.ok(u.text.includes('Unlisted list'), 'the title renders');
+    });
+
+    await check('a channel page lists that person\'s public playlists only', async () => {
+        const mk = async (title, visibility) => {
+            const r = await api(t.base, '/playlists', { method: 'POST', cookie: kimCookie, form: { title, visibility } });
+            assert.strictEqual(r.status, 303, r.text);
+            return r.headers.location.split('/').pop();
+        };
+        const pub = await mk('Kim channel public', 'public');
+        await mk('Kim channel unlisted', 'unlisted');
+        await mk('Kim channel private', 'private');
+        const page = await vreq(t.base, '/@kim');
+        assert.strictEqual(page.status, 200, page.text.slice(0, 300));
+        assert.ok(page.text.includes('id="h-lists"'), 'a Playlists section');
+        assert.ok(page.text.includes(`href="/playlists/${pub}"`) && page.text.includes('Kim channel public'), 'the public playlist');
+        assert.ok(!page.text.includes('Kim channel unlisted') && !page.text.includes('Kim channel private'), 'never unlisted or private');
+        assert.ok(!page.text.includes('ovv-pl-edit'), 'no owner controls on a channel page');
+        const other = await vreq(t.base, '/@sam');
+        assert.strictEqual(other.status, 200);
+        assert.ok(!other.text.includes('id="h-lists"'), 'no section without public playlists');
     });
 
     await check('a signed-in playlist write is refused without the same-origin signal', async () => {
