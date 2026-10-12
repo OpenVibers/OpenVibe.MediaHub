@@ -28,6 +28,7 @@ const { createSso } = require('./auth/sso');
 const { createPrincipal } = require('./http/principal');
 const { createApi } = require('./http/api');
 const { createPageRoutes } = require('./http/pages');
+const { createVideoRoutes } = require('./video/pages');
 const { createServiceReadiness } = require('./observability');
 const { createCallerLimits } = require('./http/caller-limits');
 const { assetVersion, send } = require('./render/layout');
@@ -61,7 +62,7 @@ async function createApp(opts = {}) {
     const drive = createService({ s, media, identity, config, log });
     const uploads = createUploads({ s, media, config, service: drive, log });
     const account = createAccount({ db: s.db, config, media, log });
-    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, log };
+    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, fetchImpl, log };
 
     const app = express();
     app.disable('x-powered-by');
@@ -85,6 +86,8 @@ async function createApp(opts = {}) {
                 styleSrc: ["'self'", "'unsafe-inline'", 'https://openvibe.network', 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com'],
                 fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com', 'https://cdnjs.cloudflare.com'],
                 imgSrc: ["'self'", 'data:', 'https://openvibe.network', 'https://openvibe.media'],
+                // The video player loads its media file from OpenVibe.Media (https://openvibe.media/v|/c).
+                mediaSrc: ["'self'", 'https://openvibe.media'],
                 connectSrc: ["'self'", 'https://openvibe.network', 'https://cloudflareinsights.com', 'https://openvibe.events'],
                 frameSrc: ["'self'", 'https://openvibe.network'],
                 frameAncestors: ["'none'"],
@@ -99,6 +102,15 @@ async function createApp(opts = {}) {
         referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     }));
     app.use(cookieParser());
+
+    // ── Host routing: openvibe.video is OpenVibe.Video; every other host (openvibe.download) stays
+    // the drive. On the video host the drive's pages, API and /auth routes never answer.
+    const videoHost = (() => { try { return new URL(config.video.url).hostname; } catch { return null; } })();
+    const videoRoutes = createVideoRoutes(ctx);
+    app.use((req, res, next) => {
+        if (videoHost && req.hostname === videoHost) return videoRoutes(req, res, next);
+        return next();
+    });
 
     // ── Machine endpoints ───────────────────────────────────
     app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'openvibe-media-hub', version: VERSION }));
