@@ -96,12 +96,17 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
      * they may do), never cached. 2xx → the JSON body; a 4xx → LiveRefusedError carrying Live's status and message
      * (a 401 lets the caller refresh the session and try once more); anything else → LiveUnavailableError.
      */
-    async function asPerson(token, method, path, body) {
+    async function asPerson(token, method, path, body, { viewerIp = null } = {}) {
         let res;
         try {
             res = await fetchImpl(`${config.video.liveUrl}${path}`, {
                 method,
-                headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+                headers: {
+                    Accept: 'application/json', Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}),
+                    // Live limits clip-making per address too; every call from here comes from this server, so the
+                    // person's own address is passed (Live reads the first X-Forwarded-For entry).
+                    ...(viewerIp ? { 'X-Forwarded-For': viewerIp } : {}),
+                },
                 body: body ? JSON.stringify(body) : undefined,
                 credentials: 'omit',
                 cache: 'no-store',
@@ -127,7 +132,13 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
         }
     }
 
+    /** Only this item's cached read (a clip still being cut is read afresh until it is ready). */
+    function forgetItem(kind, id) {
+        cache.delete(`${config.video.liveUrl}/api/${kind === 'clip' ? 'clips' : 'vods'}/${id}`);
+    }
+
     return {
+        forgetItem,
         /** The person's own view of one item (a private one they own or may moderate included); null when Live says 404. */
         async vodAs(token, id) {
             try { return await asPerson(token, 'GET', `/api/vods/${id}`); } catch (err) { if (err.status === 404) return null; throw err; }
@@ -140,6 +151,8 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
         setClipTitle: (token, id, title) => asPerson(token, 'PUT', `/api/clips/${id}/title`, { title }),
         setClipVisibility: (token, id, visibility) => asPerson(token, 'PUT', `/api/clips/${id}/visibility`, { visibility }),
         deleteClip: (token, id) => asPerson(token, 'DELETE', `/api/clips/${id}`),
+        /** A clip of a recording, cut by Media: { vod_id, start_time, end_time, title } → { clip } (Live's rules and limits). */
+        createClip: (token, fields, viewerIp) => asPerson(token, 'POST', '/api/vods/clips', fields, { viewerIp }),
         forget,
         feed({ type, limit, cursor = null }) {
             const qs = new URLSearchParams({ type, limit: String(limit) });

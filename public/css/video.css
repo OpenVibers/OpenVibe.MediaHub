@@ -189,3 +189,19 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-danger > summary:focus-visible { outline: 2px solid var(--ovv-accent); outline-offset: 2px; border-radius: 4px; }
 .ovv-owner-delete { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
 .ovv-watch--clip .ovv-owner { max-width: 640px; }
+
+/* Make a clip: a disclosure in the side column (any signed-in viewer). */
+.ovv-clipper > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ovv-clipper > summary::-webkit-details-marker { display: none; }
+.ovv-clipper > summary h2 { margin: 0; }
+.ovv-clipper > summary::after { content: '+'; font-size: 1.3rem; line-height: 1; color: var(--ovv-dim); }
+.ovv-clipper[open] > summary::after { content: '−'; }
+.ovv-clipper > summary:focus-visible { outline: 2px solid var(--ovv-accent); outline-offset: 4px; border-radius: 6px; }
+.ovv-clip-times { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ovv-clip-now { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.ovv-clip-now[hidden] { display: none; }
+
+/* A clip Media is still cutting: the player's place, with a note. */
+.ovv-cutting { aspect-ratio: 16 / 9; display: grid; place-items: center; padding: 24px; text-align: center; background: var(--ovv-card); color: var(--ovv-dim); }
+.ovv-cutting p { margin: 0; max-width: 40ch; }
+.ovv-cutting i { color: var(--accent-light, var(--ovv-accent)); margin-right: 6px; }

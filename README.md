@@ -138,8 +138,13 @@ view.
 description (recordings), visibility and delete. Each change is a same-origin web form that openvibe.video sends to
 OpenVibe.Live's own API as the signed-in person (their Network token as a Bearer, refreshed once if it expired), so
 Live's rules decide who may do what and its refusal is shown as it is; the cached reads of the item and of the lists
-are dropped after a change. A private item is shown to its owner only (noindex, never cached). New clips are still cut
-on Live.
+are dropped after a change. A private item is shown to its owner only (noindex, never cached).
+
+**Make a clip.** Any signed-in viewer of a finished recording cuts a clip of up to 60 seconds from its page (start and
+end as m:ss or h:mm:ss; "Start here" / "End here" mark the player's position). openvibe.video sends it to Live's own
+`POST /api/vods/clips` as the person, with their address in `X-Forwarded-For` (Live limits clip-making per person and
+per address), so Live's rules, limits and channel settings apply; the new clip's page says it is being cut, and
+checks again by itself, until Media has cut it.
 
 The VOD page also shows a chat replay of the stream (from OpenVibe.Chat) and read-only comments with a link to
 the OpenVibe.Community thread. The video host signs in through the same Network SSO as the drive, with its own
@@ -151,6 +156,7 @@ does not sign in on the other.
 | `/` | anyone | what OpenVibe.Video is, then the latest recordings and clips |
 | `/v/:id` | anyone | a VOD watch page: player, AI chapters and captions, chat replay, comments, its clips, add-to-playlist |
 | `/c/:id` | anyone | a clip watch page: player, attribution, the full-recording link, add-to-playlist |
+| `POST /v/:id/clip` | any signed-in viewer (Live decides) | cut a clip `{ start, end, title? }` of up to 60 seconds |
 | `POST /v/:id/manage`, `POST /v/:id/delete` | the recording's channel (Live decides) | edit title, description and visibility; delete (a ticked box) |
 | `POST /c/:id/manage`, `POST /c/:id/delete` | the clip's maker or channel (Live decides) | edit title and visibility; delete |
 | `/@:username` | anyone | a channel's recordings (and clips), newest first, 24 per page |

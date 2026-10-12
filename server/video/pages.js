@@ -73,6 +73,24 @@ function isoDuration(seconds) {
     return `PT${h ? `${h}H` : ''}${m ? `${m}M` : ''}${s || (!h && !m) ? `${s}S` : ''}`;
 }
 
+/** "1:02:03", "2:03", "123" or "123.5" → seconds, or NaN. */
+function parseClock(v) {
+    const t = String(v == null ? '' : v).trim();
+    if (/^\d+(\.\d+)?$/.test(t)) return Number(t);
+    const m = /^(?:(\d+):)?([0-5]?\d):([0-5]\d(?:\.\d+)?)$/.exec(t);
+    if (!m) return NaN;
+    return (Number(m[1] || 0) * 3600) + (Number(m[2]) * 60) + Number(m[3]);
+}
+/** Seconds → "m:ss" or "h:mm:ss". */
+function clock(seconds) {
+    const n = Math.max(0, Math.floor(Number(seconds) || 0));
+    const h = Math.floor(n / 3600);
+    const m = Math.floor((n % 3600) / 60);
+    const s = String(n % 60).padStart(2, '0');
+    return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+}
+const CLIP_MAX_SECONDS = 60;   // Live's default max_clip_duration; Live has the last word and says so
+
 const isoTime = (v) => { const t = Date.parse(String(v || '')); return Number.isFinite(t) ? new Date(t).toISOString() : undefined; };
 
 /**
@@ -434,6 +452,26 @@ function createVideoRoutes(ctx) {
     }
     const savedNotice = (req) => (req.query.saved === '1' ? notice('Saved on OpenVibe.Live.', 'ok') : '');
     const visibilityOptions = (current) => VISIBILITIES.map((v) => html`<option value="${v}"${v === current ? ' selected' : ''}>${visibilityLabel(v)}</option>`);
+    /** "Make a clip" of a finished recording, for any signed-in viewer who can see it (Live's rule, as on Live). */
+    function clipPanel(req, id, vod) {
+        if (vod.is_recording) return '';
+        if (!signedIn(req)) {
+            return html`<section class="ovv-panel ovv-clipper" aria-labelledby="h-clip"><h2 id="h-clip">Make a clip</h2><p class="ovv-fine"><a href="/auth/login?next=${encodeURIComponent(req.originalUrl)}">Sign in with OpenVibe</a> to cut a clip of up to ${CLIP_MAX_SECONDS} seconds from this recording.</p></section>`;
+        }
+        const dur = Math.floor(Number(vod.duration_seconds) || 0);
+        return html`<details class="ovv-panel ovv-clipper" data-ovv-clipper><summary><h2 id="h-clip">Make a clip</h2></summary>
+<form class="ovv-owner-form" method="post" action="/v/${id}/clip">
+<div class="ovv-clip-times">
+<label class="ovv-field"><span>Start</span><input name="start" type="text" inputmode="numeric" placeholder="0:00" pattern="[0-9:.]{1,12}" required data-ovv-clip-start></label>
+<label class="ovv-field"><span>End</span><input name="end" type="text" inputmode="numeric" placeholder="0:30" pattern="[0-9:.]{1,12}" required data-ovv-clip-end></label>
+</div>
+<p class="ovv-clip-now" hidden data-ovv-clip-now><button type="button" class="ovv-btn" data-ovv-clip-mark="start">Start here</button> <button type="button" class="ovv-btn" data-ovv-clip-mark="end">End here</button></p>
+<label class="ovv-field"><span>Title <span class="ovv-fine">(optional)</span></span><input name="title" type="text" maxlength="100"></label>
+<p class="ovv-fine">Up to ${CLIP_MAX_SECONDS} seconds${dur ? `, within ${clock(dur)}` : ''}. Times are m:ss or h:mm:ss. The clip is cut on OpenVibe.Media and credited to you.</p>
+<button class="ovv-btn ovv-btn--primary" type="submit">Make the clip</button>
+</form></details>`;
+    }
+
     function ownerPanel(kind, id, item) {
         const what = kind === 'vod' ? 'recording' : 'clip';
         const action = `/${kind === 'vod' ? 'v' : 'c'}/${id}`;
@@ -448,7 +486,6 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
 <details class="ovv-danger"><summary>Delete this ${what}</summary>
 <form class="ovv-owner-delete" method="post" action="${action}/delete"><label class="ovv-confirm"><input type="checkbox" name="confirm" value="1" required> I want to delete it for good</label> <button class="ovv-btn ovv-btn--danger" type="submit">Delete</button></form>
 </details>
-${kind === 'vod' ? html`<p class="ovv-fine">New clips are still cut on <a href="${livePublic}/vod/${id}">OpenVibe.Live</a>.</p>` : ''}
 </section>`;
     }
 
@@ -694,6 +731,7 @@ ${commentsOk ? html`<section class="ovv-panel ovv-comments" aria-labelledby="h-c
 </div>
 <aside class="ovv-side">
 ${manageable ? ownerPanel('vod', id, vod) : ''}
+${ownOnly ? '' : clipPanel(req, id, vod)}
 ${up.html}
 ${mems.length ? html`<section class="ovv-panel ovv-chapters" aria-labelledby="h-chapters"><h2 id="h-chapters">Chapters</h2><ol>${mems.map((m) => html`<li><a href="/v/${id}?t=${m.offset_seconds}" data-ovv-chapter="${m.offset_seconds}"><span class="ovv-time">${vttTime(m.offset_seconds).slice(0, 8)}</span><span>${m.description}</span></a></li>`)}</ol><p class="ovv-fine">From the AI moments of the stream.</p></section>` : ''}
 ${chatRows ? html`<section class="ovv-panel ovv-chat" aria-labelledby="h-chat"><h2 id="h-chat">Chat replay</h2><div class="ovv-chat-body" data-ovv-chat>${chatRows.rows.map((r) => html`<div class="ovv-chat-row" data-ovv-at="${r.offset}"><button type="button" class="ovv-seek" data-ovv-seek="${r.offset}">${streamTime(r.offset)}</button><span class="ovv-chat-msg">${r.name ? html`<b class="ovv-chat-name">${r.name}</b> ` : ''}${r.text}</span></div>`)}</div>${chatRows.leftOut ? html`<p class="ovv-fine">Showing the first 1,000 messages; ${chatRows.leftOut} more not shown.</p>` : ''}</section>` : ''}
@@ -727,6 +765,9 @@ ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 i
         const unlisted = clip.visibility === 'unlisted';
         // AI clips stay out of search, as on Live: noindex and no structured data.
         const aiClip = Boolean(clip.auto_generated);
+        // A clip Media is still cutting (or failed to cut) has no file to play yet.
+        const cutting = Boolean(clip.status) && clip.status !== 'ready';
+        if (cutting) live.forgetItem('clip', id);
         const fullRecording = clip.vod_id ? `/v/${clip.vod_id}${clip.start_time != null ? `?t=${clip.start_time}` : ''}` : null;
         const sourceName = clip.source_streamer_display_name || clip.source_streamer_username || 'the streamer';
         const madeBy = clip.display_name || clip.username || 'an OpenVibe member';
@@ -751,8 +792,9 @@ ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 i
             scripts: ['js/video.js'],
             body: html`<div class="ovv-watch ovv-watch--clip">
 <div class="ovv-main">
-${savedNotice(req)}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this clip.', 'info') : ''}
-<div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline src="${httpsUrl(clip.playback_url) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>
+${savedNotice(req)}${req.query.made === '1' ? notice('Your clip was made. It is credited to you on OpenVibe.Live and here.', 'ok') : ''}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this clip.', 'info') : ''}
+${cutting ? html`<div class="ovv-player-wrap ovv-cutting" role="status" data-ovv-reload="8"><p><i class="fa-solid fa-scissors" aria-hidden="true"></i> This clip is being cut. It plays here in a moment; the page checks again by itself.</p></div>`
+        : html`<div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline src="${httpsUrl(clip.playback_url) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>`}
 <h1 class="ovv-title">${clip.title || 'Clip'}</h1>
 <div class="ovv-byline">
 <div class="ovv-byline-text"><span class="ovv-channel-name">${clip.auto_generated ? html`<span class="ovv-tag ovv-tag--inline">AI clip</span> ` : ''}${attribution}</span>
@@ -782,6 +824,27 @@ ${manageable ? ownerPanel('clip', id, clip) : ''}
         title: 'Not saved', cache: cache.htmlHeaders({ private: true }),
         body: html`<h1>That was not saved</h1>${notice(text, 'bad')}<p><a class="ovv-btn" href="${back}">Go back</a></p>`,
     }, 422);
+
+    r.post('/v/:id/clip', mustSignIn('here', 'Sign in to make a clip.'), async (req, res) => {
+        const id = String(req.params.id || '');
+        if (!live.isId(id)) return notFound(req, res);
+        const back = `/v/${id}`;
+        if (!sameSite(req, res, back)) return undefined;
+        const b = req.body || {};
+        const start = parseClock(b.start);
+        const end = parseClock(b.end);
+        if (!Number.isFinite(start) || !Number.isFinite(end)) return fieldError(req, res, 'Write the start and end as m:ss (for example 1:05) or h:mm:ss.', back);
+        if (end - start < 1) return fieldError(req, res, 'The end has to come at least a second after the start.', back);
+        if (end - start > CLIP_MAX_SECONDS) return fieldError(req, res, `A clip is at most ${CLIP_MAX_SECONDS} seconds.`, back);
+        const title = String(b.title || '').trim().slice(0, 100);
+        let out;
+        try {
+            out = await asPerson(req, res, (token) => live.createClip(token, { vod_id: Number(id), start_time: start, end_time: end, ...(title ? { title } : {}) }, req.ip));
+        } catch (err) { return ownerRefused(req, res, err, back); }
+        const clipId = out && out.clip && out.clip.id;
+        live.forget('vod', id);
+        return res.redirect(303, live.isId(clipId) ? `/c/${clipId}?made=1` : `${back}?saved=1`);
+    });
 
     r.post('/v/:id/manage', mustSignIn('here', 'Sign in to manage your recording.'), async (req, res) => {
         const id = String(req.params.id || '');

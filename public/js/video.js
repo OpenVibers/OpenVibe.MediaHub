@@ -62,9 +62,41 @@
         }, function () { return 'file'; });
     }
 
+    function clockOf(seconds) {
+        const n = Math.max(0, Math.floor(seconds || 0));
+        const h = Math.floor(n / 3600);
+        const m = Math.floor((n % 3600) / 60);
+        const s = String(n % 60).padStart(2, '0');
+        return h ? h + ':' + String(m).padStart(2, '0') + ':' + s : m + ':' + s;
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
+        // A clip still being cut: look again in a few seconds (the server answers once it is ready).
+        const cutting = document.querySelector('[data-ovv-reload]');
+        if (cutting) {
+            const wait = Math.max(3, Number(cutting.getAttribute('data-ovv-reload')) || 8) * 1000;
+            setTimeout(function () { window.location.replace(window.location.pathname); }, wait);
+        }
+
         const video = document.querySelector('video[data-ovv-video]');
         if (!video) return;
+
+        // "Make a clip": with the player here, mark the start and end at the current time.
+        const now = document.querySelector('[data-ovv-clip-now]');
+        if (now) {
+            now.hidden = false;
+            now.querySelectorAll('[data-ovv-clip-mark]').forEach(function (b) {
+                b.addEventListener('click', function () {
+                    const which = b.getAttribute('data-ovv-clip-mark');
+                    const input = document.querySelector(which === 'start' ? '[data-ovv-clip-start]' : '[data-ovv-clip-end]');
+                    if (input) input.value = clockOf(video.currentTime);
+                    if (which === 'start') {
+                        const end = document.querySelector('[data-ovv-clip-end]');
+                        if (end && !end.value) end.value = clockOf(video.currentTime + 30);
+                    }
+                });
+            });
+        }
 
         const t = startSeconds();
         attachSource(video).then(function (source) {
