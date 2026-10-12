@@ -83,8 +83,10 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
     }
 
     return {
-        feed({ type, limit }) {
+        feed({ type, limit, cursor = null }) {
             const qs = new URLSearchParams({ type, limit: String(limit) });
+            // Live's feed pages by an opaque cursor (its `next`); only a plain token is passed on.
+            if (cursor && /^[A-Za-z0-9_-]{1,200}$/.test(String(cursor))) qs.set('cursor', String(cursor));
             return getJson(`/api/content/feed?${qs.toString()}`);
         },
         vodsByUser(username, { limit, offset = 0 }) {
