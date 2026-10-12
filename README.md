@@ -127,6 +127,13 @@ Live's `POST /api/views/:kind/:id`, so Live counts the view for the viewer's own
 come from the loopback address). The CSP allows Media's hosts (openvibe.media, its shield edge.openvibe.media and
 the presigned R2/B2 hosts it may redirect a file to) and Live's origin for the beacon.
 
+**Structured data.** A public recording's page carries a schema.org `VideoObject` (name, description, thumbnail, upload
+time, ISO 8601 duration, the file, the view count, the channel as author) with its chapters as `Clip` parts (Google's
+key moments, each a `?t=` link); a clip's page has its own `VideoObject`, `isPartOf` its recording; a public
+playlist's page an `ItemList`. The thumbnail is the page's share image (`og:image`, `og:type` `video.other`). AI clips
+stay out of search as on Live (noindex, no structured data), and so do a recording in progress and an owner's private
+view.
+
 **Owner tools.** A recording's channel, and a clip's maker or channel, see a "Manage" panel on the watch page: title,
 description (recordings), visibility and delete. Each change is a same-origin web form that openvibe.video sends to
 OpenVibe.Live's own API as the signed-in person (their Network token as a Bearer, refreshed once if it expired), so

@@ -32,7 +32,8 @@ function assetVersion(rel) {
 }
 const asset = (rel) => `/${rel}?v=${assetVersion(rel)}`;
 
-/** o: title, description, body (html), config, path, index, noindex, viewer, private, crumbs [{label, href}], scripts [rel] */
+/** o: title, description, body (html), config, path, index, noindex, viewer, private, crumbs [{label, href}], scripts [rel],
+ *     jsonLd (structured data for the page), image (its share image, an https URL), ogType */
 function renderPage(o) {
     const title = o.title || SITE_NAME;
     const viewer = o.viewer || { kind: 'anonymous' };
@@ -67,6 +68,9 @@ ${render(o.body)}
         description: o.description || `${SITE_NAME} — ${TAGLINE}`,
         canonical,
         robots: o.noindex ? 'noindex' : (o.index ? 'index, follow' : 'noindex, nofollow'),
+        ...(o.jsonLd ? { jsonLd: o.jsonLd } : {}),
+        ...(o.image ? { image: o.image, imageAlt: title } : {}),
+        ...(o.ogType ? { type: o.ogType } : {}),
         home: '/',
         navLinks: [],
         navbar: {
