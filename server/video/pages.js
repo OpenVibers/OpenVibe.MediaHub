@@ -291,6 +291,21 @@ const grid = (cards, empty = 'Nothing here yet.') => (cards && cards.length ? ht
 
 function createVideoRoutes(ctx) {
     const { config, log, playlists } = ctx;
+
+    // A channel page lists that person's public playlists, which are stored by subject: the username is resolved
+    // through Network (identity.subject.resolve) and remembered for ten minutes (an unknown name for one), at most
+    // 1,000, so a crawled channel page is not a Network call per visit.
+    const subjects = new Map();   // username (lowercase) → { at, ttl, subject }
+    async function subjectOf(username) {
+        const key = username.toLowerCase();
+        const hit = subjects.get(key);
+        if (hit && Date.now() - hit.at < hit.ttl) return hit.subject;
+        const subject = ctx.identity && ctx.identity.resolveUsername ? await ctx.identity.resolveUsername(username) : null;
+        subjects.delete(key);
+        subjects.set(key, { at: Date.now(), ttl: subject ? 600_000 : 60_000, subject });
+        if (subjects.size > 1000) subjects.delete(subjects.keys().next().value);
+        return subject;
+    }
     const live = createLiveClient({ config, fetchImpl: ctx.fetchImpl || globalThis.fetch, log });
     const chat = createChatClient({ config, fetchImpl: ctx.fetchImpl || globalThis.fetch, log });
     const r = asyncRouter();
@@ -344,7 +359,7 @@ function createVideoRoutes(ctx) {
     }));
 
     // ── Playlist API (openvibe.video only; the drive's /api/v1 is untouched) ──
-    r.use('/api/v1/video/playlists', createVideoApiRoutes(ctx));
+    r.use('/api/v1/video', createVideoApiRoutes(ctx));
     // The playlist forms are web forms (no JavaScript): urlencoded text. The API router above has its own JSON
     // parser, so the two never read each other's bodies.
     r.use(express.urlencoded({ extended: false, limit: '64kb' }));
@@ -407,6 +422,13 @@ function createVideoRoutes(ctx) {
 <form class="ovv-inline" method="post" action="/playlists/${p.id}/delete"><label class="ovv-confirm"><input type="checkbox" name="confirm" value="1" required> I want to delete it</label> <button class="ovv-btn ovv-btn--danger" type="submit">Delete</button></form>
 </div></details>
 </li>`;
+    }
+
+    /** A public playlist on a channel page: its title and size, no owner controls. */
+    function publicPlaylistRow(p) {
+        const n = Number(p.item_count) || 0;
+        return html`<li class="ovv-playlist-row"><div class="ovv-playlist-main"><a class="ovv-playlist-title" href="/playlists/${p.id}">${p.title}</a>
+<span class="ovv-meta">${n} item${n === 1 ? '' : 's'} · updated ${dateLabel(p.updated_at)}</span></div></li>`;
     }
 
     function playlistError(req, res, out) {
@@ -633,6 +655,14 @@ ${clip.ai_overview ? html`<section class="ovv-panel"><p>${clip.ai_overview}</p><
                 : [];
         } catch { clips = []; }
 
+        let lists = [];
+        if (pageNum === 1) {
+            try {
+                const subject = await subjectOf(username);
+                if (subject) lists = (await playlists.publicByOwner(`user:${subject}`, { limit: 12 })).playlists;
+            } catch (err) { log.warn('[OpenVibe.Video] channel playlists:', (err && err.message) || ''); }
+        }
+
         const prevLink = pageNum > 1 ? `?page=${pageNum - 1}` : null;
         const nextLink = hasMore ? `?page=${pageNum + 1}` : null;
 
@@ -642,13 +672,15 @@ ${clip.ai_overview ? html`<section class="ovv-panel"><p>${clip.ai_overview}</p><
             description: `Recordings and clips from @${username} on OpenVibe.Video.`,
             body: html`<header class="ovv-channel-head"><span class="ovv-avatar ovv-avatar--big" aria-hidden="true">${username.slice(0, 1).toUpperCase()}</span><div><h1>@${username}</h1><p class="ovv-meta">Recordings and clips from this channel's streams on OpenVibe.Live.</p></div><a class="ovv-btn" href="${livePublic}/@${username}"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Channel on OpenVibe.Live</a></header>
 <section class="ovv-section" aria-labelledby="h-vods"><h2 id="h-vods">Recordings</h2>${grid(vods.map(vodCard), 'No recordings yet.')}${prevLink || nextLink ? html`<nav class="ovv-pagination" aria-label="Pages">${prevLink ? html`<a href="${prevLink}">← Newer</a>` : ''}${nextLink ? html`<a href="${nextLink}">Older →</a>` : ''}</nav>` : ''}</section>
-${clips.length ? html`<section class="ovv-section" aria-labelledby="h-clips"><h2 id="h-clips">Clips</h2>${grid(clips.map(clipCard), 'No clips yet.')}</section>` : ''}`,
+${clips.length ? html`<section class="ovv-section" aria-labelledby="h-clips"><h2 id="h-clips">Clips</h2>${grid(clips.map(clipCard), 'No clips yet.')}</section>` : ''}
+${lists.length ? html`<section class="ovv-section" aria-labelledby="h-lists"><h2 id="h-lists">Playlists</h2><ul class="ovv-playlist-list">${lists.map(publicPlaylistRow)}</ul></section>` : ''}`,
         });
     });
 
     // ── Playlists ──────────────────────────────────────────
     r.get('/playlists', mustSignIn('/playlists', 'A playlist belongs to your OpenVibe account, so you can keep and share your saved recordings and clips.'), async (req, res) => {
         const rows = await playlists.list(ownerOf(req));
+        if (req.viewer && req.viewer.username) await playlists.refreshOwnerUsername(ownerOf(req), req.viewer.username);
         return page(req, res, {
             title: 'Your playlists',
             crumbs: [{ label: 'Home', href: '/' }, { label: 'Playlists' }],
@@ -662,7 +694,7 @@ ${rows.length ? html`<ul class="ovv-playlist-list">${rows.map(playlistRow)}</ul>
 
     r.post('/playlists', mustSignIn('/playlists'), async (req, res) => {
         if (!sameSite(req, res, '/playlists')) return undefined;
-        const out = await playlists.create(ownerOf(req), { title: (req.body || {}).title, visibility: (req.body || {}).visibility || 'private' });
+        const out = await playlists.create(ownerOf(req), { title: (req.body || {}).title, visibility: (req.body || {}).visibility || 'private', ownerUsername: req.viewer && req.viewer.username });
         if (!out.ok) return playlistError(req, res, out);
         return res.redirect(303, `/playlists/${out.playlist.id}`);
     });
@@ -703,7 +735,7 @@ ${rows.length ? html`<ul class="ovv-playlist-list">${rows.map(playlistRow)}</ul>
         const owner = ownerOf(req);
         let target = String(b.playlist || '');
         if (title) {
-            const created = await playlists.create(owner, { title });
+            const created = await playlists.create(owner, { title, ownerUsername: req.viewer && req.viewer.username });
             if (!created.ok) return playlistError(req, res, created);
             target = created.playlist.id;
         }
@@ -718,6 +750,12 @@ ${rows.length ? html`<ul class="ovv-playlist-list">${rows.map(playlistRow)}</ul>
         if (!pl) return notFound(req, res);
         const isOwner = signedIn(req) && ownerOf(req) === pl.owner;
         if (pl.visibility === 'private' && !isOwner) return notFound(req, res);
+
+        const ownerIsPerson = String(pl.owner || '').startsWith('user:');
+        const ownerUsername = ownerIsPerson && pl.owner_username && live.isUsername(pl.owner_username) ? pl.owner_username : null;
+        const ownerBy = ownerIsPerson
+            ? (ownerUsername ? html`<a class="ovv-channel-name" href="/@${ownerUsername}">@${ownerUsername}</a>` : 'an OpenVibe member')
+            : 'an app';
 
         const items = await playlists.items(pl.id);
         const rows = [];
@@ -756,6 +794,7 @@ ${isOwner ? itemControls(pl.id, it) : ''}
             body: html`<header class="ovv-playlist-head"><h1>${pl.title}</h1>
 ${pl.description ? html`<p class="ovv-lede">${pl.description}</p>` : ''}
 <p class="ovv-meta">${visibilityLabel(pl.visibility)} · ${items.length} item${items.length === 1 ? '' : 's'} · updated ${dateLabel(pl.updated_at)}</p>
+<p class="ovv-meta">Curated by ${ownerBy}</p>
 ${playAllHref ? html`<p><a class="ovv-btn ovv-btn--primary" href="${playAllHref}"><i class="fa-solid fa-play" aria-hidden="true"></i> Play all</a></p>` : ''}</header>
 ${items.length ? html`<ol class="ovv-item-list">${rows}</ol>` : html`<p class="muted">This playlist is empty.</p>`}
 ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down buttons, or remove them. <a href="/playlists">Back to your playlists</a>.</p>` : ''}`,

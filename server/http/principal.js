@@ -27,7 +27,7 @@ const PROJECT_RE = /^prj_[0-9A-HJKMNP-TV-Z]{26}$/;
 // The product fills this in: one entry per capability its routes name, in openvibe-contracts
 // manifests/capabilities/<media-hub>.*. requireCapability('<name>') refuses a name that is not listed here, so a
 // route can never be guarded by a capability the service does not declare.
-const CAPABILITIES = [];
+const CAPABILITIES = ['video.playlist.read', 'video.playlist.manage'];
 
 function decodePayload(token) {
     const parts = String(token || '').split('.');
@@ -99,14 +99,20 @@ function createPrincipal({ config, keys }) {
         return next();
     }
 
-    /** One route's guard: a person needs nothing more (writes by cookie must be same-origin); an app the capability. */
-    function require_(cap) {
+    /**
+     * One route's guard: a person needs nothing more (writes by cookie must be same-origin); an app the capability.
+     * The drive guards with its own defaults; the video host passes the video origin and name so its session-cookie
+     * writes are judged against openvibe.video.
+     */
+    function require_(cap, opts = {}) {
         if (!CAPABILITIES.includes(cap)) throw new Error(`requireCapability(${cap}): not one of OpenVibe.MediaHub's capabilities`);
+        const origin = opts.origin || config.baseUrl;
+        const site = opts.site || 'openvibe.download';
         return function guard(req, res, next) {
             const p = req.principal;
-            if (p.kind === 'anonymous') return http.sendProblem(res, 401, 'token.required', { detail: 'Sign in at openvibe.download, or send a Network token (a person\'s, or an app\'s with this capability for openvibe.download).', ctx: req.ov });
+            if (p.kind === 'anonymous') return http.sendProblem(res, 401, 'token.required', { detail: `Sign in at ${site}, or send a Network token (a person's, or an app's with this capability for ${site}).`, ctx: req.ov });
             if (p.kind === 'user') {
-                if (p.viaSession && req.method !== 'GET' && !sameOrigin(req, config.baseUrl)) return http.sendProblem(res, 403, 'request.cross_site', { detail: 'A signed-in request that changes something must come from openvibe.download itself.', ctx: req.ov });
+                if (p.viaSession && req.method !== 'GET' && !sameOrigin(req, origin)) return http.sendProblem(res, 403, 'request.cross_site', { detail: `A signed-in request that changes something must come from ${site} itself.`, ctx: req.ov });
                 return next();
             }
             const decision = capabilities.check(p.claims, cap);

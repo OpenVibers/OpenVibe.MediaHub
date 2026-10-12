@@ -22,7 +22,8 @@ const READ = 'media-hub.api.read';
 
     await check('BUDGETS names the product\'s own expensive routes, and nothing else', () => {
         assert.deepStrictEqual(Object.keys(BUDGETS).sort(), [
-            'media-hub.folder.create', 'media-hub.share.create',
+            'media-hub.folder.create', 'media-hub.playlist.create', 'media-hub.playlist.write',
+            'media-hub.share.create',
             'media-hub.upload.complete', 'media-hub.upload.part', 'media-hub.upload.start',
         ]);
         for (const [name, own] of Object.entries(BUDGETS)) {

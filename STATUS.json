@@ -21,7 +21,7 @@
     "Reports: 3 distinct people or one report of illegal content suspend a share; staff restore or remove (Media object deleted)",
     "Downloads: attachment, nosniff, sandbox CSP, real type only for a safe list, filename* for any script, Range resume",
     "OpenVibe.Video step A: public watch pages on openvibe.video (/v/:id, /c/:id, /@:username) reading Live's public API, with WebVTT captions/chapters and no uploads",
-    "OpenVibe.Video playlists: a signed-in person's named lists of Live recordings and clips (/playlists, /playlists/:id), with a browser-session API, the ?list= watch flow, and sign-in on the video host",
+    "OpenVibe.Video playlists: a signed-in person's named lists of Live recordings and clips (/playlists, /playlists/:id), with a browser-session and app API (video.playlist.read / video.playlist.manage), the ?list= watch flow, and sign-in on the video host",
     "Parked domain: openvibe.pics redirects to openvibe.network in nginx; no request reaches the app",
     "Account export and deletion (ADR-033) through openvibe-sdk/account-data; subscriptions created at boot",
     "Per-caller and per-address limits; readiness (database required); metrics on loopback"
@@ -32,7 +32,7 @@
     "Public (signed-out) share links: deliberately not offered while there is no scanning",
     "Previews and thumbnails of files"
   ],
-  "capabilitiesRegistered": false,
+  "capabilitiesRegistered": true,
   "serviceManifestRegistered": true,
   "deployed": true,
   "placeholderInSites": false,
