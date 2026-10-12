@@ -79,6 +79,8 @@ async function createApp(opts = {}) {
     ctx.limits = createCallerLimits({ config, now: opts.limitsNow || (() => Date.now()), registry: metrics.registry, log, enabled: opts.callerLimits !== false, valkey });
 
     app.use(contracts.http.middleware());
+    const MEDIA_ORIGINS = ['https://openvibe.media', 'https://edge.openvibe.media', 'https://*.r2.cloudflarestorage.com', 'https://*.backblazeb2.com'];
+    const liveOrigin = (() => { try { return new URL(config.video.livePublicUrl).origin; } catch { return 'https://openvibe.live'; } })();
     app.use(helmet({
         contentSecurityPolicy: {
             directives: {
@@ -88,9 +90,13 @@ async function createApp(opts = {}) {
                 styleSrc: ["'self'", "'unsafe-inline'", 'https://openvibe.network', 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com'],
                 fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com', 'https://cdnjs.cloudflare.com'],
                 imgSrc: ["'self'", 'data:', 'https://openvibe.network', 'https://openvibe.media'],
-                // The video player loads its media file from OpenVibe.Media (https://openvibe.media/v|/c).
-                mediaSrc: ["'self'", 'https://openvibe.media'],
-                connectSrc: ["'self'", 'https://openvibe.network', 'https://cloudflareinsights.com', 'https://openvibe.events'],
+                // The video player loads its media file from OpenVibe.Media (https://openvibe.media/v|/c), which may
+                // redirect to its shield host (edge.openvibe.media, for B2 copies) or a presigned R2/B2 URL, exactly
+                // as on OpenVibe.Live. Over HLS it plays through Media Source Extensions (blob:) and fetches the
+                // playlist and segments from openvibe.media.
+                mediaSrc: ["'self'", 'blob:', ...MEDIA_ORIGINS],
+                // The watch page counts a view on OpenVibe.Live with a beacon (Live's /api/views).
+                connectSrc: ["'self'", 'https://openvibe.network', 'https://cloudflareinsights.com', 'https://openvibe.events', ...MEDIA_ORIGINS, liveOrigin],
                 frameSrc: ["'self'", 'https://openvibe.network'],
                 frameAncestors: ["'none'"],
                 objectSrc: ["'none'"],

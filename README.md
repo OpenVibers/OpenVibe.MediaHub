@@ -117,6 +117,14 @@ public on OpenVibe.Live, plus playlists. There are no uploads and no new storage
 OpenVibe.Media (`playback_url`), and the pages read Live's public JSON API server-side, signed out (Live already
 applies visibility: a private item answers 404, an unlisted one is reachable by id but noindex and never listed).
 
+The player plays Media's segment timeline (`hls_url`, HLS) when the recording has one: natively where the browser
+plays HLS, otherwise through hls.js, self-hosted at `public/vendor/hls.light.min.js` (hls.js 1.7.3, Apache-2.0, loaded
+only then). The file stays the fallback: a recording without a timeline plays it, and a playlist that fails falls
+back to it once at the same position. When playback starts, the page sends one beacon from the viewer's browser to
+Live's `POST /api/views/:kind/:id`, so Live counts the view for the viewer's own address (the server-side reads all
+come from the loopback address). The CSP allows Media's hosts (openvibe.media, its shield edge.openvibe.media and
+the presigned R2/B2 hosts it may redirect a file to) and Live's origin for the beacon.
+
 The VOD page also shows a chat replay of the stream (from OpenVibe.Chat) and read-only comments with a link to
 the OpenVibe.Community thread. The video host signs in through the same Network SSO as the drive, with its own
 callback URI (`https://openvibe.video/auth/callback`); each host's session cookie is host-only, so signing in on one

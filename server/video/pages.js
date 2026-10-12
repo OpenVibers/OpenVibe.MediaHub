@@ -24,7 +24,7 @@ const ovServe = require('openvibe-shared/serve');
 const { asyncRouter } = require('../http/router');
 const { sameOrigin } = require('../http/principal');
 const { html, notice } = require('../render/html');
-const { send, assetVersion, SITE_NAME } = require('./layout');
+const { send, asset, assetVersion, SITE_NAME } = require('./layout');
 const { createLiveClient } = require('./live-client');
 const { createChatClient } = require('./chat-client');
 const { createVideoApiRoutes } = require('./api');
@@ -45,6 +45,14 @@ const PER_PAGE = 24;
 function httpsUrl(u) {
     if (!u) return null;
     try { const x = new URL(String(u)); return x.protocol === 'https:' ? x.href : null; } catch { return null; }
+}
+
+/** The player's HLS source: Media's timeline playlist, for a finished item that has one, on the playback file's origin. */
+function hlsAttrs(item) {
+    const hls = !item.is_recording && httpsUrl(item.hls_url);
+    const file = httpsUrl(item.playback_url);
+    if (!hls || !file || new URL(hls).origin !== new URL(file).origin) return '';
+    return html` data-ovv-hls="${hls}" data-ovv-hls-lib="${asset('vendor/hls.light.min.js')}"`;
 }
 
 function durationLabel(s) {
@@ -529,6 +537,8 @@ function createVideoRoutes(ctx) {
         const saveForm = await playlistForm(req, 'vod', id);
         const up = await upNext(req, 'vod', id);
         const nextAttr = up.nextUrl ? html` data-ovv-next="${up.nextUrl}"` : '';
+        const viewAttr = html` data-ovv-view="${livePublic}/api/views/vod/${id}"`;
+        const hlsAttr = hlsAttrs(vod);
 
         return page(req, res, {
             index: !unlisted,
@@ -538,7 +548,7 @@ function createVideoRoutes(ctx) {
             scripts: ['js/video.js'],
             body: html`<div class="ovv-watch">
 <div class="ovv-main">
-<div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline src="${httpsUrl(vod.playback_url) || ''}" data-ovv-video${nextAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video></div>
+<div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline src="${httpsUrl(vod.playback_url) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video></div>
 <h1 class="ovv-title">${vod.title || 'Stream recording'}</h1>
 <div class="ovv-byline">
 ${channelName ? html`<a class="ovv-avatar" href="${localChannel || liveChannel}" aria-hidden="true" tabindex="-1">${String(channelName).slice(0, 1).toUpperCase()}</a>` : ''}
@@ -586,6 +596,8 @@ ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 i
         const saveForm = await playlistForm(req, 'clip', id);
         const up = await upNext(req, 'clip', id);
         const nextAttr = up.nextUrl ? html` data-ovv-next="${up.nextUrl}"` : '';
+        const viewAttr = html` data-ovv-view="${livePublic}/api/views/clip/${id}"`;
+        const hlsAttr = hlsAttrs(clip);
 
         return page(req, res, {
             index: !unlisted,
@@ -595,7 +607,7 @@ ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 i
             scripts: ['js/video.js'],
             body: html`<div class="ovv-watch ovv-watch--clip">
 <div class="ovv-main">
-<div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline src="${httpsUrl(clip.playback_url) || ''}" data-ovv-video${nextAttr}></video></div>
+<div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline src="${httpsUrl(clip.playback_url) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>
 <h1 class="ovv-title">${clip.title || 'Clip'}</h1>
 <div class="ovv-byline">
 <div class="ovv-byline-text"><span class="ovv-channel-name">${clip.auto_generated ? html`<span class="ovv-tag ovv-tag--inline">AI clip</span> ` : ''}${attribution}</span>
