@@ -7,8 +7,11 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
 - MediaHub reaches OpenVibe.Media with its Network service token (audience `openvibe.media`, grants
   `media.object.upload` and `media.object.read` on namespace `media-hub`). `MEDIAHUB_MEDIA_APP_KEY` is gone
   (compatibility register C-71).
-- openvibe.pics and openvibe.video are parked: their vhosts answer 302 to https://openvibe.network/ and proxy
-  nothing. The app no longer has "coming" pages or host-based brand handling.
+- OpenVibe.Video step A: openvibe.video now serves public, read-only watch pages for OpenVibe.Live's stream
+  recordings and clips (`/v/:id`, `/c/:id`, `/@:username`, WebVTT captions and chapters), reading Live's public
+  JSON API server-side, signed out. No uploads and no new storage.
+- openvibe.pics is still parked: its vhost answers 302 to https://openvibe.network/ and proxies nothing. The app
+  no longer has "coming" pages or host-based brand handling.
 
 ## 0.1.0 — 2026-10-08
 

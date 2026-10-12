@@ -2,9 +2,9 @@
 
 > Your files, shared on your terms.
 
-**Status:** alpha. **openvibe.download** (a private drive, live in v1) is the one domain this service serves.
-**openvibe.pics** and **openvibe.video** are parked: they redirect to `https://openvibe.network/` until Pics and
-Video are built, so no request for either host reaches the app.
+**Status:** alpha. One process serves **openvibe.download** (a private drive, live in v1) and
+**openvibe.video** (public watch pages for OpenVibe.Live's stream recordings and clips, step A), chosen by Host
+header. **openvibe.pics** is still parked: it redirects to `https://openvibe.network/` until Pics is built.
 **Port:** 4990 · **Service id:** `media-hub` · **Env prefix:** `MEDIAHUB` · **License:** AGPL-3.0.
 
 ## Purpose
@@ -12,8 +12,9 @@ Video are built, so no request for either host reaches the app.
 OpenVibe.MediaHub is the network's file service: it serves **openvibe.download** as a private drive where a
 signed-in person can upload, organise, share and delete their own files. The bytes live in OpenVibe.Media; MediaHub
 keeps the metadata, the per-person limits, the share links and the report queue. It also answers OpenVibe.Network's
-account export and deletion events (ADR-033). openvibe.pics and openvibe.video are parked in nginx and redirect to
-openvibe.network, so v1 is the drive and nothing else.
+account export and deletion events (ADR-033). The same process serves **openvibe.video**, the public watch pages for
+OpenVibe.Live's stream recordings and clips (OpenVibe.Video v1, step A). openvibe.pics is parked in nginx and redirects
+to openvibe.network.
 
 ## Owns
 
@@ -39,8 +40,8 @@ creates none):
   `identity.subject.resolve`.
 - Event delivery, and the account export/deletion topics, are **OpenVibe.Events**': MediaHub only creates its
   subscriptions and consumes the two deliveries.
-- The **openvibe.pics** and **openvibe.video** products (image hosting, albums, video watch pages) are not built
-  here yet: those domains are parked in nginx. Previews and thumbnails are not built either.
+- The **openvibe.pics** product (image hosting and albums) is not built here yet: that domain is parked in nginx.
+  Previews and thumbnails are not built either.
 
 ## Depends on
 
@@ -51,6 +52,8 @@ creates none):
   (and `MEDIAHUB_MEDIA_TIMEOUT_MS`). Media calls use the service's Network service token. Grant
   `[media-hub, media.object.upload, openvibe.media]` and `[media-hub, media.object.read, openvibe.media]`
   on namespace `media-hub`.
+- **OpenVibe.Live** — where the recordings and clips come from. openvibe.video reads Live's public JSON API
+  server-side, signed out (`MEDIAHUB_LIVE_URL`, `MEDIAHUB_LIVE_PUBLIC_URL`).
 - **OpenVibe.Events** — `MEDIAHUB_EVENTS_URL` (the two subscriptions are created at boot) and
   `MEDIAHUB_EVENTS_SECRET` (the v2 signature on `POST /internal/events`).
 - **PostgreSQL** and **Valkey** — `DATABASE_URL` / `DATABASE_DIRECT_URL`, `VALKEY_URL` / `VALKEY_PREFIX`, read
@@ -105,11 +108,37 @@ calls Media server-side only, naming the person with `X-OV-Subject`, and never h
 
 MediaHub owns the drive: `mh_files`, `mh_folders`, `mh_shares`, `mh_reports`, `mh_usage` (migrations/0002_mediahub.sql).
 
+## OpenVibe.Video (openvibe.video)
+
+OpenVibe.Video v1 is public and read-only: it serves watch pages for the recordings and clips people already made
+public on OpenVibe.Live. There are no uploads and no new storage — the media files stay on OpenVibe.Media
+(`playback_url`), and the pages read Live's public JSON API server-side, signed out (Live already applies
+visibility: a private item answers 404, an unlisted one is reachable by id but noindex and never listed).
+
+| Path | What |
+|---|---|
+| `/` | what OpenVibe.Video is, then the latest recordings and clips |
+| `/v/:id` | a VOD watch page: player, AI chapters and captions, its clips, the Community thread link |
+| `/c/:id` | a clip watch page: player, attribution, the full-recording link, the Community thread link |
+| `/@:username` | a channel's recordings (and clips), newest first, 24 per page |
+| `/v/:id/captions.vtt` | the AI transcript as WebVTT captions |
+| `/v/:id/chapters.vtt` | the AI moments as WebVTT chapters: at most twelve, a twelfth of the stream apart, titled by what was seen |
+| `/sitemap.xml`, `/robots.txt`, `/llms.txt` | crawl artifacts for the video host |
+
+Configuration: `MEDIAHUB_VIDEO_URL` (default `https://openvibe.video`; its hostname is the video host),
+`MEDIAHUB_LIVE_URL` (default `https://openvibe.live`; production points it at the loopback address) and
+`MEDIAHUB_LIVE_PUBLIC_URL` (default `https://openvibe.live`; links people click). The video host is chosen by
+`Host` header in `server/app.js`, so the drive's pages, API and `/auth` never answer there. Only https URLs from
+Live (player source, thumbnails, the thread link) reach a page; anything else is dropped.
+
+Not built yet: chat replay, comments on the page (only the OpenVibe.Community thread link is offered), playlists,
+and uploads.
+
 ## Pages
 
 | Path | Who | What |
 |---|---|---|
-| `/` | anyone | openvibe.download's home: what it is, the safety rules, sign in. (openvibe.pics and openvibe.video are parked in nginx, not served here) |
+| `/` | anyone | openvibe.download's home: what it is, the safety rules, sign in. (openvibe.video is served by this same app; openvibe.pics is parked in nginx) |
 | `/files`, `/files/:id` | the owner | your drive: folders, files, the usage bar, upload, share, delete |
 | `/s/:slug` | a signed-in person | a share page: the name, the size, who shared it (their username), the expiry, Download, Report |
 | `/staff` | staff | the reports queue: restore or remove |
@@ -141,6 +170,7 @@ takes `network.account.export_requested` and `network.account.deleted`, and the 
 
 Every name is in [.env.example](.env.example): the Network client (`OV_OAUTH_CLIENT_ID=media-hub`, secret, internal
 URL), PostgreSQL and Valkey (written by the host's data role), Media (`MEDIAHUB_MEDIA_URL`, `MEDIAHUB_MEDIA_APP`),
+Live (`MEDIAHUB_LIVE_URL`, `MEDIAHUB_LIVE_PUBLIC_URL`) and Video (`MEDIAHUB_VIDEO_URL`),
 Events, and the limits (`MEDIAHUB_QUOTA_BYTES`, `MEDIAHUB_MAX_FILE_BYTES`,
 `MEDIAHUB_UPLOADS_PER_DAY`, `MEDIAHUB_MAX_SHARES`, `MEDIAHUB_SINGLE_UPLOAD_BYTES`, `MEDIAHUB_PART_BYTES`).
 
@@ -185,9 +215,9 @@ database, with in-process stand-ins for OpenVibe.Network and OpenVibe.Media. The
 
 `sudo ovhost deploy media-hub` on the host (unit [deploy/systemd/openvibe-media-hub.service](deploy/systemd/openvibe-media-hub.service),
 env `/etc/openvibe/media-hub.env`). The vhost [deploy/nginx/openvibe.download.conf](deploy/nginx/openvibe.download.conf)
-serves openvibe.download and parks openvibe.pics and openvibe.video with a 302 to `https://openvibe.network/` (each
-name with its own certificate); it is installed with `ov-vhost-install`. Uploads stream through nginx unbuffered;
-downloads are not buffered either.
+serves openvibe.download and openvibe.video (both proxy to the app on 127.0.0.1:4990) and parks openvibe.pics with a
+302 to `https://openvibe.network/` (each name with its own certificate); it is installed with `ov-vhost-install`.
+Uploads stream through nginx unbuffered; downloads are not buffered either.
 
 ## Security (threat notes)
 

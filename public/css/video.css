@@ -1,0 +1,108 @@
+/* OpenVibe.Video — watch pages (server/video/pages.js, ovv-*). Loaded after app.css (the drive's base: body type,
+   links, .page); colours come from the network theme variables with the default theme as fallback. */
+
+.ovv-page {
+  --ovv-card: var(--bg-card, var(--bg-secondary, #101828));
+  --ovv-line: var(--border, #1f2d47);
+  --ovv-line-strong: var(--border-light, #2c3d5c);
+  --ovv-dim: var(--text-secondary, #96a7c2);
+  --ovv-faint: var(--text-muted, #7386a3);
+  --ovv-accent: var(--accent, #3b82f6);
+  max-width: 1280px;
+  padding: 24px 24px 72px;
+}
+.ovv-page h2 { font-size: 1.15rem; margin: 0 0 .75rem; }
+.ovv-fine { margin: .5rem 0 0; font-size: .8rem; color: var(--ovv-faint); }
+
+/* Buttons */
+.ovv-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 7px 14px; border-radius: 10px; border: 1px solid var(--ovv-line-strong); background: var(--bg-tertiary, #16223a); color: var(--text-primary, #e6edf7) !important; font-size: .9rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.ovv-btn:hover, .ovv-btn:focus-visible { border-color: var(--ovv-accent); background: var(--bg-hover, #1c2a44); }
+.ovv-btn--primary { background: var(--accent-strong, #2563eb); border-color: var(--accent-strong, #2563eb); color: var(--on-accent-strong, #fff) !important; }
+.ovv-btn--primary:hover, .ovv-btn--primary:focus-visible { background: var(--accent-dark, #1d4ed8); border-color: var(--accent-light, #60a5fa); }
+
+/* Home header */
+.ovv-hero { padding: 12px 0 8px; }
+.ovv-eyebrow { display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--ovv-line-strong); color: var(--accent-light, var(--ovv-accent)); font-size: .78rem; font-weight: 700; letter-spacing: .3px; }
+.ovv-hero h1 { margin: .6rem 0 .5rem; font-size: clamp(1.9rem, 4.4vw, 2.9rem); line-height: 1.1; letter-spacing: -.02em; }
+.ovv-lede { margin: 0; max-width: 62ch; font-size: 1.05rem; color: var(--ovv-dim); }
+.ovv-hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 1.1rem 0 0; }
+
+/* Sections and card grids */
+.ovv-section { margin-top: 2.2rem; }
+.ovv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 22px 16px; }
+.ovv-card { display: flex; flex-direction: column; gap: .55rem; min-width: 0; }
+.ovv-card-media { position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: var(--ovv-card); border: 1px solid var(--ovv-line); }
+.ovv-card-media img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .25s ease; }
+.ovv-card:hover .ovv-card-media img { transform: scale(1.03); }
+.ovv-card-placeholder { display: grid; place-items: center; width: 100%; height: 100%; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--ovv-accent) 22%, transparent), transparent 60%), var(--ovv-card); color: var(--ovv-faint); font-size: 1.6rem; }
+.ovv-dur, .ovv-tag { position: absolute; bottom: 8px; padding: 1px 7px; border-radius: 6px; background: rgba(5, 8, 15, .82); color: #fff; font-size: .75rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.5; }
+.ovv-dur { right: 8px; }
+.ovv-tag { left: 8px; background: color-mix(in srgb, var(--ovv-accent) 85%, #000); }
+.ovv-tag--inline { position: static; display: inline-block; margin-right: 4px; vertical-align: 1px; }
+.ovv-card-body { min-width: 0; }
+.ovv-card-title { margin: 0; font-size: .98rem; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.ovv-card-title a { color: inherit; text-decoration: none; }
+.ovv-card-title a:hover { text-decoration: underline; }
+.ovv-card-meta { margin: .25rem 0 0; font-size: .84rem; color: var(--ovv-dim); overflow-wrap: anywhere; }
+.ovv-card-meta a { color: inherit; text-decoration: none; font-weight: 600; }
+.ovv-card-meta a:hover { text-decoration: underline; }
+
+/* Watch page: the player and the stream on the left, chapters and clips beside it */
+.ovv-watch { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 28px; align-items: start; }
+.ovv-watch--clip { grid-template-columns: minmax(0, 960px); justify-content: center; }
+.ovv-main, .ovv-side { min-width: 0; }
+.ovv-side { display: grid; gap: 18px; }
+.ovv-player-wrap { border-radius: 14px; overflow: hidden; background: #000; border: 1px solid var(--ovv-line); box-shadow: 0 18px 40px rgba(0, 0, 0, .35); }
+.ovv-player { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+.ovv-title { margin: 1rem 0 .6rem; font-size: clamp(1.3rem, 2.4vw, 1.75rem); line-height: 1.25; }
+.ovv-byline { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; padding-bottom: 16px; border-bottom: 1px solid var(--ovv-line); }
+.ovv-avatar { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-light, #60a5fa), var(--accent-strong, #2563eb)); color: #fff !important; font-weight: 800; text-decoration: none; }
+.ovv-avatar--big { width: 64px; height: 64px; font-size: 1.6rem; }
+.ovv-byline-text { display: grid; gap: 2px; min-width: 0; flex: 1 1 200px; }
+.ovv-channel-name { font-weight: 700; color: var(--text-primary, #e6edf7) !important; text-decoration: none; overflow-wrap: anywhere; }
+a.ovv-channel-name:hover { text-decoration: underline; }
+.ovv-meta { font-size: .88rem; color: var(--ovv-dim); }
+.ovv-byline-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ovv-recording { display: flex; gap: 8px; align-items: baseline; margin: 16px 0 0; padding: 10px 14px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--live-red, #ef4444) 50%, transparent); background: color-mix(in srgb, var(--live-red, #ef4444) 10%, transparent); }
+.ovv-recording i { color: var(--live-red, #ef4444); font-size: .6rem; }
+.ovv-panel { margin-top: 18px; padding: 16px 18px; border: 1px solid var(--ovv-line); border-radius: 14px; background: var(--ovv-card); }
+.ovv-side .ovv-panel { margin-top: 0; }
+.ovv-panel > p { margin: 0; line-height: 1.6; }
+.ovv-panel > p.ovv-fine { margin-top: .6rem; }
+
+/* Chapters */
+.ovv-chapters ol { list-style: none; margin: 0 -8px; padding: 0; display: grid; gap: 2px; max-height: 520px; overflow-y: auto; }
+.ovv-chapters a { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 8px; border-radius: 8px; color: inherit; text-decoration: none; font-size: .9rem; line-height: 1.4; }
+.ovv-chapters a:hover, .ovv-chapters a:focus-visible { background: var(--bg-hover, #1c2a44); }
+.ovv-chapters a.is-current { background: color-mix(in srgb, var(--ovv-accent) 14%, transparent); }
+.ovv-time { font-variant-numeric: tabular-nums; font-size: .8rem; font-weight: 700; color: var(--accent-light, var(--ovv-accent)); }
+
+/* Transcript */
+.ovv-transcript summary { cursor: pointer; font-weight: 700; }
+.ovv-transcript[open] summary { margin-bottom: .6rem; }
+.ovv-transcript-body { max-height: 26rem; overflow-y: auto; display: grid; gap: 2px; }
+.ovv-transcript-body p { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; margin: 0; padding: 4px 0; line-height: 1.5; }
+.ovv-seek { all: unset; cursor: pointer; font-variant-numeric: tabular-nums; font-size: .8rem; font-weight: 700; color: var(--accent-light, var(--ovv-accent)); padding-top: 2px; }
+.ovv-seek:hover, .ovv-seek:focus-visible { text-decoration: underline; }
+.ovv-grid--side { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 12px; }
+.ovv-grid--side .ovv-card-title { font-size: .88rem; }
+.ovv-manage { margin: 0; font-size: .88rem; color: var(--ovv-dim); }
+
+/* Channel */
+.ovv-channel-head { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 8px 0 4px; }
+.ovv-channel-head > div { flex: 1 1 240px; min-width: 0; }
+.ovv-channel-head h1 { margin: 0 0 .2rem; }
+.ovv-channel-head .ovv-meta { margin: 0; }
+.ovv-pagination { display: flex; gap: 10px; margin-top: 1.2rem; }
+
+@media (max-width: 1000px) {
+  .ovv-watch { grid-template-columns: minmax(0, 1fr); }
+  .ovv-chapters ol { max-height: none; }
+}
+@media (max-width: 600px) {
+  .ovv-page { padding: 12px 16px 56px; }
+  .ovv-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
+  .ovv-card-title { font-size: .9rem; }
+  .ovv-player-wrap { border-radius: 10px; margin: 0 -4px; }
+  .ovv-btn { white-space: normal; }
+}
