@@ -25,7 +25,7 @@ const { asyncRouter } = require('../http/router');
 const { sameOrigin } = require('../http/principal');
 const { html, notice } = require('../render/html');
 const { send, asset, assetVersion, SITE_NAME } = require('./layout');
-const { createLiveClient } = require('./live-client');
+const { createLiveClient, LiveRefusedError } = require('./live-client');
 const { createChatClient } = require('./chat-client');
 const { createVideoApiRoutes } = require('./api');
 const { ACCESS_COOKIE, REFRESH_COOKIE } = require('../auth/sso');
@@ -354,6 +354,63 @@ function createVideoRoutes(ctx) {
     }
     const visibilityLabel = (v) => (v === 'public' ? 'Public' : (v === 'unlisted' ? 'Unlisted' : 'Private'));
 
+    // ── Owner tools ─────────────────────────────────────────
+    // A recording's channel and a clip's maker or channel see a Manage panel. The panel only decides what to show:
+    // every change is made on OpenVibe.Live AS the signed-in person (their Network token as a Bearer, through
+    // sso.asViewer so an expired session is refreshed once), and Live decides whether they may make it.
+    const VISIBILITIES = ['public', 'unlisted', 'private'];
+    const sameName = (a, b) => Boolean(a && b && String(a).toLowerCase() === String(b).toLowerCase());
+    const isStaff = (req) => ['admin', 'global_mod'].includes(String((req.viewer && req.viewer.role) || ''));
+    function mayManage(req, kind, item) {
+        if (!signedIn(req) || !item) return false;
+        if (isStaff(req)) return true;
+        const me = req.viewer.username;
+        if (kind === 'vod') return sameName(me, item.username);
+        return sameName(me, item.username) || sameName(me, item.source_streamer_username) || sameName(me, item.channel_username);
+    }
+    const asPerson = (req, res, fn) => ctx.sso.asViewer(req, res, fn);
+    /** A signed-in person's own view of an item Live hides from everyone else (private), or null. */
+    async function ownView(req, res, kind, id) {
+        if (!signedIn(req)) return null;
+        try {
+            const data = await asPerson(req, res, (token) => (kind === 'vod' ? live.vodAs(token, id) : live.clipAs(token, id)));
+            const item = data && (kind === 'vod' ? data.vod : data.clip);
+            return item && mayManage(req, kind, item) ? data : null;
+        } catch (err) {
+            if (err instanceof LiveRefusedError) return null;
+            throw err;
+        }
+    }
+    function ownerRefused(req, res, err, back) {
+        const refused = err instanceof LiveRefusedError;
+        if (!refused && !(err && err.liveUnavailable)) throw err;
+        const status = refused ? (err.status === 401 ? 401 : err.status === 404 ? 404 : 403) : 502;
+        return page(req, res, {
+            title: 'Not saved',
+            cache: cache.htmlHeaders({ private: true }),
+            body: html`<h1>That was not saved</h1>${notice(refused ? `OpenVibe.Live said: ${err.message}` : err.message, 'bad')}<p><a class="ovv-btn" href="${back}">Go back</a></p>`,
+        }, status);
+    }
+    const savedNotice = (req) => (req.query.saved === '1' ? notice('Saved on OpenVibe.Live.', 'ok') : '');
+    const visibilityOptions = (current) => VISIBILITIES.map((v) => html`<option value="${v}"${v === current ? ' selected' : ''}>${visibilityLabel(v)}</option>`);
+    function ownerPanel(kind, id, item) {
+        const what = kind === 'vod' ? 'recording' : 'clip';
+        const action = `/${kind === 'vod' ? 'v' : 'c'}/${id}`;
+        return html`<section class="ovv-panel ovv-owner" aria-labelledby="h-owner"><h2 id="h-owner">Manage this ${what}</h2>
+<form class="ovv-owner-form" method="post" action="${action}/manage">
+<label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="200" value="${item.title || ''}" required></label>
+${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textarea name="description" rows="3" maxlength="2000">${item.description || ''}</textarea></label>` : ''}
+<label class="ovv-field"><span>Visibility</span><select name="visibility">${visibilityOptions(item.visibility || 'public')}</select></label>
+<p class="ovv-fine">Public is listed and searchable; unlisted opens only by its link; private only for you and staff.</p>
+<button class="ovv-btn ovv-btn--primary" type="submit">Save changes</button>
+</form>
+<details class="ovv-danger"><summary>Delete this ${what}</summary>
+<form class="ovv-owner-delete" method="post" action="${action}/delete"><label class="ovv-confirm"><input type="checkbox" name="confirm" value="1" required> I want to delete it for good</label> <button class="ovv-btn ovv-btn--danger" type="submit">Delete</button></form>
+</details>
+${kind === 'vod' ? html`<p class="ovv-fine">New clips are still cut on <a href="${livePublic}/vod/${id}">OpenVibe.Live</a>.</p>` : ''}
+</section>`;
+    }
+
     // The shell's navbar/footer scripts come from the site's own /shared copy, and the one
     // product stylesheet/script live in public/.
     r.use('/shared', ovServe.handler());
@@ -517,9 +574,15 @@ function createVideoRoutes(ctx) {
         const id = String(req.params.id || '');
         if (!live.isId(id)) return notFound(req, res);
 
-        const data = await live.vod(id);
+        let data = await live.vod(id);
+        let ownOnly = false;
+        if (!data || !data.vod) {
+            data = await ownView(req, res, 'vod', id);
+            ownOnly = true;
+        }
         if (!data || !data.vod) return notFound(req, res);
         const vod = data.vod;
+        const manageable = mayManage(req, 'vod', vod);
         const clips = Array.isArray(data.clips) ? data.clips.filter((c) => c && c.visibility !== 'private') : [];
 
         const segs = transcriptSegments(vod);
@@ -549,7 +612,6 @@ function createVideoRoutes(ctx) {
         const channelName = vod.display_name || vod.username || null;
         const localChannel = vod.username ? `/@${vod.username}` : null;
         const liveChannel = `${livePublic}/@${vod.username}`;
-        const manage = `${livePublic}/vod/${id}`;
         const metaParts = [];
         if (vod.created_at) metaParts.push(html`<time datetime="${vod.created_at}">${dateLabel(vod.created_at)}</time>`);
         if (vod.duration_seconds != null) metaParts.push(durationLabel(vod.duration_seconds));
@@ -563,13 +625,15 @@ function createVideoRoutes(ctx) {
         const hlsAttr = hlsAttrs(vod);
 
         return page(req, res, {
-            index: !unlisted,
-            noindex: unlisted,
+            index: !unlisted && !ownOnly,
+            noindex: unlisted || ownOnly,
+            ...(ownOnly ? { cache: cache.htmlHeaders({ private: true }) } : {}),
             title: vod.title || 'Stream recording',
             description: vod.description || vod.ai_overview || '',
             scripts: ['js/video.js'],
             body: html`<div class="ovv-watch">
 <div class="ovv-main">
+${savedNotice(req)}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this recording.', 'info') : ''}
 <div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline src="${httpsUrl(vod.playback_url) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video></div>
 <h1 class="ovv-title">${vod.title || 'Stream recording'}</h1>
 <div class="ovv-byline">
@@ -584,11 +648,11 @@ ${segs.length ? html`<details class="ovv-panel ovv-transcript"><summary>Transcri
 ${commentsOk ? html`<section class="ovv-panel ovv-comments" aria-labelledby="h-comments"><h2 id="h-comments">Comments</h2>${commentRows.length ? commentRows.map(commentItem) : html`<p class="ovv-comments-empty">No comments yet.</p>`}${threadUrl ? html`<p class="ovv-comments-link"><a class="ovv-btn" href="${threadUrl}">Join the discussion on OpenVibe.Community</a></p>` : ''}</section>` : ''}
 </div>
 <aside class="ovv-side">
+${manageable ? ownerPanel('vod', id, vod) : ''}
 ${up.html}
 ${mems.length ? html`<section class="ovv-panel ovv-chapters" aria-labelledby="h-chapters"><h2 id="h-chapters">Chapters</h2><ol>${mems.map((m) => html`<li><a href="/v/${id}?t=${m.offset_seconds}" data-ovv-chapter="${m.offset_seconds}"><span class="ovv-time">${vttTime(m.offset_seconds).slice(0, 8)}</span><span>${m.description}</span></a></li>`)}</ol><p class="ovv-fine">From the AI moments of the stream.</p></section>` : ''}
 ${chatRows ? html`<section class="ovv-panel ovv-chat" aria-labelledby="h-chat"><h2 id="h-chat">Chat replay</h2><div class="ovv-chat-body" data-ovv-chat>${chatRows.rows.map((r) => html`<div class="ovv-chat-row" data-ovv-at="${r.offset}"><button type="button" class="ovv-seek" data-ovv-seek="${r.offset}">${streamTime(r.offset)}</button><span class="ovv-chat-msg">${r.name ? html`<b class="ovv-chat-name">${r.name}</b> ` : ''}${r.text}</span></div>`)}</div>${chatRows.leftOut ? html`<p class="ovv-fine">Showing the first 1,000 messages; ${chatRows.leftOut} more not shown.</p>` : ''}</section>` : ''}
 ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 id="h-clips">Clips from this stream</h2><div class="ovv-grid ovv-grid--side">${clips.map(clipCard)}</div></section>` : ''}
-<p class="ovv-manage"><a href="${manage}">Manage on OpenVibe.Live</a> <span class="ovv-fine">· owner tools (visibility, clips, delete) stay on Live for now</span></p>
 </aside>
 </div>`,
         });
@@ -599,9 +663,15 @@ ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 i
         const id = String(req.params.id || '');
         if (!live.isId(id)) return notFound(req, res);
 
-        const data = await live.clip(id);
+        let data = await live.clip(id);
+        let ownOnly = false;
+        if (!data || !data.clip) {
+            data = await ownView(req, res, 'clip', id);
+            ownOnly = true;
+        }
         if (!data || !data.clip) return notFound(req, res);
         const clip = data.clip;
+        const manageable = mayManage(req, 'clip', clip);
 
         let threadUrl = null;
         try {
@@ -622,13 +692,15 @@ ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 i
         const hlsAttr = hlsAttrs(clip);
 
         return page(req, res, {
-            index: !unlisted,
-            noindex: unlisted,
+            index: !unlisted && !ownOnly,
+            noindex: unlisted || ownOnly,
+            ...(ownOnly ? { cache: cache.htmlHeaders({ private: true }) } : {}),
             title: clip.title || 'Clip',
             description: clip.ai_overview || '',
             scripts: ['js/video.js'],
             body: html`<div class="ovv-watch ovv-watch--clip">
 <div class="ovv-main">
+${savedNotice(req)}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this clip.', 'info') : ''}
 <div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline src="${httpsUrl(clip.playback_url) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>
 <h1 class="ovv-title">${clip.title || 'Clip'}</h1>
 <div class="ovv-byline">
@@ -638,13 +710,91 @@ ${clip.created_at ? html`<span class="ovv-meta"><time datetime="${clip.created_a
 </div>
 ${up.html}
 ${clip.ai_overview ? html`<section class="ovv-panel"><p>${clip.ai_overview}</p><p class="ovv-fine">Written by AI from the clip.</p></section>` : ''}
-<p class="ovv-manage"><a href="${livePublic}/clip/${id}">Manage on OpenVibe.Live</a></p>
+${manageable ? ownerPanel('clip', id, clip) : ''}
 </div>
 </div>`,
         });
     });
 
     // ── Channel page ────────────────────────────────────────
+    // ── Owner changes (web forms, same-origin, as the person on Live) ──
+    function ownerFields(b, kind) {
+        const title = String(b.title || '').trim();
+        const description = String(b.description || '').trim();
+        const visibility = String(b.visibility || '');
+        if (!title || title.length > 200) return { error: 'A title is 1 to 200 characters.' };
+        if (kind === 'vod' && description.length > 2000) return { error: 'A description is at most 2,000 characters.' };
+        if (!VISIBILITIES.includes(visibility)) return { error: 'Choose public, unlisted or private.' };
+        return { title, description, visibility };
+    }
+    const fieldError = (req, res, text, back) => page(req, res, {
+        title: 'Not saved', cache: cache.htmlHeaders({ private: true }),
+        body: html`<h1>That was not saved</h1>${notice(text, 'bad')}<p><a class="ovv-btn" href="${back}">Go back</a></p>`,
+    }, 422);
+
+    r.post('/v/:id/manage', mustSignIn('here', 'Sign in to manage your recording.'), async (req, res) => {
+        const id = String(req.params.id || '');
+        if (!live.isId(id)) return notFound(req, res);
+        const back = `/v/${id}`;
+        if (!sameSite(req, res, back)) return undefined;
+        const f = ownerFields(req.body || {}, 'vod');
+        if (f.error) return fieldError(req, res, f.error, back);
+        try {
+            await asPerson(req, res, (token) => live.updateVod(token, id, { title: f.title, description: f.description, visibility: f.visibility }));
+        } catch (err) { return ownerRefused(req, res, err, back); }
+        live.forget('vod', id);
+        return res.redirect(303, `${back}?saved=1`);
+    });
+
+    r.post('/v/:id/delete', mustSignIn('here', 'Sign in to manage your recording.'), async (req, res) => {
+        const id = String(req.params.id || '');
+        if (!live.isId(id)) return notFound(req, res);
+        const back = `/v/${id}`;
+        if (!sameSite(req, res, back)) return undefined;
+        if ((req.body || {}).confirm !== '1') return fieldError(req, res, 'Tick the box to confirm the deletion.', back);
+        try {
+            await asPerson(req, res, (token) => live.deleteVod(token, id));
+        } catch (err) { return ownerRefused(req, res, err, back); }
+        live.forget('vod', id);
+        return res.redirect(303, req.viewer.username && live.isUsername(req.viewer.username) ? `/@${req.viewer.username}?deleted=1` : '/?deleted=1');
+    });
+
+    r.post('/c/:id/manage', mustSignIn('here', 'Sign in to manage your clip.'), async (req, res) => {
+        const id = String(req.params.id || '');
+        if (!live.isId(id)) return notFound(req, res);
+        const back = `/c/${id}`;
+        if (!sameSite(req, res, back)) return undefined;
+        const f = ownerFields(req.body || {}, 'clip');
+        if (f.error) return fieldError(req, res, f.error, back);
+        // Two Live calls: the title (the clip's maker, the channel or staff) and the visibility (the channel or staff).
+        // Only what changed is sent, so a maker who keeps the visibility is never refused for it.
+        let current = null;
+        try {
+            const d = await asPerson(req, res, (token) => live.clipAs(token, id));
+            current = d && d.clip;
+        } catch (err) { return ownerRefused(req, res, err, back); }
+        if (!current) return notFound(req, res);
+        try {
+            if (f.title !== String(current.title || '')) await asPerson(req, res, (token) => live.setClipTitle(token, id, f.title));
+            if (f.visibility !== String(current.visibility || '')) await asPerson(req, res, (token) => live.setClipVisibility(token, id, f.visibility));
+        } catch (err) { live.forget('clip', id); return ownerRefused(req, res, err, back); }
+        live.forget('clip', id);
+        return res.redirect(303, `${back}?saved=1`);
+    });
+
+    r.post('/c/:id/delete', mustSignIn('here', 'Sign in to manage your clip.'), async (req, res) => {
+        const id = String(req.params.id || '');
+        if (!live.isId(id)) return notFound(req, res);
+        const back = `/c/${id}`;
+        if (!sameSite(req, res, back)) return undefined;
+        if ((req.body || {}).confirm !== '1') return fieldError(req, res, 'Tick the box to confirm the deletion.', back);
+        try {
+            await asPerson(req, res, (token) => live.deleteClip(token, id));
+        } catch (err) { return ownerRefused(req, res, err, back); }
+        live.forget('clip', id);
+        return res.redirect(303, req.viewer.username && live.isUsername(req.viewer.username) ? `/@${req.viewer.username}?deleted=1` : '/?deleted=1');
+    });
+
     r.get('/@:username', async (req, res) => {
         const username = String(req.params.username || '');
         if (!live.isUsername(username)) return notFound(req, res);
@@ -682,7 +832,7 @@ ${clip.ai_overview ? html`<section class="ovv-panel"><p>${clip.ai_overview}</p><
             index: true,
             title: `@${username}`,
             description: `Recordings and clips from @${username} on OpenVibe.Video.`,
-            body: html`<header class="ovv-channel-head"><span class="ovv-avatar ovv-avatar--big" aria-hidden="true">${username.slice(0, 1).toUpperCase()}</span><div><h1>@${username}</h1><p class="ovv-meta">Recordings and clips from this channel's streams on OpenVibe.Live.</p></div><a class="ovv-btn" href="${livePublic}/@${username}"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Channel on OpenVibe.Live</a></header>
+            body: html`${req.query.deleted === '1' ? notice('Deleted on OpenVibe.Live.', 'ok') : ''}<header class="ovv-channel-head"><span class="ovv-avatar ovv-avatar--big" aria-hidden="true">${username.slice(0, 1).toUpperCase()}</span><div><h1>@${username}</h1><p class="ovv-meta">Recordings and clips from this channel's streams on OpenVibe.Live.</p></div><a class="ovv-btn" href="${livePublic}/@${username}"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Channel on OpenVibe.Live</a></header>
 <section class="ovv-section" aria-labelledby="h-vods"><h2 id="h-vods">Recordings</h2>${grid(vods.map(vodCard), 'No recordings yet.')}${prevLink || nextLink ? html`<nav class="ovv-pagination" aria-label="Pages">${prevLink ? html`<a href="${prevLink}">← Newer</a>` : ''}${nextLink ? html`<a href="${nextLink}">Older →</a>` : ''}</nav>` : ''}</section>
 ${clips.length ? html`<section class="ovv-section" aria-labelledby="h-clips"><h2 id="h-clips">Clips</h2>${grid(clips.map(clipCard), 'No clips yet.')}</section>` : ''}
 ${lists.length ? html`<section class="ovv-section" aria-labelledby="h-lists"><h2 id="h-lists">Playlists</h2><ul class="ovv-playlist-list">${lists.map(publicPlaylistRow)}</ul></section>` : ''}`,
