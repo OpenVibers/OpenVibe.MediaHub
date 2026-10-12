@@ -115,10 +115,13 @@ public on OpenVibe.Live. There are no uploads and no new storage — the media f
 (`playback_url`), and the pages read Live's public JSON API server-side, signed out (Live already applies
 visibility: a private item answers 404, an unlisted one is reachable by id but noindex and never listed).
 
+The VOD page also shows a chat replay of the stream (from OpenVibe.Chat) and read-only comments with a link to
+the OpenVibe.Community thread.
+
 | Path | What |
 |---|---|
 | `/` | what OpenVibe.Video is, then the latest recordings and clips |
-| `/v/:id` | a VOD watch page: player, AI chapters and captions, its clips, the Community thread link |
+| `/v/:id` | a VOD watch page: player, AI chapters and captions, chat replay, comments, its clips |
 | `/c/:id` | a clip watch page: player, attribution, the full-recording link, the Community thread link |
 | `/@:username` | a channel's recordings (and clips), newest first, 24 per page |
 | `/v/:id/captions.vtt` | the AI transcript as WebVTT captions |
@@ -126,13 +129,14 @@ visibility: a private item answers 404, an unlisted one is reachable by id but n
 | `/sitemap.xml`, `/robots.txt`, `/llms.txt` | crawl artifacts for the video host |
 
 Configuration: `MEDIAHUB_VIDEO_URL` (default `https://openvibe.video`; its hostname is the video host),
-`MEDIAHUB_LIVE_URL` (default `https://openvibe.live`; production points it at the loopback address) and
-`MEDIAHUB_LIVE_PUBLIC_URL` (default `https://openvibe.live`; links people click). The video host is chosen by
-`Host` header in `server/app.js`, so the drive's pages, API and `/auth` never answer there. Only https URLs from
-Live (player source, thumbnails, the thread link) reach a page; anything else is dropped.
+`MEDIAHUB_LIVE_URL` (default `https://openvibe.live`; production points it at the loopback address),
+`MEDIAHUB_LIVE_PUBLIC_URL` (default `https://openvibe.live`; links people click) and `MEDIAHUB_CHAT_URL`
+(default `https://openvibe.live`, which proxies `/api/chat/` to OpenVibe.Chat; production points it at the loopback
+address). The video host is chosen by `Host` header in `server/app.js`, so the drive's pages, API and `/auth` never
+answer there. Only https URLs from Live (player source, thumbnails, the thread link) reach a page; anything else is
+dropped.
 
-Not built yet: chat replay, comments on the page (only the OpenVibe.Community thread link is offered), playlists,
-and uploads.
+Not built yet: playlists and uploads.
 
 ## Pages
 

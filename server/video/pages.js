@@ -25,6 +25,7 @@ const { asyncRouter } = require('../http/router');
 const { html } = require('../render/html');
 const { send, assetVersion, SITE_NAME } = require('./layout');
 const { createLiveClient } = require('./live-client');
+const { createChatClient } = require('./chat-client');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 const HOME_LIMIT = 10;
@@ -55,6 +56,77 @@ function dateLabel(iso) {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return String(iso);
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+/** A UTC timestamp: chat uses 'YYYY-MM-DD HH:MM:SS'; Live's stream times may be ISO. Returns seconds or NaN. */
+function utcSeconds(v) {
+    if (v == null) return NaN;
+    const s = String(v).trim();
+    if (!s) return NaN;
+    const iso = /[TtZz]/.test(s) ? s : `${s.replace(' ', 'T')}Z`;
+    const t = Date.parse(iso);
+    return Number.isFinite(t) ? t / 1000 : NaN;
+}
+
+/** An offset into the stream as H:MM:SS (no leading zero on the hour). */
+function streamTime(s) {
+    const n = Math.max(0, Math.floor(Number(s) || 0));
+    const h = Math.floor(n / 3600);
+    const m = Math.floor((n % 3600) / 60);
+    const sec = n % 60;
+    return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
+/** A short "2 hours ago" for a comment's created time. */
+function relativeDate(iso) {
+    if (!iso) return '';
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) return '';
+    const s = Math.floor((Date.now() - t) / 1000);
+    if (s < 60) return 'just now';
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m} min ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
+    const d = Math.floor(h / 24);
+    if (d < 30) return `${d} day${d === 1 ? '' : 's'} ago`;
+    const mo = Math.floor(d / 30);
+    if (mo < 12) return `${mo} month${mo === 1 ? '' : 's'} ago`;
+    const y = Math.floor(mo / 12);
+    return `${y} year${y === 1 ? '' : 's'} ago`;
+}
+
+/** The replay messages that belong in the chat panel: oldest first, at most 1,000, null when none. */
+function chatMessageRows(vod, messages) {
+    const start = utcSeconds(vod && vod.stream_started_at);
+    if (!Number.isFinite(start) || !Array.isArray(messages)) return null;
+    const end = utcSeconds(vod.stream_ended_at);
+    const rows = [];
+    for (const m of messages) {
+        if (!m || typeof m !== 'object') continue;
+        if (m.is_deleted || m.is_filtered) continue;
+        if (m.message_type !== 'chat') continue;
+        const at = utcSeconds(m.timestamp);
+        if (!Number.isFinite(at)) continue;
+        const offset = at - start;
+        if (offset < 0) continue;
+        if (Number.isFinite(end) && offset > end - start + 60) continue;
+        rows.push({ offset: Math.floor(offset), name: m.display_name || m.username || '', text: m.message == null ? '' : String(m.message) });
+    }
+    rows.sort((a, b) => a.offset - b.offset);
+    if (!rows.length) return null;
+    const leftOut = rows.length > 1000 ? rows.length - 1000 : 0;
+    return { rows: rows.slice(0, 1000), leftOut };
+}
+
+function commentItem(c) {
+    const name = c.display_name || c.username || '';
+    const text = c.message == null ? '' : String(c.message);
+    const replies = Number(c.reply_count) || 0;
+    return html`<article class="ovv-comment">
+<header class="ovv-comment-header"><span class="ovv-comment-author">${name}</span>${c.created_at ? html`<time class="ovv-comment-date" datetime="${c.created_at}">${relativeDate(c.created_at)}</time>` : ''}</header>
+<p class="ovv-comment-text">${text}</p>
+${replies > 0 ? html`<p class="ovv-comment-replies"><i class="fa-regular fa-comments" aria-hidden="true"></i> ${replies} ${replies === 1 ? 'reply' : 'replies'}</p>` : ''}
+</article>`;
 }
 
 /** WebVTT timestamp: HH:MM:SS.mmm. */
@@ -216,6 +288,7 @@ const grid = (cards, empty = 'Nothing here yet.') => (cards && cards.length ? ht
 function createVideoRoutes(ctx) {
     const { config, log } = ctx;
     const live = createLiveClient({ config, fetchImpl: ctx.fetchImpl || globalThis.fetch, log });
+    const chat = createChatClient({ config, fetchImpl: ctx.fetchImpl || globalThis.fetch, log });
     const r = asyncRouter();
     const base = String(config.video.url).replace(/\/+$/, '');
     const livePublic = String(config.video.livePublicUrl).replace(/\/+$/, '');
@@ -304,10 +377,21 @@ function createVideoRoutes(ctx) {
             mems = chapters(moments(m && m.memories), vod.duration_seconds);
         } catch { mems = []; }
         let threadUrl = null;
+        let commentRows = [];
+        let commentsOk = false;
         try {
             const cm = await live.comments('vod', id);
             threadUrl = httpsUrl(cm && cm.thread && cm.thread.url);
+            const list = Array.isArray(cm && cm.comments) ? cm.comments : [];
+            commentRows = list.filter((c) => c && !c.is_deleted && !c.deleted).slice(0, 20);
+            commentsOk = true;
         } catch { threadUrl = null; }
+
+        let chatRows = null;
+        try {
+            const replay = await chat.chatReplay(vod.stream_id);
+            chatRows = chatMessageRows(vod, replay && Array.isArray(replay.messages) ? replay.messages : []);
+        } catch { chatRows = null; }
 
         const unlisted = vod.visibility === 'unlisted';
         const channelName = vod.display_name || vod.username || null;
@@ -339,9 +423,11 @@ ${metaParts.length ? html`<span class="ovv-meta">${metaParts.map((p, i) => (i ==
 ${vod.is_recording ? html`<p class="ovv-recording" role="status"><i class="fa-solid fa-circle" aria-hidden="true"></i> This recording is still in progress. <a href="${liveChannel}">Watch the live channel</a>.</p>` : ''}
 ${vod.ai_overview ? html`<section class="ovv-panel" aria-labelledby="h-overview"><h2 id="h-overview">About this stream</h2><p>${vod.ai_overview}</p><p class="ovv-fine">Written by AI from the stream.</p></section>` : ''}
 ${segs.length ? html`<details class="ovv-panel ovv-transcript"><summary>Transcript <span class="ovv-fine">(AI, ${segs.length} lines)</span></summary><div class="ovv-transcript-body">${segs.map((s) => html`<p><button type="button" class="ovv-seek" data-ovv-seek="${s.start}">${vttTime(s.start).slice(0, 8)}</button> <span>${s.text}</span></p>`)}</div></details>` : ''}
+${commentsOk ? html`<section class="ovv-panel ovv-comments" aria-labelledby="h-comments"><h2 id="h-comments">Comments</h2>${commentRows.length ? commentRows.map(commentItem) : html`<p class="ovv-comments-empty">No comments yet.</p>`}${threadUrl ? html`<p class="ovv-comments-link"><a class="ovv-btn" href="${threadUrl}">Join the discussion on OpenVibe.Community</a></p>` : ''}</section>` : ''}
 </div>
 <aside class="ovv-side">
 ${mems.length ? html`<section class="ovv-panel ovv-chapters" aria-labelledby="h-chapters"><h2 id="h-chapters">Chapters</h2><ol>${mems.map((m) => html`<li><a href="/v/${id}?t=${m.offset_seconds}" data-ovv-chapter="${m.offset_seconds}"><span class="ovv-time">${vttTime(m.offset_seconds).slice(0, 8)}</span><span>${m.description}</span></a></li>`)}</ol><p class="ovv-fine">From the AI moments of the stream.</p></section>` : ''}
+${chatRows ? html`<section class="ovv-panel ovv-chat" aria-labelledby="h-chat"><h2 id="h-chat">Chat replay</h2><div class="ovv-chat-body" data-ovv-chat>${chatRows.rows.map((r) => html`<div class="ovv-chat-row" data-ovv-at="${r.offset}"><button type="button" class="ovv-seek" data-ovv-seek="${r.offset}">${streamTime(r.offset)}</button><span class="ovv-chat-msg">${r.name ? html`<b class="ovv-chat-name">${r.name}</b> ` : ''}${r.text}</span></div>`)}</div>${chatRows.leftOut ? html`<p class="ovv-fine">Showing the first 1,000 messages; ${chatRows.leftOut} more not shown.</p>` : ''}</section>` : ''}
 ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 id="h-clips">Clips from this stream</h2><div class="ovv-grid ovv-grid--side">${clips.map(clipCard)}</div></section>` : ''}
 <p class="ovv-manage"><a href="${manage}">Manage on OpenVibe.Live</a> <span class="ovv-fine">· owner tools (visibility, clips, delete) stay on Live for now</span></p>
 </aside>

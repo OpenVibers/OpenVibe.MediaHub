@@ -10,6 +10,9 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
 - OpenVibe.Video step A: openvibe.video now serves public, read-only watch pages for OpenVibe.Live's stream
   recordings and clips (`/v/:id`, `/c/:id`, `/@:username`, WebVTT captions and chapters), reading Live's public
   JSON API server-side, signed out. No uploads and no new storage.
+- OpenVibe.Video step B: the VOD watch page now shows a chat replay of the stream (read from OpenVibe.Chat,
+  oldest first, the first 1,000 messages) and read-only comments with the OpenVibe.Community thread link, plus the
+  `MEDIAHUB_CHAT_URL` setting.
 - openvibe.pics is still parked: its vhost answers 302 to https://openvibe.network/ and proxies nothing. The app
   no longer has "coming" pages or host-based brand handling.
 
