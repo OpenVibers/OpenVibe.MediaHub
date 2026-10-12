@@ -29,7 +29,8 @@ const { createChatClient } = require('./chat-client');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 const HOME_LIMIT = 10;
-const SITEMAP_LIMIT = 30;
+const SITEMAP_LIMIT = 30;     // Live's feed page size (its MAX_LIMIT)
+const SITEMAP_PAGES = 5;      // per kind: up to 150 recordings and 150 clips
 const CHANNEL_CLIPS_LIMIT = 12;
 const PER_PAGE = 24;
 
@@ -515,13 +516,37 @@ ${clips.length ? html`<section class="ovv-section" aria-labelledby="h-clips"><h2
     });
 
     // ── Discovery: robots.txt, sitemap.xml, llms.txt ────────
+    /** Up to SITEMAP_PAGES pages of one feed, following Live's cursor; a page that fails ends the walk. */
+    async function feedItems(type) {
+        const items = [];
+        let cursor = null;
+        for (let i = 0; i < SITEMAP_PAGES; i++) {
+            let page;
+            try { page = await live.feed({ type, limit: SITEMAP_LIMIT, cursor }); } catch (err) { if (!items.length) throw err; break; }
+            items.push(...((page && Array.isArray(page.items)) ? page.items : []));
+            cursor = page && page.next;
+            if (!cursor) break;
+        }
+        return items;
+    }
+
     r.get('/sitemap.xml', async (req, res) => {
-        const [vods, clips] = await Promise.all([
-            live.feed({ type: 'vods', limit: SITEMAP_LIMIT }),
-            live.feed({ type: 'clips', limit: SITEMAP_LIMIT }),
-        ]);
-        const items = [...((vods && vods.items) || []), ...((clips && clips.items) || [])];
-        const urls = items.map((it) => ({ loc: `${base}${it.kind === 'clip' ? '/c/' : '/v/'}${it.id}` }));
+        const [vods, clips] = await Promise.all([feedItems('vods'), feedItems('clips')]);
+        const day = (iso) => { const d = new Date(String(iso || '')); return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10); };
+        const newest = (list) => list.map(day).filter(Boolean).sort().pop() || null;
+        const items = [...vods, ...clips].filter((it) => it && Number.isSafeInteger(Number(it.id)));
+        const channels = new Map();   // username → its newest item's day
+        for (const it of items) {
+            const u = it.channel && it.channel.username;
+            if (!u || !/^[A-Za-z0-9_]{1,32}$/.test(u)) continue;
+            const d = day(it.created_at);
+            if (!channels.has(u) || (d && d > channels.get(u))) channels.set(u, d);
+        }
+        const urls = [
+            { loc: `${base}/`, lastmod: newest(items.map((it) => it.created_at)) },
+            ...items.map((it) => ({ loc: `${base}${it.kind === 'clip' ? '/c/' : '/v/'}${Number(it.id)}`, lastmod: day(it.created_at) })),
+            ...[...channels].map(([u, d]) => ({ loc: `${base}/@${u}`, lastmod: d })),
+        ].map((u) => (u.lastmod ? u : { loc: u.loc }));
         return res.type('application/xml').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(seo.sitemapXml(urls));
     });
 

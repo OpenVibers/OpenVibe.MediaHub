@@ -295,6 +295,9 @@ function countOccurrences(haystack, needle) {
 
     await check('the sitemap lists public items and leaves the unlisted VOD out', async () => {
         const r = await getVideo('/sitemap.xml');
+        assert.match(r.text, /<loc>https:\/\/openvibe\.video\/<\/loc><lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/, 'the home, dated by the newest item');
+        assert.match(r.text, /<loc>https:\/\/openvibe\.video\/v\/101<\/loc><lastmod>2026-10-12<\/lastmod>/, 'a recording, dated');
+        assert.match(r.text, /<loc>https:\/\/openvibe\.video\/@streamer<\/loc>/, 'its channel');
         assert.strictEqual(r.status, 200);
         assert.ok(r.text.includes('https://openvibe.video/v/101'));
         assert.ok(r.text.includes('https://openvibe.video/c/201'));
