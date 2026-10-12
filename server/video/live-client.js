@@ -20,6 +20,15 @@ function isId(v) {
     return /^[1-9]\d*$/.test(String(v)) && Number.isSafeInteger(Number(v)) && Number(v) > 0;
 }
 
+/** Live answered an owner call with a 4xx: its status and its own message, shown to the person. */
+class LiveRefusedError extends Error {
+    constructor(status, message) {
+        super(message);
+        this.name = 'LiveRefusedError';
+        this.status = status;
+    }
+}
+
 /** Live was down or answered nonsense: the pages turn this into a 502. */
 class LiveUnavailableError extends Error {
     constructor(message) {
@@ -82,7 +91,56 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
         return remember(url, body);
     }
 
+    /**
+     * A call made AS the signed-in person (their Network token as a Bearer; Live checks the issuer and decides what
+     * they may do), never cached. 2xx → the JSON body; a 4xx → LiveRefusedError carrying Live's status and message
+     * (a 401 lets the caller refresh the session and try once more); anything else → LiveUnavailableError.
+     */
+    async function asPerson(token, method, path, body) {
+        let res;
+        try {
+            res = await fetchImpl(`${config.video.liveUrl}${path}`, {
+                method,
+                headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+                body: body ? JSON.stringify(body) : undefined,
+                credentials: 'omit',
+                cache: 'no-store',
+                signal: AbortSignal.timeout(TIMEOUT_MS * 2),
+            });
+        } catch (err) {
+            log.warn('[OpenVibe.Video] Live did not answer an owner call', err && err.name);
+            throw new LiveUnavailableError('OpenVibe.Live did not answer; try again in a minute.');
+        }
+        const data = await res.json().catch(() => null);
+        if (res.ok) return data || {};
+        if (res.status >= 400 && res.status < 500) {
+            throw new LiveRefusedError(res.status, (data && typeof data.error === 'string' && data.error.slice(0, 200)) || 'OpenVibe.Live refused that.');
+        }
+        throw new LiveUnavailableError('OpenVibe.Live did not answer; try again in a minute.');
+    }
+
+    /** After an owner's change: drop the cached reads of this item and every cached list, so pages show it at once. */
+    function forget(kind, id) {
+        const one = `${config.video.liveUrl}/api/${kind === 'clip' ? 'clips' : 'vods'}/${id}`;
+        for (const key of [...cache.keys()]) {
+            if (key === one || key.startsWith(`${one}/`) || key.includes('/api/vods?') || key.includes('/api/clips?') || key.includes('/api/content/feed?')) cache.delete(key);
+        }
+    }
+
     return {
+        /** The person's own view of one item (a private one they own or may moderate included); null when Live says 404. */
+        async vodAs(token, id) {
+            try { return await asPerson(token, 'GET', `/api/vods/${id}`); } catch (err) { if (err.status === 404) return null; throw err; }
+        },
+        async clipAs(token, id) {
+            try { return await asPerson(token, 'GET', `/api/clips/${id}`); } catch (err) { if (err.status === 404) return null; throw err; }
+        },
+        updateVod: (token, id, fields) => asPerson(token, 'PUT', `/api/vods/${id}`, fields),
+        deleteVod: (token, id) => asPerson(token, 'DELETE', `/api/vods/${id}`),
+        setClipTitle: (token, id, title) => asPerson(token, 'PUT', `/api/clips/${id}/title`, { title }),
+        setClipVisibility: (token, id, visibility) => asPerson(token, 'PUT', `/api/clips/${id}/visibility`, { visibility }),
+        deleteClip: (token, id) => asPerson(token, 'DELETE', `/api/clips/${id}`),
+        forget,
         feed({ type, limit, cursor = null }) {
             const qs = new URLSearchParams({ type, limit: String(limit) });
             // Live's feed pages by an opaque cursor (its `next`); only a plain token is passed on.
@@ -114,4 +172,4 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
     };
 }
 
-module.exports = { createLiveClient, LiveUnavailableError, isId, USERNAME_RE };
+module.exports = { createLiveClient, LiveUnavailableError, LiveRefusedError, isId, USERNAME_RE };

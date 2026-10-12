@@ -127,6 +127,13 @@ Live's `POST /api/views/:kind/:id`, so Live counts the view for the viewer's own
 come from the loopback address). The CSP allows Media's hosts (openvibe.media, its shield edge.openvibe.media and
 the presigned R2/B2 hosts it may redirect a file to) and Live's origin for the beacon.
 
+**Owner tools.** A recording's channel, and a clip's maker or channel, see a "Manage" panel on the watch page: title,
+description (recordings), visibility and delete. Each change is a same-origin web form that openvibe.video sends to
+OpenVibe.Live's own API as the signed-in person (their Network token as a Bearer, refreshed once if it expired), so
+Live's rules decide who may do what and its refusal is shown as it is; the cached reads of the item and of the lists
+are dropped after a change. A private item is shown to its owner only (noindex, never cached). New clips are still cut
+on Live.
+
 The VOD page also shows a chat replay of the stream (from OpenVibe.Chat) and read-only comments with a link to
 the OpenVibe.Community thread. The video host signs in through the same Network SSO as the drive, with its own
 callback URI (`https://openvibe.video/auth/callback`); each host's session cookie is host-only, so signing in on one
@@ -137,6 +144,8 @@ does not sign in on the other.
 | `/` | anyone | what OpenVibe.Video is, then the latest recordings and clips |
 | `/v/:id` | anyone | a VOD watch page: player, AI chapters and captions, chat replay, comments, its clips, add-to-playlist |
 | `/c/:id` | anyone | a clip watch page: player, attribution, the full-recording link, add-to-playlist |
+| `POST /v/:id/manage`, `POST /v/:id/delete` | the recording's channel (Live decides) | edit title, description and visibility; delete (a ticked box) |
+| `POST /c/:id/manage`, `POST /c/:id/delete` | the clip's maker or channel (Live decides) | edit title and visibility; delete |
 | `/@:username` | anyone | a channel's recordings (and clips), newest first, 24 per page |
 | `/playlists` | the owner | their playlists: create, rename, change visibility, delete |
 | `/playlists/:id` | anyone with the link | one playlist: public and unlisted are open by link (unlisted noindex), private only to the owner |

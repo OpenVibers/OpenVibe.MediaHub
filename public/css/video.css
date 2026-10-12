@@ -172,3 +172,20 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-item-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .ovv-item-row--gone .ovv-item-title { color: var(--ovv-faint); font-weight: 500; }
 .ovv-playlist-head { padding: 8px 0 4px; }
+
+/* Owner tools: the Manage panel on a recording or clip its channel (or maker) owns. */
+.ovv-owner { border-color: var(--ovv-line-strong); }
+.ovv-owner h2 { display: flex; align-items: center; gap: 8px; }
+.ovv-owner-form { display: grid; gap: 12px; margin-top: 10px; }
+.ovv-field { display: grid; gap: 5px; }
+.ovv-field > span { font-size: .82rem; font-weight: 700; color: var(--ovv-dim); }
+.ovv-field input, .ovv-field textarea, .ovv-field select { font: inherit; width: 100%; box-sizing: border-box; min-height: 38px; padding: 7px 10px; border-radius: 9px; border: 1px solid var(--ovv-line-strong); background: var(--bg-input, var(--bg-secondary, #0f1729)); color: inherit; }
+.ovv-field textarea { resize: vertical; min-height: 76px; }
+.ovv-field input:focus-visible, .ovv-field textarea:focus-visible, .ovv-field select:focus-visible { outline: 2px solid var(--ovv-accent); outline-offset: 1px; border-color: var(--ovv-accent); }
+.ovv-owner-form .ovv-fine { margin: -4px 0 0; }
+.ovv-owner-form .ovv-btn { justify-self: start; }
+.ovv-danger { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--ovv-line); }
+.ovv-danger > summary { cursor: pointer; font-size: .88rem; font-weight: 700; color: var(--danger, #f87171); }
+.ovv-danger > summary:focus-visible { outline: 2px solid var(--ovv-accent); outline-offset: 2px; border-radius: 4px; }
+.ovv-owner-delete { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
+.ovv-watch--clip .ovv-owner { max-width: 640px; }
