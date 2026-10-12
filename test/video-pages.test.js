@@ -26,7 +26,7 @@ function startLive() {
     const publicVod = {
         id: 101, title: 'A public recording', description: 'A public stream', duration_seconds: 45,
         created_at: '2026-10-12T10:00:00.000Z', thumbnail_url: 'https://openvibe.media/t/101.jpg',
-        playback_url: 'https://openvibe.media/v/101', visibility: 'public',
+        playback_url: 'https://openvibe.media/v/101', hls_url: 'https://openvibe.media/o/med_101/master.m3u8', visibility: 'public',
         username: 'streamer', display_name: 'Streamer', avatar_url: null, profile_color: null,
         ai_overview: 'A public overview.',
         ai_transcript_json: [
@@ -39,7 +39,7 @@ function startLive() {
     const unlistedVod = {
         id: 102, title: 'An unlisted recording', description: '', duration_seconds: 20,
         created_at: '2026-10-11T10:00:00.000Z', thumbnail_url: null,
-        playback_url: 'https://openvibe.media/v/102', visibility: 'unlisted',
+        playback_url: 'https://openvibe.media/v/102', hls_url: 'https://evil.example/o/med_102/master.m3u8', visibility: 'unlisted',
         username: 'streamer', display_name: 'Streamer', view_count: 5, is_recording: false,
         ai_overview: '', ai_transcript_json: null,
     };
@@ -53,7 +53,7 @@ function startLive() {
     const vodListItem = {
         id: 101, title: 'A public recording', description: 'A public stream', duration_seconds: 45,
         created_at: '2026-10-12T10:00:00.000Z', thumbnail_url: 'https://openvibe.media/t/101.jpg',
-        playback_url: 'https://openvibe.media/v/101', visibility: 'public',
+        playback_url: 'https://openvibe.media/v/101', hls_url: 'https://openvibe.media/o/med_101/master.m3u8', visibility: 'public',
         username: 'streamer', display_name: 'Streamer', view_count: 100,
     };
     const clipListItem = {
@@ -236,6 +236,11 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('preload="metadata"'));
         assert.ok(r.text.includes('playsinline'));
         assert.ok(r.text.includes('data-ovv-video'));
+        assert.ok(r.text.includes('data-ovv-view="https://openvibe.live/api/views/vod/101"'), 'playback counts a view on Live');
+        assert.ok(r.text.includes('data-ovv-hls="https://openvibe.media/o/med_101/master.m3u8"'), 'the timeline playlist');
+        assert.ok(/data-ovv-hls-lib="\/vendor\/hls\.light\.min\.js\?v=[0-9a-f]{10}"/.test(r.text), 'hls.js, self-hosted and content-hashed');
+        assert.ok(/media-src[^;]*blob:/.test(String(r.headers['content-security-policy'])), 'MSE plays from blob:');
+        assert.ok(/connect-src[^;]*https:\/\/openvibe\.live/.test(String(r.headers['content-security-policy'])), 'the beacon may reach Live');
         assert.ok(r.text.includes('kind="captions"') && r.text.includes('src="/v/101/captions.vtt"'), 'the transcript track');
         assert.ok(r.text.includes('kind="chapters"') && r.text.includes('src="/v/101/chapters.vtt"'), 'the chapters track');
         assert.ok(r.text.includes('Chapters'));
@@ -251,6 +256,7 @@ function countOccurrences(haystack, needle) {
     await check('the clip watch page attributes its maker and links the full recording', async () => {
         const r = await getVideo('/c/201');
         assert.strictEqual(r.status, 200);
+        assert.ok(r.text.includes('data-ovv-view="https://openvibe.live/api/views/clip/201"'), 'playback counts a clip view on Live');
         assert.ok(r.text.includes('src="https://openvibe.media/c/201"'), 'the clip playback url');
         assert.ok(r.text.includes('Made by Clipper'), 'attributed to the person who made it');
         assert.ok(r.text.includes('Watch in the full recording'));
@@ -263,6 +269,7 @@ function countOccurrences(haystack, needle) {
         const r = await getVideo('/v/102');
         assert.strictEqual(r.status, 200);
         assert.ok(r.text.includes('An unlisted recording'));
+        assert.ok(!r.text.includes('data-ovv-hls='), 'a playlist on another origin than the file is not used');
         assert.ok(r.text.includes('<meta name="robots" content="noindex">'));
     });
 

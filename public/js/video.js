@@ -22,12 +22,64 @@
         window.history.replaceState(null, '', u.pathname + '?' + u.searchParams.toString());
     }
 
+    // Media's segment timeline (HLS) when the recording has one: native where the browser plays HLS (Safari, iOS),
+    // otherwise hls.js (self-hosted, loaded only then). The file in src stays the fallback: a playlist that fails
+    // falls back to it once, at the same position.
+    function loadScript(src) {
+        return new Promise(function (resolve, reject) {
+            const s = document.createElement('script');
+            s.src = src;
+            s.onload = resolve;
+            s.onerror = reject;
+            document.head.appendChild(s);
+        });
+    }
+
+    function attachSource(video) {
+        const hlsUrl = video.getAttribute('data-ovv-hls');
+        const fileUrl = video.getAttribute('src');
+        if (!hlsUrl || !fileUrl) return Promise.resolve('file');
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = hlsUrl;
+            return Promise.resolve('hls');
+        }
+        if (!window.MediaSource) return Promise.resolve('file');
+        return loadScript(video.getAttribute('data-ovv-hls-lib')).then(function () {
+            if (typeof window.Hls === 'undefined' || !window.Hls.isSupported()) return 'file';
+            const hls = new window.Hls({ enableWorker: true, backBufferLength: 60 });
+            let failed = false;
+            hls.on(window.Hls.Events.ERROR, function (_event, data) {
+                if (!data || !data.fatal || failed) return;
+                failed = true;
+                const at = video.currentTime || 0;
+                hls.destroy();
+                video.src = fileUrl;
+                if (at > 0) seek(video, at);
+            });
+            hls.loadSource(hlsUrl);
+            hls.attachMedia(video);
+            return 'hls';
+        }, function () { return 'file'; });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         const video = document.querySelector('video[data-ovv-video]');
         if (!video) return;
 
         const t = startSeconds();
-        if (t != null) seek(video, t);
+        attachSource(video).then(function (source) {
+            video.setAttribute('data-ovv-source', source);
+            if (t != null) seek(video, t);
+        });
+
+        // A view counts on OpenVibe.Live once playback starts, from this browser (so the viewer's own address is the
+        // one counted, as on Live's own pages). The beacon carries no body and no answer is read.
+        const viewUrl = video.getAttribute('data-ovv-view');
+        if (viewUrl && navigator.sendBeacon) {
+            video.addEventListener('playing', function () {
+                try { navigator.sendBeacon(viewUrl); } catch (e) { /* a view that is not counted is not an error */ }
+            }, { once: true });
+        }
 
         // A playlist's watch page (?list=…) carries the next item on the player; move to it when this ends.
         const nextUrl = video.getAttribute('data-ovv-next');
