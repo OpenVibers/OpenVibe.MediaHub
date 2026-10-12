@@ -60,5 +60,39 @@
             current = at;
             if (current) { current.classList.add('is-current'); current.setAttribute('aria-current', 'true'); }
         });
+        // Chat replay: mark rows up to the current time as past and dim the ones still ahead, keeping
+        // the newest past row in view inside the panel's own scroll box (never the page).
+        const chatBody = document.querySelector('[data-ovv-chat]');
+        if (chatBody) {
+            const chatRows = Array.prototype.slice.call(chatBody.querySelectorAll('[data-ovv-at]'));
+            let userScrollUntil = 0;
+            let lastAutoScroll = 0;
+            chatBody.addEventListener('scroll', function () {
+                if (Date.now() - lastAutoScroll > 250) userScrollUntil = Date.now() + 5000;
+            });
+            video.addEventListener('timeupdate', function () {
+                const t = video.currentTime;
+                let newest = null;
+                for (let i = 0; i < chatRows.length; i++) {
+                    const row = chatRows[i];
+                    if (Number(row.getAttribute('data-ovv-at')) <= t + 0.25) {
+                        row.classList.add('is-past');
+                        row.classList.remove('is-ahead');
+                        newest = row;
+                    } else {
+                        row.classList.remove('is-past');
+                        row.classList.add('is-ahead');
+                    }
+                }
+                if (!newest || Date.now() < userScrollUntil) return;
+                lastAutoScroll = Date.now();
+                const pr = chatBody.getBoundingClientRect();
+                const rr = newest.getBoundingClientRect();
+                const top = rr.top - pr.top + chatBody.scrollTop;
+                const bottom = top + rr.height;
+                if (top < chatBody.scrollTop) chatBody.scrollTop = top;
+                else if (bottom > chatBody.scrollTop + chatBody.clientHeight) chatBody.scrollTop = bottom - chatBody.clientHeight;
+            });
+        }
     });
 })();

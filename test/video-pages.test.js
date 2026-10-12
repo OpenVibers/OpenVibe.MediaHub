@@ -33,7 +33,7 @@ function startLive() {
             { start: 0, end: 2, text: 'Hi & bye <tag> --> here' },
             { start: 2, end: 4, text: 'Second\nline --> done' },
         ],
-        transcript_status: 'done', stream_category: 'Just Chatting', stream_started_at: '2026-10-12T09:30:00.000Z',
+        transcript_status: 'done', stream_category: 'Just Chatting', stream_id: 1001, stream_started_at: '2026-10-12 09:30:00', stream_ended_at: '2026-10-12 09:30:45',
         stream_peak_viewers: 12, comment_count: 3, view_count: 100, is_recording: false,
     };
     const unlistedVod = {
@@ -63,7 +63,32 @@ function startLive() {
         source_streamer_username: 'streamer', source_streamer_display_name: 'Streamer', view_count: 20,
     };
 
-    const state = { down: false };
+    const comments101 = [
+        { id: 'c1', message: 'Nice <b>stream</b>!', display_name: 'Commenter', username: 'commenter', created_at: '2026-10-12T10:00:00.000Z', reply_count: 3, is_deleted: 0, deleted: false },
+        { id: 'c2', message: 'Agreed', display_name: null, username: 'other_user', created_at: '2026-10-12T10:05:00.000Z', reply_count: 0, is_deleted: 0, deleted: false },
+        { id: 'c3', message: '', display_name: null, username: null, created_at: '2026-10-12T10:10:00.000Z', reply_count: 0, is_deleted: 1, deleted: true },
+    ];
+    const chatMessages101 = [
+        { id: 'm1', timestamp: '2026-10-12 09:29:59', username: 'early', display_name: 'Early', message: 'EARLY_MSG_XYZ', message_type: 'chat', user_id: 900001, anon_id: 'anon-PRIVATE-1', metadata: { note: 'meta-PRIVATE-1' }, profile_color: '#PRIVATE-COLOR', role: 'PRIVATE-ROLE' },
+        { id: 'm2', timestamp: '2026-10-12 09:30:05', username: 'viewer', display_name: 'Viewer', message: 'Hello <b>world</b>', message_type: 'chat', user_id: 900002, anon_id: 'anon-PRIVATE-2', metadata: { note: 'meta-PRIVATE-2' }, profile_color: '#PRIVATE-COLOR', role: 'PRIVATE-ROLE' },
+        { id: 'm3', timestamp: '2026-10-12 09:30:10', username: 'deleted_user', display_name: 'Deleted', message: 'DELETED_MSG_XYZ', message_type: 'chat', is_deleted: true, user_id: 900003, anon_id: 'anon-PRIVATE-3', metadata: { note: 'meta-PRIVATE-3' }, profile_color: '#PRIVATE-COLOR', role: 'PRIVATE-ROLE' },
+        { id: 'm4', timestamp: '2026-10-12 09:30:15', username: 'filtered_user', display_name: 'Filtered', message: 'FILTERED_MSG_XYZ', message_type: 'chat', is_filtered: true, user_id: 900004, anon_id: 'anon-PRIVATE-4', metadata: { note: 'meta-PRIVATE-4' }, profile_color: '#PRIVATE-COLOR', role: 'PRIVATE-ROLE' },
+        { id: 'm5', timestamp: '2026-10-12 09:30:20', username: 'system', display_name: 'System', message: 'SYSTEM_MSG_XYZ', message_type: 'system', user_id: 900005, anon_id: 'anon-PRIVATE-5', metadata: { note: 'meta-PRIVATE-5' }, profile_color: '#PRIVATE-COLOR', role: 'PRIVATE-ROLE' },
+        { id: 'm6', timestamp: '2026-10-12 09:30:25', username: 'viewer2', display_name: 'Viewer Two', message: 'Second message', message_type: 'chat', user_id: 900006, anon_id: 'anon-PRIVATE-6', metadata: { note: 'meta-PRIVATE-6' }, profile_color: '#PRIVATE-COLOR', role: 'PRIVATE-ROLE' },
+        { id: 'm7', timestamp: '2026-10-12 09:32:00', username: 'late', display_name: 'Late', message: 'LATE_MSG_XYZ', message_type: 'chat', user_id: 900007, anon_id: 'anon-PRIVATE-7', metadata: { note: 'meta-PRIVATE-7' }, profile_color: '#PRIVATE-COLOR', role: 'PRIVATE-ROLE' },
+    ];
+    const manyChatMessages = Array.from({ length: 1005 }, function (_, i) {
+        return { id: 'many_' + i, timestamp: '2026-10-12 09:30:01', username: 'viewer', display_name: 'Viewer', message: 'Many message ' + i, message_type: 'chat' };
+    });
+    const secondVod = {
+        id: 104, title: 'A long recording', description: '', duration_seconds: 300,
+        created_at: '2026-10-12T09:30:00.000Z', thumbnail_url: null,
+        playback_url: 'https://openvibe.media/v/104', visibility: 'public',
+        username: 'streamer', display_name: 'Streamer', view_count: 50, is_recording: false,
+        ai_overview: '', ai_transcript_json: null,
+        stream_id: 1002, stream_started_at: '2026-10-12 09:30:00', stream_ended_at: '2026-10-12 09:35:00',
+    };
+    const state = { down: false, chatDown: false };
     const server = http.createServer((req, res) => {
         const url = new URL(req.url, 'http://x');
         const json = (status, body) => {
@@ -101,6 +126,7 @@ function startLive() {
             if (vodDetail[1] === '103') return json(404, { error: 'not found' });
             if (vodDetail[1] === '101') return json(200, { vod: publicVod, clips: [clipListItem] });
             if (vodDetail[1] === '102') return json(200, { vod: unlistedVod, clips: [] });
+            if (vodDetail[1] === '104') return json(200, { vod: secondVod, clips: [] });
             return json(404, { error: 'not found' });
         }
         const clipDetail = /^\/api\/clips\/(\d+)$/.exec(p);
@@ -110,7 +136,17 @@ function startLive() {
         }
         const comments = /^\/api\/comments\/(vod|clip)\/(\d+)$/.exec(p);
         if (comments) {
+            if (comments[1] === 'vod' && comments[2] === '101') {
+                return json(200, { comments: comments101, total: comments101.length, thread: { id: 'thr_vod_101', url: 'https://openvibe.community/t/vod-101' } });
+            }
             return json(200, { comments: [], total: 0, thread: { id: `thr_${comments[1]}_${comments[2]}`, url: `https://openvibe.community/t/${comments[1]}-${comments[2]}` } });
+        }
+        const chatReplay = /^\/api\/chat\/(\d+)\/replay$/.exec(p);
+        if (chatReplay) {
+            if (state.chatDown) return json(503, { error: 'Chat is down' });
+            if (chatReplay[1] === '1001') return json(200, { messages: chatMessages101 });
+            if (chatReplay[1] === '1002') return json(200, { messages: manyChatMessages });
+            return json(200, { messages: [] });
         }
         return json(404, { error: 'not found' });
     });
@@ -119,6 +155,7 @@ function startLive() {
         server.listen(0, '127.0.0.1', () => resolve({
             url: `http://127.0.0.1:${server.address().port}`,
             setDown: (v) => { state.down = v; },
+            setChatDown: (v) => { state.chatDown = v; },
             close: () => new Promise((r) => server.close(r)),
         }));
     });
@@ -143,6 +180,13 @@ function request(base, path, host) {
     });
 }
 
+function countOccurrences(haystack, needle) {
+    let n = 0;
+    let i = 0;
+    while ((i = haystack.indexOf(needle, i)) !== -1) { n++; i += needle.length; }
+    return n;
+}
+
 (async () => {
     const live = await startLive();
     const t = await boot({
@@ -150,6 +194,7 @@ function request(base, path, host) {
             MEDIAHUB_VIDEO_URL: 'https://openvibe.video',
             MEDIAHUB_LIVE_URL: live.url,
             MEDIAHUB_LIVE_PUBLIC_URL: 'https://openvibe.live',
+            MEDIAHUB_CHAT_URL: live.url,
         },
     });
     const getVideo = (p) => request(t.base, p, 'openvibe.video');
@@ -161,6 +206,15 @@ function request(base, path, host) {
         assert.strictEqual(r.status, 502);
         assert.ok(r.text.includes('did not answer'), r.text.slice(0, 300));
         live.setDown(false);
+    });
+
+    await check('Chat being down still renders the VOD page without a chat panel', async () => {
+        live.setChatDown(true);
+        const r = await getVideo('/v/101');
+        assert.strictEqual(r.status, 200);
+        assert.ok(!r.text.includes('Chat replay'), 'no chat panel when Chat is down');
+        assert.ok(!r.text.includes('ovv-chat'), 'no chat markup when Chat is down');
+        live.setChatDown(false);
     });
 
     await check('the video home shows both latest grids and links the watch pages', async () => {
@@ -272,6 +326,59 @@ function request(base, path, host) {
         const r = await getDownload('/');
         assert.strictEqual(r.status, 200);
         assert.ok(r.text.includes('private drive'));
+    });
+
+    await check('the VOD page lists the chat replay with offsets, escaping and no private fields', async () => {
+        const r = await getVideo('/v/101');
+        assert.strictEqual(r.status, 200);
+        assert.ok(r.text.includes('Chat replay'));
+        assert.ok(r.text.includes('data-ovv-at="5"'), 'the first message is 5 seconds in');
+        assert.ok(r.text.includes('data-ovv-seek="5"'), 'the seek button carries the offset');
+        assert.ok(r.text.includes('0:00:05'), 'the offset is H:MM:SS');
+        assert.ok(r.text.includes('data-ovv-at="25"'), 'the second message is 25 seconds in');
+        assert.ok(r.text.includes('0:00:25'));
+        assert.ok(r.text.includes('Hello &lt;b&gt;world&lt;/b&gt;'), 'message text is escaped');
+        assert.ok(!r.text.includes('Hello <b>world</b>'), 'raw HTML never appears');
+        assert.ok(!r.text.includes('EARLY_MSG_XYZ'), 'message before the stream start is dropped');
+        assert.ok(!r.text.includes('DELETED_MSG_XYZ'), 'deleted message is dropped');
+        assert.ok(!r.text.includes('FILTERED_MSG_XYZ'), 'filtered message is dropped');
+        assert.ok(!r.text.includes('SYSTEM_MSG_XYZ'), 'non-chat message is dropped');
+        assert.ok(!r.text.includes('LATE_MSG_XYZ'), 'message after the end + 60 s is dropped');
+        assert.ok(!r.text.includes('anon-PRIVATE'), 'anon ids never render');
+        assert.ok(!r.text.includes('meta-PRIVATE'), 'metadata never renders');
+        assert.ok(!r.text.includes('PRIVATE-COLOR'), 'colours never render');
+        assert.ok(!r.text.includes('PRIVATE-ROLE'), 'roles never render');
+        assert.ok(!r.text.includes('900002'), 'user ids never render');
+        assert.ok(!r.text.includes('user_id'), 'user id field never renders');
+    });
+
+    await check('the chat replay caps at 1,000 messages and says how many were left out', async () => {
+        const r = await getVideo('/v/104');
+        assert.strictEqual(r.status, 200);
+        assert.ok(r.text.includes('Showing the first 1,000 messages; 5 more not shown.'), 'the cap note names the count');
+        assert.strictEqual(countOccurrences(r.text, 'class="ovv-chat-row"'), 1000, 'exactly 1,000 rows render');
+    });
+
+    await check('the VOD page shows the newest comments and the Community link', async () => {
+        const r = await getVideo('/v/101');
+        assert.strictEqual(r.status, 200);
+        assert.ok(r.text.includes('Comments'));
+        assert.ok(r.text.includes('Commenter'), 'author display name');
+        assert.ok(r.text.includes('other_user'), 'username fallback for the author');
+        assert.ok(r.text.includes('Nice &lt;b&gt;stream&lt;/b&gt;!'), 'comment text is escaped');
+        assert.ok(!r.text.includes('Nice <b>stream</b>!'), 'raw comment HTML never appears');
+        assert.ok(r.text.includes('3 replies'), 'reply count when present');
+        assert.ok(r.text.includes('<time class="ovv-comment-date"'), 'a relative date is shown');
+        assert.strictEqual(countOccurrences(r.text, 'class="ovv-comment"'), 2, 'the deleted comment is not rendered');
+        assert.ok(r.text.includes('Join the discussion on OpenVibe.Community'));
+        assert.ok(r.text.includes('href="https://openvibe.community/t/vod-101"'));
+    });
+
+    await check('a VOD with no comments shows the empty line and the link', async () => {
+        const r = await getVideo('/v/102');
+        assert.strictEqual(r.status, 200);
+        assert.ok(r.text.includes('No comments yet.'));
+        assert.ok(r.text.includes('href="https://openvibe.community/t/vod-102"'));
     });
 
     await t.close();

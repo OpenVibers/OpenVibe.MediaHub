@@ -56,11 +56,13 @@ function load(env = process.env) {
         // OpenVibe.Video: public, read-only watch pages for OpenVibe.Live's stream recordings and clips. The
         // app serves openvibe.video by Host header and reads Live's public JSON API server-side, signed out.
         // `url` is the public origin (its hostname is the video host); `liveUrl` is where the app calls Live
-        // (production sets it to the loopback address) and `livePublicUrl` is what links people click.
+        // (production sets it to the loopback address), `livePublicUrl` is what links people click, and
+        // `chatUrl` is where it reads a stream's chat replay (production sets it to the loopback address).
         video: {
             url: trim(env.MEDIAHUB_VIDEO_URL || 'https://openvibe.video'),
             liveUrl: trim(env.MEDIAHUB_LIVE_URL || 'https://openvibe.live'),
             livePublicUrl: trim(env.MEDIAHUB_LIVE_PUBLIC_URL || 'https://openvibe.live'),
+            chatUrl: trim(env.MEDIAHUB_CHAT_URL || 'https://openvibe.live'),
         },
 
         // What one person may keep and do here. Media's own quotas are per tenant (this whole service is one

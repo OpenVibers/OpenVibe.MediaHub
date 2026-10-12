@@ -95,6 +95,25 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-channel-head .ovv-meta { margin: 0; }
 .ovv-pagination { display: flex; gap: 10px; margin-top: 1.2rem; }
 
+/* Chat replay */
+.ovv-chat-body { max-height: 26rem; overflow-y: auto; display: grid; gap: 2px; }
+.ovv-chat-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 4px 0; line-height: 1.5; font-size: .9rem; }
+.ovv-chat-row.is-ahead { opacity: .42; }
+.ovv-chat-row.is-past { opacity: 1; }
+.ovv-chat-name { font-weight: 700; margin-right: 6px; color: var(--text-primary, #e6edf7); }
+.ovv-chat-msg { overflow-wrap: anywhere; }
+
+/* Comments (read only) */
+.ovv-comments .ovv-comment { padding: 10px 0; }
+.ovv-comments .ovv-comment + .ovv-comment { border-top: 1px solid var(--ovv-line); }
+.ovv-comment-header { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.ovv-comment-author { font-weight: 700; overflow-wrap: anywhere; }
+.ovv-comment-date { font-size: .8rem; color: var(--ovv-faint); }
+.ovv-comment-text { margin: .3rem 0 0; line-height: 1.6; overflow-wrap: anywhere; }
+.ovv-comment-replies { margin: .3rem 0 0; font-size: .8rem; color: var(--ovv-faint); }
+.ovv-comments-empty { color: var(--ovv-dim); }
+.ovv-comments-link { margin: .9rem 0 0; }
+
 @media (max-width: 1000px) {
   .ovv-watch { grid-template-columns: minmax(0, 1fr); }
   .ovv-chapters ol { max-height: none; }
