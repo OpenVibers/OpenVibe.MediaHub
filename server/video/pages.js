@@ -47,10 +47,18 @@ function httpsUrl(u) {
     try { const x = new URL(String(u)); return x.protocol === 'https:' ? x.href : null; } catch { return null; }
 }
 
+/**
+ * An item's playable file. Live's `file_url` is always the file; its `playback_url` is the HLS playlist when Media has
+ * one (Live T4 step 5), so it is only the fallback for answers from before `file_url` existed.
+ */
+function fileOf(item) {
+    return httpsUrl(item.file_url) || httpsUrl(item.playback_url);
+}
+
 /** The player's HLS source: Media's timeline playlist, for a finished item that has one, on the playback file's origin. */
 function hlsAttrs(item) {
     const hls = !item.is_recording && httpsUrl(item.hls_url);
-    const file = httpsUrl(item.playback_url);
+    const file = fileOf(item);
     if (!hls || !file || new URL(hls).origin !== new URL(file).origin) return '';
     return html` data-ovv-hls="${hls}" data-ovv-hls-lib="${asset('vendor/hls.light.min.js')}"`;
 }
@@ -112,7 +120,7 @@ function videoLd({ base, path, item, title, description, chapterList, partOf }) 
         ...seo.jsonLd.video({
             name: title, url: pageUrl, description: String(description || title).slice(0, 500),
             thumbnailUrl: thumb ? [thumb] : undefined, uploadDate: isoTime(item.created_at),
-            duration: isoDuration(item.duration_seconds), contentUrl: httpsUrl(item.playback_url) || undefined, embedUrl: pageUrl,
+            duration: isoDuration(item.duration_seconds), contentUrl: fileOf(item) || undefined, embedUrl: pageUrl,
         }),
         ...(item.view_count != null ? { interactionStatistic: { '@type': 'InteractionCounter', interactionType: 'https://schema.org/WatchAction', userInteractionCount: Number(item.view_count) || 0 } } : {}),
         ...(channel ? { author: { '@type': 'Person', name: channel, ...(item.username ? { url: `${base}/@${item.username}` } : {}) } } : {}),
@@ -716,7 +724,7 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
             body: html`<div class="ovv-watch">
 <div class="ovv-main">
 ${savedNotice(req)}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this recording.', 'info') : ''}
-<div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline src="${httpsUrl(vod.playback_url) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video></div>
+<div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video></div>
 <h1 class="ovv-title">${vod.title || 'Stream recording'}</h1>
 <div class="ovv-byline">
 ${channelName ? html`<a class="ovv-avatar" href="${localChannel || liveChannel}" aria-hidden="true" tabindex="-1">${String(channelName).slice(0, 1).toUpperCase()}</a>` : ''}
@@ -794,7 +802,7 @@ ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 i
 <div class="ovv-main">
 ${savedNotice(req)}${req.query.made === '1' ? notice('Your clip was made. It is credited to you on OpenVibe.Live and here.', 'ok') : ''}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this clip.', 'info') : ''}
 ${cutting ? html`<div class="ovv-player-wrap ovv-cutting" role="status" data-ovv-reload="8"><p><i class="fa-solid fa-scissors" aria-hidden="true"></i> This clip is being cut. It plays here in a moment; the page checks again by itself.</p></div>`
-        : html`<div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline src="${httpsUrl(clip.playback_url) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>`}
+        : html`<div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline src="${fileOf(clip) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>`}
 <h1 class="ovv-title">${clip.title || 'Clip'}</h1>
 <div class="ovv-byline">
 <div class="ovv-byline-text"><span class="ovv-channel-name">${clip.auto_generated ? html`<span class="ovv-tag ovv-tag--inline">AI clip</span> ` : ''}${attribution}</span>

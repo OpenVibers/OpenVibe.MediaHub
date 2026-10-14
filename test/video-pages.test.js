@@ -88,6 +88,9 @@ function startLive() {
         ai_overview: '', ai_transcript_json: null,
         stream_id: 1002, stream_started_at: '2026-10-12 09:30:00', stream_ended_at: '2026-10-12 09:35:00',
     };
+    // Live's answer since T4 step 5: playback_url is the playlist, file_url the file.
+    const hlsFirstVod = { ...secondVod, id: 105, title: 'Playlist first', playback_url: 'https://openvibe.media/o/med_105/master.m3u8',
+        hls_url: 'https://openvibe.media/o/med_105/master.m3u8', file_url: 'https://openvibe.media/v/105' };
     const state = { down: false, chatDown: false };
     const server = http.createServer((req, res) => {
         const url = new URL(req.url, 'http://x');
@@ -127,6 +130,7 @@ function startLive() {
             if (vodDetail[1] === '101') return json(200, { vod: publicVod, clips: [clipListItem] });
             if (vodDetail[1] === '102') return json(200, { vod: unlistedVod, clips: [] });
             if (vodDetail[1] === '104') return json(200, { vod: secondVod, clips: [] });
+            if (vodDetail[1] === '105') return json(200, { vod: hlsFirstVod, clips: [] });
             return json(404, { error: 'not found' });
         }
         const clipDetail = /^\/api\/clips\/(\d+)$/.exec(p);
@@ -351,6 +355,14 @@ function countOccurrences(haystack, needle) {
         const r = await getDownload('/');
         assert.strictEqual(r.status, 200);
         assert.ok(r.text.includes('private drive'));
+    });
+
+    await check('an answer whose playback_url is the playlist plays the file_url as the file, with the playlist for hls.js', async () => {
+        const r = await getVideo('/v/105');
+        assert.strictEqual(r.status, 200);
+        assert.ok(r.text.includes('src="https://openvibe.media/v/105"'), 'the file is the <video> source');
+        assert.ok(r.text.includes('data-ovv-hls="https://openvibe.media/o/med_105/master.m3u8"'));
+        assert.ok(r.text.includes('"contentUrl":"https://openvibe.media/v/105"'), 'contentUrl is the file');
     });
 
     await check('the VOD page lists the chat replay with offsets, escaping and no private fields', async () => {
