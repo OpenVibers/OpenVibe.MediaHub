@@ -35,7 +35,8 @@ const asset = (rel) => `/${rel}?v=${assetVersion(rel)}`;
 /** o: title, description, body (html), config, path, index, noindex, viewer, private, crumbs [{label, href}], scripts [rel],
  *     jsonLd (structured data for the page), image (its share image, an https URL), ogType */
 function renderPage(o) {
-    const title = o.title || SITE_NAME;
+    // The front page's title says what the site is (search results show it; at most 60 characters).
+    const title = o.title || (o.path === '/' ? `${SITE_NAME}: recordings and clips from OpenVibe.Live` : SITE_NAME);
     const viewer = o.viewer || { kind: 'anonymous' };
     const signedIn = viewer.kind === 'user';
     const pathNow = o.path || '/';
