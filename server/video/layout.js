@@ -83,7 +83,7 @@ ${render(o.body)}
             logoutUrl: '/auth/logout?next={path}',
             silentLogin: `${String(o.baseUrl).replace(/\/+$/, '')}/auth/login?silent=1&next={url}`,
         },
-        footer: { service: 'media-hub', variant: 'compact', brandName: SITE_NAME },
+        footer: { service: 'media-hub', variant: 'compact', brandName: SITE_NAME, updates: '/updates' },
         head,
         body,
     });

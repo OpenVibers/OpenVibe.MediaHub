@@ -23,7 +23,8 @@ const seo = require('openvibe-shared/seo');
 const ovServe = require('openvibe-shared/serve');
 const { asyncRouter } = require('../http/router');
 const { sameOrigin } = require('../http/principal');
-const { html, notice } = require('../render/html');
+const { html, raw, notice } = require('../render/html');
+const frame = require('openvibe-shared/frame');
 const { send, asset, assetVersion, SITE_NAME } = require('./layout');
 const { createLiveClient, LiveRefusedError } = require('./live-client');
 const { createChatClient } = require('./chat-client');
@@ -643,6 +644,14 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
         });
     });
 
+    // ── What shipped: the shared update log, as on every OpenVibe site (MediaHub's log: Video and Download ship together) ──
+    r.get('/updates', (req, res) => page(req, res, {
+        index: true,
+        title: 'What shipped on OpenVibe.Video',
+        description: 'Every change deployed to OpenVibe.Video, newest first.',
+        body: raw(frame.updatesBody({ service: 'media-hub', siteName: 'OpenVibe.Video' }) + `<script src="${ovServe.url('shipped.js')}" defer></script>`),
+    }));
+
     // ── WebVTT tracks ───────────────────────────────────────
     r.get('/v/:id/captions.vtt', async (req, res) => {
         const id = String(req.params.id || '');
@@ -1140,6 +1149,7 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
         }
         const urls = [
             { loc: `${base}/`, lastmod: newest(items.map((it) => it.created_at)) },
+            { loc: `${base}/updates` },
             ...items.map((it) => ({ loc: `${base}${it.kind === 'clip' ? '/c/' : '/v/'}${Number(it.id)}`, lastmod: day(it.created_at) })),
             ...[...channels].map(([u, d]) => ({ loc: `${base}/@${u}`, lastmod: d })),
         ].map((u) => (u.lastmod ? u : { loc: u.loc }));
