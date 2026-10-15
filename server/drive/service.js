@@ -180,7 +180,7 @@ function createService({ s, media, identity, config, log = console }) {
      * each is asked of Network's identity resolver, and the ones it cannot resolve are kept as typed and matched
      * against a viewer's username claim later. No names at all = any signed-in person with the link.
      */
-    async function createShare(owner, { fileId = null, folderId = null, hours, names = [], ownerUsername = null }) {
+    async function createShare(owner, { fileId = null, folderId = null, hours, names = [], ownerUsername = null, isPublic = false }) {
         const room = await shareAllowed(owner);
         if (!room.ok) return room;
         if (fileId && !await ownFile(owner, fileId)) return { ok: false, code: 'file.not_found', detail: 'No such file.' };
@@ -188,6 +188,7 @@ function createService({ s, media, identity, config, log = console }) {
         if (!fileId && !folderId) return { ok: false, code: 'share.invalid', detail: 'A share names one file or one folder.' };
         if (fileId && folderId) return { ok: false, code: 'share.invalid', detail: 'A share names one file or one folder, not both.' };
         const wanted = [...new Set(names.map((n) => String(n || '').trim().toLowerCase()).filter(Boolean))];
+        if (isPublic && wanted.length) return { ok: false, code: 'share.invalid', detail: 'A public link is for anyone with it, so it cannot also name accounts. Choose one.' };
         for (const n of wanted) {
             if (!rules.isUsername(n)) return { ok: false, code: 'share.bad_username', detail: `"${rules.cleanName(n, 40)}" is not an OpenVibe username.` };
         }
@@ -199,7 +200,7 @@ function createService({ s, media, identity, config, log = console }) {
         const expiresAt = new Date(s.now() + rules.expiryHours(hours) * 3_600_000).toISOString();
         const share = await store.insertShare(s, {
             slug: newSlug(), file_id: fileId || null, folder_id: folderId || null, owner,
-            owner_username: ownerUsername, expires_at: expiresAt, allowed_subjects: allowed, created_at: nowIso(),
+            owner_username: ownerUsername, expires_at: expiresAt, allowed_subjects: allowed, created_at: nowIso(), public: isPublic === true,
         });
         return { ok: true, share, unresolved: resolved.unresolved };
     }

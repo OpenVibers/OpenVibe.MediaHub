@@ -95,8 +95,8 @@ function load(env = process.env) {
         // What one person may keep and do here. Media's own quotas are per tenant (this whole service is one
         // tenant), so the per-person numbers are enforced in MediaHub and nowhere else.
         quotas: {
-            bytes: size(env.MEDIAHUB_QUOTA_BYTES, 2 * GB),              // 2 GB stored
-            maxFileBytes: size(env.MEDIAHUB_MAX_FILE_BYTES, 512 * MB),  // 512 MB per file
+            bytes: size(env.MEDIAHUB_QUOTA_BYTES, 25 * GB),             // 25 GB stored (the owner's Q10: free accounts)
+            maxFileBytes: size(env.MEDIAHUB_MAX_FILE_BYTES, 2 * GB),    // 2 GB per file
             uploadsPerDay: size(env.MEDIAHUB_UPLOADS_PER_DAY, 50),      // 50 uploads a day (UTC)
             maxShares: size(env.MEDIAHUB_MAX_SHARES, 20),               // 20 live share links
         },

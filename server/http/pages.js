@@ -151,7 +151,7 @@ ${notice(p && p.detail ? p.detail : 'You are over the limit for this.', 'warn')}
             eyebrow: `${SITE_NAME} · a private drive`,
             title: 'Your files,',
             accent: 'shared on your terms.',
-            lede: 'A private drive for your files, with share links you control. Uploads and every file page need a signed-in OpenVibe account — there is no anonymous upload and no anonymous download here.',
+            lede: 'A private drive for your files, 25 GB free, with share links you control: for named people, for anyone signed in, or a public download page anyone with the link can use. Uploading needs a signed-in OpenVibe account.',
             actions: signedIn(req)
                 ? [{ label: 'Your files', href: '/files', primary: true }, { label: 'The safety rules', href: '/safety' }]
                 : [{ label: 'Sign in with OpenVibe', href: '/auth/login?next=%2Ffiles', primary: true }, { label: 'The safety rules', href: '/safety' }],
@@ -257,7 +257,11 @@ ${table(['Size', 'Type', 'SHA-256', 'Added'], [[fileSize(row), row.content_type,
 <section aria-labelledby="h-share"><h2 id="h-share">Make a share link</h2>
 <form method="post" action="/files/${row.id}/share">
 <div class="field"><label for="hours">Expires in</label><select id="hours" name="hours">${rules.EXPIRY_CHOICES.map((c) => html`<option value="${c.hours}"${c.hours === rules.EXPIRY_DEFAULT_HOURS ? raw(' selected') : ''}>${c.label}</option>`)}</select></div>
-<div class="field"><label for="usernames">Limited to OpenVibe usernames (optional)</label><input id="usernames" name="usernames" type="text" maxlength="300" placeholder="kim, sam"><p class="small muted">Leave empty for any signed-in person with the link. Everyone who opens it still has to be signed in.</p></div>
+<fieldset class="field"><legend>Who can open it</legend>
+<label class="check"><input type="radio" name="who" value="signed_in" checked> Anyone signed in to OpenVibe with the link</label>
+<label class="check"><input type="radio" name="who" value="public"> Anyone with the link, no account needed (a public download page)</label>
+<label class="check"><input type="radio" name="who" value="named"> Only these OpenVibe usernames:</label>
+<input id="usernames" name="usernames" type="text" maxlength="300" placeholder="kim, sam" aria-label="OpenVibe usernames"></fieldset>
 <p><button class="sc-btn sc-primary" type="submit">Create the link</button></p>
 </form>
 ${shares.length ? html`<h3>Its links</h3><ul class="file-list">${shares.map((sh) => html`<li class="file">${shareBadge(drive.stateOf(sh, s.iso()))} <a href="/s/${sh.slug}">/s/${sh.slug}</a> <span class="small muted">expires ${time(sh.expires_at)} · ${Number(sh.downloads)} downloads</span></li>`)}</ul>` : ''}
@@ -337,9 +341,10 @@ ${shares.length ? html`<h3>Its links</h3><ul class="file-list">${shares.map((sh)
         const owner = requesterOf(req);
         const row = await drive.ownFile(owner, String(req.params.id || ''));
         if (!row) return notFoundFile(req, res);
-        const names = String((req.body || {}).usernames || '').split(/[\s,]+/).filter(Boolean).slice(0, 50);
+        const who = String((req.body || {}).who || '');
+        const names = who === 'public' ? [] : String((req.body || {}).usernames || '').split(/[\s,]+/).filter(Boolean).slice(0, 50);
         const out = await drive.createShare(owner, {
-            fileId: row.id, hours: (req.body || {}).hours, names, ownerUsername: req.viewer.username || null,
+            fileId: row.id, hours: (req.body || {}).hours, names, ownerUsername: req.viewer.username || null, isPublic: who === 'public',
         });
         if (!out.ok) {
             return page(req, res, {
@@ -354,7 +359,7 @@ ${shares.length ? html`<h3>Its links</h3><ul class="file-list">${shares.map((sh)
             body: html`<h1>Share link made</h1>
 <p>The link is <a href="/s/${out.share.slug}"><code>/s/${out.share.slug}</code></a> — it expires ${time(out.share.expires_at)}${out.share.allowed_subjects ? ' and only the people you named can open it' : ''}.</p>
 
-<p class="muted">Everyone who opens it has to be signed in to OpenVibe before they can download.</p>
+<p class="muted">${out.share.public ? 'Anyone with the link can open the page and download, no account needed. Revoke it at any time.' : 'Everyone who opens it has to be signed in to OpenVibe before they can download.'}</p>
 <p><a class="sc-btn sc-primary" href="/s/${out.share.slug}">Open the share page</a> <a class="sc-btn" href="/files/${row.id}">Back to the file</a></p>`,
         });
     });
@@ -496,17 +501,28 @@ ${shares.length ? html`<h3>Its links</h3><ul class="file-list">${shares.map((sh)
         return share;
     }
 
+    /** Public links (mh_shares.public) open for anyone with them; every other link still needs a signed-in person. */
+    const signedInUnlessPublic = (why) => {
+        const gate = mustSignIn('here', why);
+        return async (req, res, next) => {
+            const slug = String(req.params.slug || '');
+            const share = rules.isSlug(slug) ? await drive.shareBySlug(slug) : null;
+            if (share && share.public === true) return next();
+            return gate(req, res, next);
+        };
+    };
+
     // A single-file share's picture, for whoever may open the share (the same checks as the page; not a download).
-    r.get('/s/:slug/preview', mustSignIn('here', 'A share link still needs an OpenVibe account.'), async (req, res) => {
+    r.get('/s/:slug/preview', signedInUnlessPublic('A share link still needs an OpenVibe account.'), async (req, res) => {
         const share = await openShare(req, res);
         if (!share) return undefined;
         return sendPreview(req, res, share.file_id ? await fileById(share) : null);
     });
 
-    r.get('/s/:slug', mustSignIn('here', 'A share link still needs an OpenVibe account: uploads, downloads and reports here all belong to a signed-in person.'), async (req, res) => {
+    r.get('/s/:slug', signedInUnlessPublic('This share link needs an OpenVibe account: its owner shared it with signed-in people only.'), async (req, res) => {
         const share = await openShare(req, res);
         if (!share) return undefined;
-        const mine = share.owner === requesterOf(req);
+        const mine = signedIn(req) && share.owner === requesterOf(req);
         if (share.file_id) {
             const file = await fileById(share);
             if (!file) return shareGone(req, res, share);
@@ -514,7 +530,7 @@ ${shares.length ? html`<h3>Its links</h3><ul class="file-list">${shares.map((sh)
                 title: `${file.name} · shared by ${share.owner_username || 'an OpenVibe member'}`,
                 crumbs: [{ label: 'Home', href: '/' }, { label: 'Shared file' }],
                 body: html`<h1>${file.name}</h1>
-${notice(`Shared with you by ${share.owner_username ? `@${share.owner_username}` : 'an OpenVibe member'}.`, 'info')}
+${notice(`Shared ${share.public ? 'publicly' : 'with you'} by ${share.owner_username ? `@${share.owner_username}` : 'an OpenVibe member'}.`, 'info')}
 ${rules.isPreviewable(file.content_type) ? html`<figure class="file-preview"><img src="/s/${share.slug}/preview?w=640" alt="${file.name}" decoding="async"></figure>` : ''}
 ${table(['Size', 'Type', 'Expires', 'Downloads'], [[fileSize(file), file.content_type, time(share.expires_at), String(Number(share.downloads) || 0)]])}
 <p><a class="sc-btn sc-primary" href="/s/${share.slug}/download">Download</a></p>
@@ -528,7 +544,7 @@ ${mine ? '' : reportForm(share)}
             title: `${folder ? folder.name : 'A folder'} · shared by ${share.owner_username || 'an OpenVibe member'}`,
             crumbs: [{ label: 'Home', href: '/' }, { label: 'Shared folder' }],
             body: html`<h1>${folder ? folder.name : 'A folder'}</h1>
-${notice(`Shared with you by ${share.owner_username ? `@${share.owner_username}` : 'an OpenVibe member'}.`, 'info')}
+${notice(`Shared ${share.public ? 'publicly' : 'with you'} by ${share.owner_username ? `@${share.owner_username}` : 'an OpenVibe member'}.`, 'info')}
 <p class="small muted">${files.length} file${files.length === 1 ? '' : 's'} · expires ${time(share.expires_at)}</p>
 ${files.length ? html`<ul class="file-list">${files.map((f) => html`<li class="file"><span class="file-main"><span class="file-name">${f.name}</span><span class="file-meta small muted">${fileSize(f)} · ${f.content_type}</span></span><a class="sc-btn" href="/s/${share.slug}/f/${f.id}/download">Download</a></li>`)}</ul>` : html`<p class="muted">The folder is empty.</p>`}
 ${mine ? '' : reportForm(share)}`,
@@ -555,7 +571,7 @@ ${mine ? '' : reportForm(share)}`,
 </form>
 <p class="small muted">${REPORT_NOTE}</p></section>`;
 
-    r.get('/s/:slug/download', mustSignIn('here', 'A share link still needs an OpenVibe account before anything can be downloaded.'), async (req, res) => {
+    r.get('/s/:slug/download', signedInUnlessPublic('This share link needs an OpenVibe account before anything can be downloaded.'), async (req, res) => {
         const share = await openShare(req, res);
         if (!share) return undefined;
         const file = share.file_id ? await fileById(share) : null;
@@ -564,7 +580,7 @@ ${mine ? '' : reportForm(share)}`,
         return sendFile(req, res, file);
     });
 
-    r.get('/s/:slug/f/:fileId/download', mustSignIn('here', 'A share link still needs an OpenVibe account before anything can be downloaded.'), async (req, res) => {
+    r.get('/s/:slug/f/:fileId/download', signedInUnlessPublic('This share link needs an OpenVibe account before anything can be downloaded.'), async (req, res) => {
         const share = await openShare(req, res);
         if (!share) return undefined;
         if (!share.folder_id) return res.redirect(303, `/s/${share.slug}`);   // a file share has no files inside it
@@ -581,7 +597,7 @@ ${mine ? '' : reportForm(share)}`,
         return sendFile(req, res, file);
     });
 
-    r.post('/s/:slug/report', mustSignIn('here'), async (req, res) => {
+    r.post('/s/:slug/report', signedInUnlessPublic('Sign in to report this link.'), async (req, res) => {
         if (!sameSite(req, res, '/s')) return undefined;
         const slug = String(req.params.slug || '');
         const reason = String((req.body || {}).reason || '');
@@ -593,7 +609,7 @@ ${mine ? '' : reportForm(share)}`,
                 body: html`<h1>That report was not sent</h1>${notice('Pick one of the reasons on the list.', 'warn')}<p><a class="sc-btn" href="/s/${slug}">Back to the share</a></p>`,
             }, 422);
         }
-        const out = await drive.report(slug, { reporter: requesterOf(req), reason, note });
+        const out = await drive.report(slug, { reporter: signedIn(req) ? requesterOf(req) : ctx.pics.addressId(req.ip), reason, note });
         if (out.error === 'share.own') {
             return page(req, res, {
                 title: 'That is your share',

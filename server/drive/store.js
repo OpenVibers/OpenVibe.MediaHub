@@ -68,10 +68,10 @@ const deleteFolder = (s, id, owner) => s.db.exec(`DELETE FROM ${FOLDERS} WHERE i
 
 async function insertShare(s, row) {
     await s.db.query(
-        `INSERT INTO ${SHARES} (slug, file_id, folder_id, owner, owner_username, expires_at, allowed_subjects, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)`,
+        `INSERT INTO ${SHARES} (slug, file_id, folder_id, owner, owner_username, expires_at, allowed_subjects, created_at, public)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)`,
         [row.slug, row.file_id, row.folder_id, row.owner, row.owner_username || null, row.expires_at,
-            row.allowed_subjects ? JSON.stringify(row.allowed_subjects) : null, row.created_at]);
+            row.allowed_subjects ? JSON.stringify(row.allowed_subjects) : null, row.created_at, row.public === true]);
     return getShare(s, row.slug);
 }
 

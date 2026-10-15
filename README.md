@@ -92,10 +92,12 @@ OpenVibe.Download v1 is a **private drive**, not a public host:
 
 - Every upload and every file page needs a signed-in OpenVibe person. Apps, agents and anonymous callers cannot upload.
 - Files are private to their owner: another person's file id answers 404.
-- A share link (`/s/<slug>`, 24 random url-safe characters) expires in 1 hour to 7 days (7 by default), can be revoked,
-  counts downloads, and **needs the downloader to be signed in**. It may be limited to named OpenVibe accounts. The names
-  are resolved through OpenVibe.Network to account subjects, and only subjects are matched, because a username can
-  change hands. A name no account has is refused.
+- A share link (`/s/<slug>`, 24 random url-safe characters) expires in 1 hour to 30 days (7 by default), can be revoked,
+  counts downloads, and is one of three kinds: for anyone **signed in** with the link (the default), for **named**
+  OpenVibe accounts, or **public** (`public: true`, migration `0007_public_shares.sql`; the owner's Q10, MediaFire-style):
+  its page and its downloads open for anyone with the link, no account needed. Named accounts are resolved through
+  OpenVibe.Network to account subjects, and only subjects are matched, because a username can change hands; a name no
+  account has is refused, and a public link cannot also name accounts.
 - Every share page has a Report form (malware, illegal content, copyright, something else). Three distinct reports,
   or any report of illegal content, suspend the share at once. Staff (Network role `admin` or `global_mod`) then
   restore it, or remove the file, which also deletes the object in Media.
@@ -109,7 +111,8 @@ OpenVibe.Download v1 is a **private drive**, not a public host:
   - OpenVibe.Media makes it as a signed WebP variant of the private object, and MediaHub passes it through: `nosniff`,
     a sandbox CSP, `private, max-age=300`, never an attachment and never counted as a download.
   - Only the owner gets one, or whoever may open the share. Other files show their extension.
-- Per-person limits, all from the environment: 2 GB stored, 512 MB per file, 50 uploads a day, 20 live share links.
+- Per-person limits, all from the environment: 25 GB stored and 2 GB per file (the owner's Q10 for free accounts), 50
+  uploads a day, 20 live share links.
 
 ## How it works
 
@@ -390,8 +393,9 @@ Uploads stream through nginx unbuffered; downloads are not buffered either.
 
 Reporting a vulnerability: [SECURITY.md](SECURITY.md).
 
-- Uploads are account-only, files are private, and share links need a signed-in downloader. Every download is
-  attributable, and none renders as a page.
+- Uploads are account-only and files are private. A share link needs a signed-in downloader unless its owner made it
+  public; a public link's page takes reports from anyone (a signed-out reporter is a keyed hash of the address, never
+  the address), and three reports, or one of illegal content, suspend it. No download renders as a page.
 - The form reader streams files to disk. A text field over 64 KB, a second file, or a body cut off before its last
   boundary is refused.
 - Session tokens are httpOnly cookies. Secrets live only in the env file, and no secret or request body is logged.
