@@ -70,7 +70,8 @@ function createAiEdit({ s, media, config, fetchImpl = globalThis.fetch, log = co
             const signed = await media.vodSignedUrl(upload.media_vod_id, 6 * 3600);
             if (!signed.ok || !signed.data || !signed.data.url) throw new Error(`Media gave no readable URL (${signed.code || signed.status})`);
             const r = await run({ media_url: signed.data.url, language: 'auto', allow_paid: false }, `media-hub.video.analyze:${upload.id}:${attempt}`, { service: 'media-hub', type: 'video', id: upload.id });
-            if (r && (r.status === 'queued' || r.status === 'running')) return save(ai.upload_id, { run_id: r.id || null, next_at: later(10) });
+            // Still going after the minute's wait: look again on the next sweep or two (an analysis takes a few minutes).
+            if (r && (r.status === 'queued' || r.status === 'running')) return save(ai.upload_id, { run_id: r.id || null, next_at: later(2) });
             const out = r && r.status === 'succeeded' && r.output;
             if (!out || !out.transcript || !Array.isArray(out.transcript.segments)) throw new Error((r && r.error && (r.error.code || r.error.detail)) || (r && r.status) || 'no result');
             const segments = out.transcript.segments.filter((x) => x && Number.isFinite(Number(x.start)) && Number.isFinite(Number(x.end)) && clean(x.text, 500))
