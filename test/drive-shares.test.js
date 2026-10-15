@@ -39,9 +39,9 @@ const HOUR = 3_600_000;
         assert.strictEqual(s.expires_at, new Date(clock + 24 * HOUR).toISOString());
         assert.strictEqual((await share(t, kim, { file_id: file.id })).json().share.expires_at, new Date(clock + 7 * 24 * HOUR).toISOString(), 'seven days by default');
 
-        // The clamp: an hour is the shortest, a week the longest.
+        // The clamp: an hour is the shortest, thirty days the longest (nothing means the default, a week).
         assert.strictEqual((await share(t, kim, { file_id: file.id, hours: 0 })).json().share.expires_at, new Date(clock + 7 * 24 * HOUR).toISOString());
-        assert.strictEqual((await share(t, kim, { file_id: file.id, hours: 999 })).json().share.expires_at, new Date(clock + 7 * 24 * HOUR).toISOString());
+        assert.strictEqual((await share(t, kim, { file_id: file.id, hours: 9999 })).json().share.expires_at, new Date(clock + 30 * 24 * HOUR).toISOString());
 
         // A file that is not yours has no share.
         const sams = await put(sam, 'sams.bin');

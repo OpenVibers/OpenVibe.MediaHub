@@ -27,10 +27,11 @@ const { SAME, bytes, upload, share } = require('./helpers/drive');
         assert.strictEqual((await t.get('/safety')).status, 200);
     });
 
-    await check('the home page says what this is, the rules, and that everything needs an account', async () => {
+    await check('the home page says what this is, the rules, the free space, and that uploading needs an account', async () => {
         const home = await t.get('/');
         assert.ok(home.text.includes('private drive'), 'it says what it is');
-        assert.ok(home.text.includes('no anonymous upload'), 'and that nothing is anonymous');
+        assert.ok(home.text.includes('Uploading needs a signed-in OpenVibe account'), 'uploads are account-only');
+        assert.ok(home.text.includes('25 GB free') && home.text.includes('public download page'), 'the free space and the public links');
         assert.ok(home.text.includes('Sign in with OpenVibe'), 'a way in');
         assert.ok(home.text.includes('/safety'), 'a link to the rules');
         const safety = await t.get('/safety');

@@ -127,6 +127,7 @@ function createApi(ctx) {
         revoked_at: row.revoked_at, suspended_at: row.suspended_at, created_at: row.created_at,
         allowed: drive.parseAllow(row.allowed_subjects),
         limited: Boolean(row.allowed_subjects),
+        public: row.public === true,
     });
 
     // ── Liveness ────────────────────────────────────────────
@@ -206,7 +207,7 @@ function createApi(ctx) {
         const usernames = Array.isArray(b.usernames) ? b.usernames
             : (typeof b.usernames === 'string' && b.usernames.trim() ? b.usernames.split(/[\s,]+/) : []);
         const out = await drive.createShare(personOf(req), {
-            fileId, folderId, hours: b.hours, names: usernames, ownerUsername: req.principal.username,
+            fileId, folderId, hours: b.hours, names: usernames, ownerUsername: req.principal.username, isPublic: b.public === true,
         });
         if (!out.ok) return problem(req, res, refused(out.code), out.code, out.detail);
         res.set('Location', `/api/v1/shares/${out.share.slug}`);

@@ -45,7 +45,7 @@ const SUSPEND_AT_REPORTS = 3;
 const SUSPEND_IMMEDIATELY = ['illegal'];
 
 const EXPIRY_MIN_HOURS = 1;
-const EXPIRY_MAX_HOURS = 7 * 24;
+const EXPIRY_MAX_HOURS = 30 * 24;
 const EXPIRY_DEFAULT_HOURS = 7 * 24;
 
 /** The declared content type, normalised, or null when it is not a media type at all. */
@@ -128,6 +128,7 @@ const EXPIRY_CHOICES = [
     { hours: 24, label: '1 day' },
     { hours: 72, label: '3 days' },
     { hours: 24 * 7, label: '7 days' },
+    { hours: 24 * 30, label: '30 days' },
 ];
 
 /** "1.4 GB" — how a size is shown. Binary units, one decimal from MB up. */
