@@ -10,6 +10,9 @@
  *   GET  /u/:id                      the watch page (processing: it says so and reloads itself)
  *   POST /u/:id/manage | /u/:id/delete | /u/:id/report
  *   GET  /me/videos                  your uploads, with their state
+ *   GET  /record                     record from the camera or the screen in the browser (public/js/video-record.js)
+ *   POST /api/v1/videos/recordings   start: { title, description, visibility, content_type } → { upload }
+ *   PUT  /api/v1/videos/:id/chunks/:n  the recording's next piece (up to 9 MB), in order, while it records
  *
  * Every write is a signed-in person's (a session on openvibe.video) from openvibe.video itself (Sec-Fetch-Site or
  * Origin). Reports are open to anyone who can see the video, one per person (or per keyed address) per video.
@@ -68,6 +71,25 @@ function createUploadApi({ ctx, config }) {
         } catch (err) { return problem(res, err); }
     });
 
+    r.post('/recordings', express.json({ limit: '16kb' }), async (req, res) => {
+        if (!guard(req, res)) return undefined;
+        try {
+            const b = req.body || {};
+            const row = await up.startRecording(who(req), { title: b.title, description: b.description, visibility: b.visibility, contentType: b.content_type });
+            return res.status(201).json({ upload: { id: row.id } });
+        } catch (err) { return problem(res, err); }
+    });
+
+    r.put('/:id/chunks/:n', express.raw({ type: () => true, limit: '9mb' }), async (req, res) => {
+        if (!guard(req, res)) return undefined;
+        const row = await own(req, res);
+        if (!row) return undefined;
+        try {
+            const out = await up.chunk(row, Number(req.params.n), Buffer.isBuffer(req.body) ? req.body : null);
+            return res.json({ pieces: out.parts_received, size_bytes: Number(out.size_bytes) });
+        } catch (err) { return problem(res, err); }
+    });
+
     r.post('/:id/complete', async (req, res) => {
         if (!guard(req, res)) return undefined;
         const row = await own(req, res);
@@ -109,7 +131,27 @@ function mountUploadPages(r, h) {
 <button class="ovv-btn ovv-btn--primary" type="submit">Upload</button>
 <noscript><p class="ovv-fine">Uploading needs JavaScript: a video goes up in parts so a big file and a dropped connection both work.</p></noscript>
 </form>
-<p><a href="/me/videos">Your videos</a></p>`,
+<p><a href="/record">Record from your camera or screen instead</a> · <a href="/me/videos">Your videos</a></p>`,
+    }));
+
+    r.get('/record', mustSignIn('/record', 'Recordings belong to your OpenVibe account: sign in to record a video.'), async (req, res) => page(req, res, {
+        title: 'Record a video',
+        crumbs: [{ label: 'Home', href: '/' }, { label: 'Record' }],
+        scripts: ['js/video-record.js'],
+        body: html`<h1>Record a video</h1>
+<p class="ovv-lede">Record from your camera or your screen, right here. It is never live: each few seconds go up to your OpenVibe.Video account as you record, and when you stop it becomes a video you can keep private, share by link or publish.</p>
+<form class="ovv-record ovv-panel" data-video-record>
+<fieldset class="ovv-record-source"><legend>Record</legend>
+<label class="ovv-radio"><input type="radio" name="source" value="camera" checked> Camera and microphone</label>
+<label class="ovv-radio"><input type="radio" name="source" value="screen"> Screen, with your microphone</label></fieldset>
+<label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="120" placeholder="Untitled recording"></label>
+<label class="ovv-field"><span>Who can see it</span><select name="visibility">${visibilityOptions('private')}</select></label>
+<div class="ovv-record-stage"><video class="ovv-record-preview" muted playsinline hidden></video><p class="ovv-record-clock" aria-live="off" hidden>0:00</p></div>
+<p class="ovv-upload-status" role="status" aria-live="polite"></p>
+<p class="ovv-record-actions"><button class="ovv-btn" type="button" data-record-preview>Turn on the camera</button> <button class="ovv-btn ovv-btn--primary" type="button" data-record-start disabled>Start recording</button> <button class="ovv-btn ovv-btn--danger" type="button" data-record-stop disabled>Stop and save</button></p>
+<p class="ovv-fine">Up to ${Math.round(cfg.maxBytes / GB)} GB a video. Keep this tab open while recording; a few seconds are lost at most if the connection drops. Recording needs a browser that records video (Chrome, Edge, Firefox, Safari 14.1+) and JavaScript.</p>
+</form>
+<p><a href="/upload">Upload a file instead</a> · <a href="/me/videos">Your videos</a></p>`,
     }));
 
     // Without JavaScript the form posts here: a video goes up in parts, which needs the page's script.

@@ -133,6 +133,31 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         assert.strictEqual((await vreq(t.base, `/u/${id}/report`, { method: 'POST', cookie: samCookie, form: { reason: 'nonsense' } })).status, 404, 'hidden: not reportable by others');
     });
 
+    await check('a recording: pieces of any size go up in order while it records, then it completes and plays', async () => {
+        const startR = await vreq(t.base, '/api/v1/videos/recordings', { method: 'POST', json: { title: '', visibility: 'unlisted', content_type: 'video/webm;codecs=vp9,opus' }, cookie: samCookie });
+        assert.strictEqual(startR.status, 201, startR.text);
+        const rid = startR.json().upload.id;
+        const pieces = [Buffer.from('webm-header+cluster-1'), Buffer.alloc(300 * 1024, 2), Buffer.alloc(17, 3)];
+        assert.strictEqual((await vreq(t.base, `/api/v1/videos/${rid}/chunks/2`, { method: 'PUT', body: pieces[1], cookie: samCookie })).status, 409, 'in order');
+        assert.strictEqual((await vreq(t.base, `/api/v1/videos/${rid}/parts/1`, { method: 'PUT', body: pieces[0], cookie: samCookie })).status, 409, 'a recording takes pieces, not parts');
+        for (const [i, p] of pieces.entries()) {
+            const r = await vreq(t.base, `/api/v1/videos/${rid}/chunks/${i + 1}`, { method: 'PUT', body: p, cookie: samCookie });
+            assert.strictEqual(r.status, 200, r.text);
+        }
+        const vod = [...t.media.vods.values()].find((v) => v.visibility === 'unlisted');
+        assert.ok(vod.bytes.equals(Buffer.concat(pieces)), 'Media has every piece, in order');
+        assert.deepStrictEqual([...new Set(vod.types)], ['video/webm']);
+        assert.strictEqual((await vreq(t.base, `/api/v1/videos/${rid}/complete`, { method: 'POST', cookie: samCookie })).status, 202);
+        let page = null;
+        for (let i = 0; i < 20; i++) { page = await vreq(t.base, `/u/${rid}`, { cookie: samCookie }); if (page.text.includes('data-ovv-video')) break; await new Promise((r) => setTimeout(r, 50)); }
+        assert.ok(page.text.includes('data-ovv-video'), 'it plays');
+        assert.match(page.text, /<h1 class="ovv-title">Recording, \d{4}-\d\d-\d\d \d\d:\d\d UTC<\/h1>/, 'an untitled recording is named by its time');
+        assert.strictEqual((await vreq(t.base, `/api/v1/videos/${rid}/chunks/4`, { method: 'PUT', body: pieces[2], cookie: samCookie })).status, 409, 'closed once complete');
+        const rec = await vreq(t.base, '/record', { cookie: samCookie });
+        assert.ok(rec.text.includes('data-video-record') && rec.text.includes('js/video-record.js'), 'the recorder page');
+        assert.strictEqual((await vreq(t.base, '/record')).status, 401, 'signed out: sign in first');
+    });
+
     await check('delete removes the VOD in Media; the daily limit holds', async () => {
         const r = await vreq(t.base, `/u/${id}/delete`, { method: 'POST', cookie: kimCookie, form: { confirm: '1' } });
         assert.strictEqual(r.status, 303);

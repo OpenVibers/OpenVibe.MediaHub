@@ -9,6 +9,10 @@
  *   complete(row)              closes the file; Media finalizes in the background, the row goes processing → ready
  *   refresh(row)               reads Media again for a row still processing (after a restart it is how it finishes)
  *   update(row, patch) / remove(row) / report(row, …)
+ *   startRecording(who, { title, description, visibility, contentType })   a video recorded in the browser (/record):
+ *                              its size is not known ahead, so parts_expected stays 0 until complete()
+ *   chunk(row, n, buffer)      the n-th piece of a recording (any size up to 9 MB), in order; the size and the person's
+ *                              quota are checked as it grows
  *
  * Rules: MP4 (QuickTime and M4V are the same container and go to Media as MP4), WebM and Matroska; at most
  * VIDEO_UPLOAD_MAX_BYTES (2 GB) a file, VIDEO_UPLOAD_QUOTA_BYTES (20 GB) a person, VIDEO_UPLOADS_PER_DAY (10) a day.
@@ -86,7 +90,45 @@ function createUploads({ s, media, config, log = console }) {
         return await byId(id);
     }
 
+    async function startRecording(who, input) {
+        if (!who || !who.requester) throw new UploadError(401, 'auth.required', 'Sign in to record a video.');
+        const title = cleanLine(input.title, 120) || `Recording, ${s.iso().slice(0, 16).replace('T', ' ')} UTC`;
+        const description = cleanText(input.description, 5000);
+        const visibility = VISIBILITY.includes(input.visibility) ? input.visibility : 'private';
+        const t = String(input.contentType || '').split(';')[0].trim().toLowerCase();
+        const kind = t === 'video/webm' || t === 'video/mp4' ? t : null;
+        if (!kind) throw new UploadError(415, 'upload.type', 'This browser records in a format OpenVibe.Video does not take (WebM or MP4).');
+        const today = s.iso().slice(0, 10);
+        const usage = await s.db.maybe(`SELECT count(*) FILTER (WHERE created_at >= $2)::int AS today, coalesce(sum(size_bytes) FILTER (WHERE state <> 'removed'), 0)::bigint AS bytes
+                                          FROM video_uploads WHERE owner = $1`, [who.requester, today]);
+        if (usage && usage.today >= cfg.perDay) throw new UploadError(429, 'upload.daily_limit', `That is ${cfg.perDay} uploads today. Try again tomorrow.`);
+        if (usage && Number(usage.bytes) >= cfg.quotaBytes) throw new UploadError(413, 'upload.quota', `Your videos already fill ${Math.round(cfg.quotaBytes / 1024 ** 3)} GB. Delete one first.`);
+        const vod = await media.vodCreate({ title, visibility, ownerSubject: who.requester });
+        if (!vod.ok || !vod.data || vod.data.id == null) throw new UploadError(502, 'upload.media', `OpenVibe.Media could not start the recording (${vod.code || vod.status}).`);
+        const id = s.newId('vup');
+        const now = s.iso();
+        await s.db.query(`INSERT INTO video_uploads (id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, created_at, updated_at)
+                          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, 0, 0, $9, $9)`,
+        [id, who.requester, who.username || null, title, description, visibility, Number(vod.data.id), kind, now]);
+        return await byId(id);
+    }
+
+    /** A recording's next piece. The total may not pass the per-video limit or the person's quota. */
+    async function chunk(row, n, buffer) {
+        if (row.status !== 'uploading' || row.parts_expected !== 0) throw new UploadError(409, 'upload.closed', 'This recording is already finished.');
+        if (n !== row.parts_received + 1) throw new UploadError(409, 'upload.out_of_order', `Send piece ${row.parts_received + 1} next.`);
+        if (!buffer || !buffer.length) throw new UploadError(422, 'upload.empty', 'An empty piece.');
+        const size = Number(row.size_bytes) + buffer.length;
+        if (size > cfg.maxBytes) throw new UploadError(413, 'upload.too_big', `A video can be at most ${Math.round(cfg.maxBytes / 1024 ** 3)} GB. Stop the recording.`);
+        const used = Number(await s.db.value("SELECT coalesce(sum(size_bytes), 0)::bigint FROM video_uploads WHERE owner = $1 AND state <> 'removed' AND id <> $2", [row.owner, row.id]));
+        if (used + size > cfg.quotaBytes) throw new UploadError(413, 'upload.quota', `Your videos would pass ${Math.round(cfg.quotaBytes / 1024 ** 3)} GB. Stop the recording.`);
+        const out = await media.vodChunk(row.media_vod_id, buffer, row.content_type);
+        if (!out.ok) throw new UploadError(502, 'upload.media', `OpenVibe.Media did not take piece ${n} (${out.code || out.status}). Try again.`);
+        return await patchRow(row.id, { parts_received: n, size_bytes: size });
+    }
+
     async function part(row, n, buffer) {
+        if (row.parts_expected === 0) throw new UploadError(409, 'upload.recording', 'This is a recording: send its pieces to …/chunks/:n.');
         if (row.status !== 'uploading') throw new UploadError(409, 'upload.closed', 'This upload is already finished.');
         if (n !== row.parts_received + 1) throw new UploadError(409, 'upload.out_of_order', `Send part ${row.parts_received + 1} next.`);
         const last = n === row.parts_expected;
@@ -109,8 +151,10 @@ function createUploads({ s, media, config, log = console }) {
 
     async function complete(row) {
         if (row.status === 'ready' || row.status === 'processing') return row;
-        if (row.parts_received !== row.parts_expected) throw new UploadError(409, 'upload.incomplete', `${row.parts_expected - row.parts_received} parts are still missing.`);
-        const now = await patchRow(row.id, { status: 'processing' });
+        const recording = row.parts_expected === 0;
+        if (recording && row.parts_received < 1) throw new UploadError(409, 'upload.incomplete', 'Nothing was recorded.');
+        if (!recording && row.parts_received !== row.parts_expected) throw new UploadError(409, 'upload.incomplete', `${row.parts_expected - row.parts_received} parts are still missing.`);
+        const now = await patchRow(row.id, { status: 'processing', ...(recording ? { parts_expected: row.parts_received } : {}) });
         // Media can take minutes on a big file: answer now, finish in the background (refresh() finishes it after a restart).
         const job = media.vodComplete(row.media_vod_id).then(async (out) => {
             if (out.ok) return await absorb(await byId(row.id), out.data);
@@ -164,7 +208,7 @@ function createUploads({ s, media, config, log = console }) {
 
     return {
         PART_SIZE, REASONS, UploadError, kindOf, addressId, canSee,
-        byId, start, part, complete, refresh, update, remove, report,
+        byId, start, part, complete, refresh, update, remove, report, startRecording, chunk,
         mine: (owner, limit = 60) => s.db.many("SELECT * FROM video_uploads WHERE owner = $1 AND state <> 'removed' ORDER BY id DESC LIMIT $2", [owner, limit]),
         latest: (limit = 12) => s.db.many("SELECT * FROM video_uploads WHERE visibility = 'public' AND status = 'ready' AND state = 'active' ORDER BY id DESC LIMIT $1", [limit]),
         channel: (username, limit = 48) => s.db.many("SELECT * FROM video_uploads WHERE lower(owner_username) = lower($1) AND visibility = 'public' AND status = 'ready' AND state = 'active' ORDER BY id DESC LIMIT $2", [String(username), limit]),

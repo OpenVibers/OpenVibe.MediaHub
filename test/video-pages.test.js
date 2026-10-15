@@ -330,9 +330,9 @@ function countOccurrences(haystack, needle) {
         assert.strictEqual(r.text, 'WEBVTT\n\n00:00:10.000 --> 00:00:30.000\nIntro &amp; setup\n\n00:00:30.000 --> 00:00:45.000\nThe &lt;main&gt; part\n');
     });
 
-    await check('the navbar names the site\'s places: Videos, Upload, Your videos and Playlists, the current one active', async () => {
+    await check('the navbar names the site\'s places: Videos, Upload, Record, Your videos and Playlists, the current one active', async () => {
         const home = (await getVideo('/')).text;
-        assert.match(home, /"links":\[\{"label":"Videos","href":"\/","active":true\},\{"label":"Upload","href":"\/upload","active":false\},\{"label":"Your videos","href":"\/me\/videos","active":false\},\{"label":"Playlists","href":"\/playlists","active":false\}\]/);
+        assert.match(home, /"links":\[\{"label":"Videos","href":"\/","active":true\},\{"label":"Upload","href":"\/upload","active":false\},\{"label":"Record","href":"\/record","active":false\},\{"label":"Your videos","href":"\/me\/videos","active":false\},\{"label":"Playlists","href":"\/playlists","active":false\}\]/);
         assert.ok(home.includes('href="/playlists"'), 'the no-JS nav links Playlists too');
     });
 
