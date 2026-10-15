@@ -9,8 +9,9 @@
  *   overview   a short description, labelled as written by AI, which the owner may take as the video's description
  *
  * Media gives AI a signed URL to read (private videos too); AI keeps nothing of the video but the run. One run per
- * attempt, keyed (media-hub.video.analyze:<id>:<attempt>): a run still going after a minute is joined again by its key
- * on the next sweep, never started twice. A failure waits and retries (up to 4 attempts).
+ * attempt, keyed (media-hub.video.analyze:<id>:<attempt>): a run still going after a minute is read again by its id on
+ * the next sweeps (GET /api/v1/runs/:id; posting again would carry a new signed URL, which AI refuses under the same
+ * key), never started twice. A failure waits and retries (up to 4 attempts).
  *
  *   sweep()          every few minutes: queue ready uploads that have no AI row, then work the due rows (2 at a time)
  *   forUpload(row)   the AI row of an upload, parsed (or null)
@@ -54,6 +55,17 @@ function createAiEdit({ s, media, config, fetchImpl = globalThis.fetch, log = co
         return body && body.run;
     }
 
+    /** A run this service started, as it is now. */
+    async function read(runId) {
+        const token = await tokens.getToken();
+        const res = await fetchImpl(`${url}/api/v1/runs/${encodeURIComponent(runId)}`, {
+            headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000),
+        });
+        const body = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(`OpenVibe.AI answered ${res.status}${body && body.code ? ` (${body.code})` : ''}`);
+        return body && body.run;
+    }
+
     const later = (minutes) => new Date(s.now() + minutes * 60_000).toISOString();
     const save = (id, patch) => {
         const cols = Object.keys(patch);
@@ -63,13 +75,18 @@ function createAiEdit({ s, media, config, fetchImpl = globalThis.fetch, log = co
     async function work(ai) {
         const upload = await s.db.maybe('SELECT * FROM video_uploads WHERE id = $1', [ai.upload_id]);
         if (!upload || upload.state === 'removed' || upload.status !== 'ready') return save(ai.upload_id, { status: 'failed', error: 'The video is gone.', next_at: null });
-        // A run still going is joined by the same key; a new attempt gets a new key.
+        // A run still going is read again by its id; a new attempt starts a run under a new key.
+        const joining = ai.status === 'running' && Boolean(ai.run_id);
         const attempt = ai.status === 'running' ? ai.attempts : ai.attempts + 1;
         if (ai.status !== 'running') await save(ai.upload_id, { status: 'running', attempts: attempt, next_at: later(15) });
         try {
-            const signed = await media.vodSignedUrl(upload.media_vod_id, 6 * 3600);
-            if (!signed.ok || !signed.data || !signed.data.url) throw new Error(`Media gave no readable URL (${signed.code || signed.status})`);
-            const r = await run({ media_url: signed.data.url, language: 'auto', allow_paid: false }, `media-hub.video.analyze:${upload.id}:${attempt}`, { service: 'media-hub', type: 'video', id: upload.id });
+            let r;
+            if (joining) r = await read(ai.run_id);
+            else {
+                const signed = await media.vodSignedUrl(upload.media_vod_id, 6 * 3600);
+                if (!signed.ok || !signed.data || !signed.data.url) throw new Error(`Media gave no readable URL (${signed.code || signed.status})`);
+                r = await run({ media_url: signed.data.url, language: 'auto', allow_paid: false }, `media-hub.video.analyze:${upload.id}:${attempt}`, { service: 'media-hub', type: 'video', id: upload.id });
+            }
             // Still going after the minute's wait: look again on the next sweep or two (an analysis takes a few minutes).
             if (r && (r.status === 'queued' || r.status === 'running')) return save(ai.upload_id, { run_id: r.id || null, next_at: later(2) });
             const out = r && r.status === 'succeeded' && r.output;
