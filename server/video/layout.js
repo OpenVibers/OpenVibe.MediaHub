@@ -91,7 +91,7 @@ ${render(o.body)}
 }
 
 // The site's own places in the navbar: the videos, and your playlists (signed in; the page asks you to sign in).
-const NAV_LINKS = [{ label: 'Videos', href: '/' }, { label: 'Playlists', href: '/playlists' }];
+const NAV_LINKS = [{ label: 'Videos', href: '/' }, { label: 'Upload', href: '/upload' }, { label: 'Your videos', href: '/me/videos' }, { label: 'Playlists', href: '/playlists' }];
 
 /** Send a video page. Signed-out pages are public; a session cookie makes a page private, no-store. */
 function send(res, status, o) {

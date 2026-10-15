@@ -37,6 +37,10 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
     const sessions = new Map();    // id → { id, object_id, part_size, total_size, parts_expected, status, parts: Map }
     const requests = [];
     const deleted = [];
+    const vods = new Map();        // OpenVibe.Video uploads: id → { id, title, visibility, user_id, bytes, types, status }
+    const deletedVods = [];
+    const vodState = { duration: 42.5, completeFails: false };
+    let vodSeq = 0;
     const state = { down: false, tokenRejects: false };
     let seq = 0;
 
@@ -87,7 +91,53 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
         const entry = { method: req.method, path, query: url.search, authorization: req.headers.authorization || null, subject: req.headers['x-ov-subject'] || null, bytes: raw.length };
         requests.push(entry);
         if (state.down) return problem(res, 503, 'media.down', 'Media is restarting');
-        if (!path.startsWith('/api/v2/') && !path.startsWith('/o/')) return problem(res, 404, 'route.not_found', 'no such route');
+        if (!path.startsWith('/api/v2/') && !path.startsWith('/o/') && !path.startsWith('/api/v1/')) return problem(res, 404, 'route.not_found', 'no such route');
+
+        // ── The v1 VOD API OpenVibe.Video uploads use (/api/v1/:app/vods): create, chunks (multipart, appended in
+        // order), complete (a probe stand-in: duration from vodState.duration, a thumbnail and the HLS URL), get, put,
+        // delete. Needs the service token like the v2 API.
+        if (path.startsWith('/api/v1/')) {
+            if (state.tokenRejects || req.headers.authorization !== `Bearer ${SERVICE_TOKEN}`) return problem(res, 401, 'auth.required', 'Authentication required');
+            const parts = path.split('/').filter(Boolean);   // api v1 :app vods [:id] [chunks|complete]
+            if (parts[3] !== 'vods') return problem(res, 404, 'route.not_found', 'no such route');
+            const vodPublicOf = (v) => ({
+                id: v.id, title: v.title, visibility: v.visibility, user_id: v.user_id, is_recording: v.status !== 'ready',
+                duration_seconds: v.status === 'ready' ? vodState.duration : 0, file_size: v.bytes.length,
+                file_url: v.status === 'ready' ? `https://openvibe.media/v/vod-${v.id}.mp4` : null,
+                hls_url: v.status === 'ready' ? `https://openvibe.media/o/med_vod${v.id}/master.m3u8` : null,
+                thumbnail_url: v.status === 'ready' ? `https://openvibe.media/t/vod-${v.id}.jpg` : null,
+            });
+            if (parts.length === 4 && req.method === 'POST') {
+                const body = JSON.parse(raw.toString('utf8') || '{}');
+                const id = ++vodSeq;
+                vods.set(id, { id, title: body.title, visibility: body.visibility, user_id: body.user_id, bytes: Buffer.alloc(0), types: [], status: 'recording' });
+                return json(res, 201, { id });
+            }
+            const v = vods.get(Number(parts[4]));
+            if (!v || v.deleted) return problem(res, 404, 'vod.not_found', 'VOD not found');
+            if (parts[5] === 'chunks' && req.method === 'POST') {
+                // The multipart body's `chunk` file part: its bytes and its Content-Type (what Media names the file by).
+                const boundary = /boundary=([^;]+)/.exec(String(req.headers['content-type'] || ''));
+                if (!boundary) return problem(res, 400, 'vod.chunk', 'not multipart');
+                const text = raw.toString('latin1');
+                const piece = text.split(`--${boundary[1]}`).find((x) => /name="chunk"/.test(x));
+                if (!piece) return problem(res, 400, 'vod.chunk', 'No chunk data');
+                const head = piece.slice(0, piece.indexOf('\r\n\r\n'));
+                const body = Buffer.from(piece.slice(piece.indexOf('\r\n\r\n') + 4, piece.length - 2), 'latin1');
+                v.types.push((/content-type:\s*([^\r\n]+)/i.exec(head) || [])[1] || null);
+                v.bytes = Buffer.concat([v.bytes, body]);
+                return json(res, 200, { vodId: v.id, chunkIndex: v.types.length - 1, status: 'appended' });
+            }
+            if (parts[5] === 'complete' && req.method === 'POST') {
+                if (vodState.completeFails) return problem(res, 500, 'vod.finalize', 'Failed to finalize VOD');
+                v.status = 'ready';
+                return json(res, 200, { vod: vodPublicOf(v) });
+            }
+            if (parts.length === 5 && req.method === 'GET') return json(res, 200, vodPublicOf(v));
+            if (parts.length === 5 && req.method === 'PUT') { Object.assign(v, JSON.parse(raw.toString('utf8') || '{}')); return json(res, 200, vodPublicOf(v)); }
+            if (parts.length === 5 && req.method === 'DELETE') { v.deleted = true; deletedVods.push(v.id); return json(res, 200, { ok: true }); }
+            return problem(res, 404, 'route.not_found', 'no such route');
+        }
 
         // ── The public bytes of an object (/o/:id), signature-checked like Media checks it ──
         if (path.startsWith('/o/')) {
@@ -262,7 +312,7 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     const url = `http://127.0.0.1:${server.address().port}`;
     return {
-        url, objects, sessions, requests, deleted, state,
+        url, objects, sessions, requests, deleted, state, vods, deletedVods, vodState,
         bytesOf: (id) => (objects.get(id) && objects.get(id).bytes) || null,
         objectOf: (id) => objects.get(id) || null,
         setDown: (v) => { state.down = v; },

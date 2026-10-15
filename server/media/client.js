@@ -17,6 +17,14 @@
  *   bytes(objectId, { range })                                  GET   <signed URL on the Media host>
  *   remove(objectId)                                            DELETE …/objects/:id   (a soft delete in Media)
  *
+ * OpenVibe.Video uploads use Media's VOD API in the same tenant (/api/v1/media-hub/vods, the media.object.upload grant),
+ * which gives an uploaded video what Live's recordings get: probe, thumbnail, seekable file and the HLS timeline.
+ *
+ *   vodCreate({ title, visibility, ownerSubject })              POST  /api/v1/media-hub/vods
+ *   vodChunk(vodId, buffer, contentType)                        POST  …/vods/:id/chunks   (appended in order)
+ *   vodComplete(vodId)                                          POST  …/vods/:id/complete (probe, thumbnail; minutes for a big file)
+ *   vodGet(vodId) / vodUpdate(vodId, { title, visibility }) / vodDelete(vodId)
+ *
  * Two details worth knowing. Media answers a private object's download with a signed URL on its *public* origin;
  * this client rewrites that URL onto the configured Media host before fetching it, so the bytes are read from the
  * one address MEDIAHUB_MEDIA_URL names and never from a URL a caller supplied. And a Media call never throws for
@@ -52,7 +60,7 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
     }
 
     /** One JSON call. Never throws for a Media refusal; throws only when Media cannot be reached at all. */
-    async function call(path, { method = 'GET', body, json, headers = {}, raw = false } = {}) {
+    async function call(path, { method = 'GET', body, json, headers = {}, raw = false, root = null, timeoutMs = null } = {}) {
         if (!enabled) return { ok: false, status: 503, code: 'media.not_configured', detail: 'OV_OAUTH_CLIENT_SECRET is not set' };
         let token;
         try {
@@ -66,7 +74,7 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
         if (json !== undefined) { payload = JSON.stringify(json); h['Content-Type'] = 'application/json'; }
         let res;
         try {
-            res = await fetchImpl(`${base()}${path}`, { method, headers: h, body: payload, signal: AbortSignal.timeout(media.timeoutMs) });
+            res = await fetchImpl(`${root || base()}${path}`, { method, headers: h, body: payload, signal: AbortSignal.timeout(timeoutMs || media.timeoutMs) });
         } catch (err) {
             log.warn('[MediaHub] Media did not answer:', (err && err.name) || '', (err && err.message) || '');
             return { ok: false, status: 502, code: 'media.unreachable', detail: 'OpenVibe.Media did not answer' };
@@ -80,8 +88,29 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
         return { ok: true, status: res.status, data };
     }
 
+    const vods = () => `${media.url}/api/v1/${encodeURIComponent(media.app)}/vods`;
+    const VOD_EXT = { 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/x-matroska': 'mkv' };
+
     return {
         enabled,
+
+        /** A VOD row for an upload (Media's user_id is the uploader's usr_… subject; MediaHub owns the meaning). */
+        vodCreate: ({ title, visibility = 'public', ownerSubject }) => call('', {
+            root: vods(), method: 'POST',
+            json: { title: String(title || 'Video').slice(0, 300), visibility: ['public', 'unlisted', 'private'].includes(visibility) ? visibility : 'private', user_id: subjectHeader(ownerSubject) },
+        }),
+        /** One part of the file, appended to the VOD's file in the order sent (segment 1: one continuous file). */
+        vodChunk(vodId, buffer, contentType) {
+            const form = new FormData();
+            form.append('segmentId', '1');
+            form.append('chunk', new Blob([buffer], { type: contentType }), `part.${VOD_EXT[contentType] || 'mp4'}`);
+            return call(`/${Number(vodId)}/chunks`, { root: vods(), method: 'POST', body: form, timeoutMs: 120_000 });
+        },
+        /** Close the file: Media remuxes, probes, makes the thumbnail and announces it. A big file takes minutes. */
+        vodComplete: (vodId) => call(`/${Number(vodId)}/complete`, { root: vods(), method: 'POST', json: {}, timeoutMs: 30 * 60_000 }),
+        vodGet: (vodId) => call(`/${Number(vodId)}`, { root: vods() }),
+        vodUpdate: (vodId, patch) => call(`/${Number(vodId)}`, { root: vods(), method: 'PUT', json: patch }),
+        vodDelete: (vodId) => call(`/${Number(vodId)}`, { root: vods(), method: 'DELETE' }),
 
         /** Start an object. Media gives it back `uploading` until its bytes arrive and it is completed. */
         async init({ size, contentType, name, ownerSubject, multipart = false, partSize = null, visibility = 'private', ownerless = false }) {

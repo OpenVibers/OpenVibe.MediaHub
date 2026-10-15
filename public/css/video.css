@@ -205,3 +205,13 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-cutting { aspect-ratio: 16 / 9; display: grid; place-items: center; padding: 24px; text-align: center; background: var(--ovv-card); color: var(--ovv-dim); }
 .ovv-cutting p { margin: 0; max-width: 40ch; }
 .ovv-cutting i { color: var(--accent-light, var(--ovv-accent)); margin-right: 6px; }
+/* Uploads (/upload, /u/:id, /me/videos) */
+.ovv-upload { display: grid; gap: 12px; max-width: 640px; }
+.ovv-upload progress { width: 100%; height: 10px; }
+.ovv-upload-status { margin: 0; min-height: 1.4em; }
+.ovv-processing { display: grid; place-items: center; min-height: 220px; padding: 20px; text-align: center; }
+.ovv-description p { white-space: pre-line; margin: 0; }
+.ovv-report fieldset { border: 0; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
+.ovv-radio { display: flex; gap: 8px; align-items: baseline; }
+.ovv-table { width: 100%; border-collapse: collapse; }
+.ovv-table th, .ovv-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--ovv-line); }

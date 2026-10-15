@@ -175,10 +175,34 @@ API on the pics host (`/api/v1`, a person; app, agent and service tokens are ref
 
 ## OpenVibe.Video (openvibe.video)
 
-OpenVibe.Video is public and read-only: it serves watch pages for the recordings and clips people already made
-public on OpenVibe.Live, plus playlists. There are no uploads and no new storage — the media files stay on
-OpenVibe.Media (`playback_url`), and the pages read Live's public JSON API server-side, signed out (Live already
-applies visibility: a private item answers 404, an unlisted one is reachable by id but noindex and never listed).
+OpenVibe.Video serves watch pages for videos people upload here, and for the recordings and clips people already
+made public on OpenVibe.Live, plus playlists. Live's media files stay on OpenVibe.Media (`playback_url`), and the
+pages read Live's public JSON API server-side, signed out (Live already applies visibility: a private item answers
+404, an unlisted one is reachable by id but noindex and never listed).
+
+**Uploads** (since 2026-10-15; `server/video/uploads.js`, `upload-routes.js`, migration `0008_video_uploads.sql`).
+- **Who and what:** a signed-in person uploads at `/upload`. MP4, WebM and MKV are accepted; MOV and M4V are the same
+  container and go to Media as MP4.
+- **Limits:** `VIDEO_UPLOAD_MAX_BYTES` (2 GB) a file, `VIDEO_UPLOAD_QUOTA_BYTES` (20 GB) a person,
+  `VIDEO_UPLOADS_PER_DAY` (10).
+- **How the bytes travel:**
+  - `public/js/video-upload.js` sends the file in 8 MB parts, in order: `POST /api/v1/videos`, then
+    `PUT /api/v1/videos/:id/parts/:n` (nginx allows 9 MB on that route only), then `POST …/complete`. Every call is
+    same-origin and signed in.
+  - Each part is appended to one **OpenVibe.Media VOD** in this tenant (`/api/v1/media-hub/vods`, the
+    `media.object.upload` grant). The video therefore gets what a Live recording gets: probe, thumbnail, seekable file,
+    HLS timeline and renditions.
+  - Completion runs in the background: the upload is *processing* until Media is done. The watch page says so and
+    reloads itself (`Refresh: 15`), and a restart is recovered by asking Media again when the page or "Your videos" is
+    read.
+- **Where it shows:** the watch page is `/u/<id>`. A public, ready video is on the person's channel (`/@username`,
+  as **Videos**), on the home page's **Latest uploads** and in the sitemap. Unlisted videos open by link only;
+  private ones only for the owner and staff.
+- **Owner tools:** the owner edits the title, description and visibility (Media's title and visibility follow) and
+  deletes (Media's VOD is deleted). `/me/videos` lists their uploads with their state.
+- **Reports:** anyone who can see a video may report it, once per person or per keyed address. A child-safety report
+  hides it at once, and three reports hide it until staff decide; the owner still sees it, labelled.
+- **Account deletion:** erases the rows and deletes the VODs in Media.
 
 The player plays Media's segment timeline (`hls_url`, HLS) when the recording has one: natively where the browser
 plays HLS, otherwise through hls.js, self-hosted at `public/vendor/hls.light.min.js` (hls.js 1.7.3, Apache-2.0, loaded

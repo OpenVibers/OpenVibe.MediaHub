@@ -29,6 +29,7 @@ const { send, asset, assetVersion, SITE_NAME } = require('./layout');
 const { createLiveClient, LiveRefusedError } = require('./live-client');
 const { createChatClient } = require('./chat-client');
 const { createVideoApiRoutes } = require('./api');
+const { createUploadApi, mountUploadPages } = require('./upload-routes');
 const { ACCESS_COOKIE, REFRESH_COOKIE } = require('../auth/sso');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
@@ -525,9 +526,14 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
 
     // ── Playlist API (openvibe.video only; the drive's /api/v1 is untouched) ──
     r.use('/api/v1/video', createVideoApiRoutes(ctx));
+    // Uploads' part API (server/video/upload-routes.js): raw parts and its own JSON, before the forms' parser.
+    r.use('/api/v1/videos', createUploadApi({ ctx, config }));
     // The playlist forms are web forms (no JavaScript): urlencoded text. The API router above has its own JSON
     // parser, so the two never read each other's bodies.
     r.use(express.urlencoded({ extended: false, limit: '64kb' }));
+
+    // ── Uploads: /upload, /u/:id, /me/videos (server/video/upload-routes.js) ──
+    const uploadCard = mountUploadPages(r, { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card });
 
     // ── Playlist page pieces ───────────────────────────────
     async function playlistForm(req, kind, id) {
@@ -632,13 +638,15 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
         ]);
         const vodItems = (vods && Array.isArray(vods.items)) ? vods.items : [];
         const clipItems = (clips && Array.isArray(clips.items)) ? clips.items : [];
+        const uploaded = await ctx.videoUploads.latest(HOME_LIMIT);
         return page(req, res, {
             index: true,
-            description: 'Stream recordings and clips from OpenVibe.Live, with AI chapters and captions.',
+            description: 'Videos people upload, and stream recordings and clips from OpenVibe.Live with AI chapters and captions.',
             body: html`<header class="ovv-hero"><p class="ovv-eyebrow"><i class="fa-solid fa-circle-play" aria-hidden="true"></i> OpenVibe.Video</p>
-<h1>Watch what OpenVibe streamed.</h1>
-<p class="ovv-lede">Stream recordings and clips from OpenVibe.Live, with AI chapters and captions. Uploads are not open here — watch what people made public on OpenVibe.Live.</p>
-<p class="ovv-hero-actions"><a class="ovv-btn ovv-btn--primary" href="${livePublic}/">Live now on OpenVibe.Live</a> <a class="ovv-btn" href="${livePublic}/docs/go-live-in-your-browser">Go live from your browser</a></p></header>
+<h1>Watch, upload, stream.</h1>
+<p class="ovv-lede">Videos people upload here, and the recordings and clips of streams on OpenVibe.Live with AI chapters and captions. Sign in with your OpenVibe account to upload: it plays everywhere, on your channel at openvibe.video/@you.</p>
+<p class="ovv-hero-actions"><a class="ovv-btn ovv-btn--primary" href="/upload"><i class="fa-solid fa-upload" aria-hidden="true"></i> Upload a video</a> <a class="ovv-btn" href="${livePublic}/">Live now on OpenVibe.Live</a> <a class="ovv-btn" href="${livePublic}/docs/go-live-in-your-browser">Go live from your browser</a></p></header>
+${uploaded.length ? html`<section class="ovv-section" aria-labelledby="h-uploads"><h2 id="h-uploads">Latest uploads</h2>${grid(uploaded.map(uploadCard))}</section>` : ''}
 <section class="ovv-section" aria-labelledby="h-vods"><h2 id="h-vods">Latest recordings</h2>${grid(vodItems.map(feedCard), 'No recordings yet.')}</section>
 <section class="ovv-section" aria-labelledby="h-clips"><h2 id="h-clips">Latest clips</h2>${grid(clipItems.map(feedCard), 'No clips yet.')}</section>`,
         });
@@ -971,12 +979,14 @@ ${manageable ? ownerPanel('clip', id, clip) : ''}
 
         const prevLink = pageNum > 1 ? `?page=${pageNum - 1}` : null;
         const nextLink = hasMore ? `?page=${pageNum + 1}` : null;
+        const uploaded = pageNum === 1 ? await ctx.videoUploads.channel(username) : [];
 
         return page(req, res, {
             index: true,
             title: `@${username}`,
-            description: `Recordings and clips from @${username} on OpenVibe.Video.`,
+            description: `Videos, recordings and clips from @${username} on OpenVibe.Video.`,
             body: html`${req.query.deleted === '1' ? notice('Deleted on OpenVibe.Live.', 'ok') : ''}<header class="ovv-channel-head"><span class="ovv-avatar ovv-avatar--big" aria-hidden="true">${username.slice(0, 1).toUpperCase()}</span><div><h1>@${username}</h1><p class="ovv-meta">Recordings and clips from this channel's streams on OpenVibe.Live.</p></div><a class="ovv-btn" href="${livePublic}/@${username}"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Channel on OpenVibe.Live</a></header>
+${uploaded.length ? html`<section class="ovv-section" aria-labelledby="h-uploads"><h2 id="h-uploads">Videos</h2>${grid(uploaded.map(uploadCard))}</section>` : ''}
 <section class="ovv-section" aria-labelledby="h-vods"><h2 id="h-vods">Recordings</h2>${grid(vods.map(vodCard), 'No recordings yet.')}${prevLink || nextLink ? html`<nav class="ovv-pagination" aria-label="Pages">${prevLink ? html`<a href="${prevLink}">← Newer</a>` : ''}${nextLink ? html`<a href="${nextLink}">Older →</a>` : ''}</nav>` : ''}</section>
 ${clips.length ? html`<section class="ovv-section" aria-labelledby="h-clips"><h2 id="h-clips">Clips</h2>${grid(clips.map(clipCard), 'No clips yet.')}</section>` : ''}
 ${lists.length ? html`<section class="ovv-section" aria-labelledby="h-lists"><h2 id="h-lists">Playlists</h2><ul class="ovv-playlist-list">${lists.map(publicPlaylistRow)}</ul></section>` : ''}`,
@@ -1136,7 +1146,7 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
     }
 
     r.get('/sitemap.xml', async (req, res) => {
-        const [vods, clips] = await Promise.all([feedItems('vods'), feedItems('clips')]);
+        const [vods, clips, uploaded] = await Promise.all([feedItems('vods'), feedItems('clips'), ctx.videoUploads.latest(500)]);
         const day = (iso) => { const d = new Date(String(iso || '')); return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10); };
         const newest = (list) => list.map(day).filter(Boolean).sort().pop() || null;
         const items = [...vods, ...clips].filter((it) => it && Number.isSafeInteger(Number(it.id)));
@@ -1147,10 +1157,17 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
             const d = day(it.created_at);
             if (!channels.has(u) || (d && d > channels.get(u))) channels.set(u, d);
         }
+        for (const x of uploaded) {
+            const u = x.owner_username;
+            if (!u || !/^[A-Za-z0-9_]{1,32}$/.test(u)) continue;
+            const d = day(x.ready_at || x.created_at);
+            if (!channels.has(u) || (d && d > channels.get(u))) channels.set(u, d);
+        }
         const urls = [
             { loc: `${base}/`, lastmod: newest(items.map((it) => it.created_at)) },
             { loc: `${base}/updates` },
             ...items.map((it) => ({ loc: `${base}${it.kind === 'clip' ? '/c/' : '/v/'}${Number(it.id)}`, lastmod: day(it.created_at) })),
+            ...uploaded.map((x) => ({ loc: `${base}/u/${x.id}`, lastmod: day(x.updated_at) })),
             ...[...channels].map(([u, d]) => ({ loc: `${base}/@${u}`, lastmod: d })),
         ].map((u) => (u.lastmod ? u : { loc: u.loc }));
         return res.type('application/xml').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(seo.sitemapXml(urls));
