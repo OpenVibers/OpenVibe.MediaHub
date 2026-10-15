@@ -20,7 +20,7 @@ const BUDGETS = {
     jsRawKB: 264,   // 239.8
     jsBrotliKB: 62.5,   // 56.5
     cssFiles: 2,   // 2 (app.css + the cached /shared/showcase.css)
-    cssRawKB: 16.5,   // 15.0
+    cssRawKB: 18.3,   // measured 16.6 (shared 4.1.8: four steps two by two); was 16.5 at 15.0
     cssBrotliKB: 4.1,   // 3.7
     externalFiles: 0,   // 0
 };
