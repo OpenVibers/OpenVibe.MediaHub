@@ -76,6 +76,12 @@ function load(env = process.env) {
         // this service (/i/<slug>.<ext>). Signed-out uploads stay off until the DMCA agent and the CSAM
         // hash-matching account exist (plan T10 gate, owner items O25 and the CSAM tool account): `anonymous` is
         // MEDIAHUB_PICS_ANONYMOUS=1 then.
+        // OpenVibe.AI (server/video/ai-edit.js): media.analyze on finished uploads, for captions, chapters and a summary.
+        // Off without OV_AI_INTERNAL_URL, or with VIDEO_AI_ANALYSIS=off.
+        ai: {
+            internalUrl: trim(env.OV_AI_INTERNAL_URL || ''),
+            videoAnalysis: env.VIDEO_AI_ANALYSIS !== 'off',
+        },
         // Uploads on openvibe.video (server/video/uploads.js): the bytes are OpenVibe.Media VODs in this tenant.
         videoUploads: {
             maxBytes: size(env.VIDEO_UPLOAD_MAX_BYTES, 2 * GB),

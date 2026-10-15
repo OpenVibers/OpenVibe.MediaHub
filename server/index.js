@@ -51,6 +51,12 @@ async function start() {
         sweep.unref();
         timers.push(sweep);
     }
+    // OpenVibe.Video's AI edit (server/video/ai-edit.js): captions, chapters and a summary for finished uploads.
+    if (ctx.videoAi.enabled) {
+        const aiTimer = setInterval(() => { ctx.videoAi.sweep().catch((err) => console.warn('[OpenVibe.Video] AI sweep failed:', err && err.message)); }, 3 * 60_000);
+        aiTimer.unref();
+        timers.push(aiTimer);
+    }
     createLifecycle({ server, ctx, timers, extra: [() => videoIndexNow.stop(), () => { if (subscriptions) subscriptions.stop(); }] });
     return { server, ctx };
 }
