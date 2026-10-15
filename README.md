@@ -203,6 +203,12 @@ pages read Live's public JSON API server-side, signed out (Live already applies 
 - **Reports:** anyone who can see a video may report it, once per person or per keyed address. A child-safety report
   hides it at once, and three reports hide it until staff decide; the owner still sees it, labelled.
 - **Account deletion:** erases the rows and deletes the VODs in Media.
+- **Recording** (`/record`, `public/js/video-record.js`):
+  - Record from the camera or the screen (with the microphone) in the browser. It is never live.
+  - MediaRecorder hands over a piece every 4 seconds, and each piece goes up in order
+    (`POST /api/v1/videos/recordings`, then `PUT /api/v1/videos/:id/chunks/:n`, up to 9 MB each) to the same kind of
+    Media VOD.
+  - Stop completes it like an upload. Size and quota are checked as it grows, and a recording is private by default.
 
 The player plays Media's segment timeline (`hls_url`, HLS) when the recording has one: natively where the browser
 plays HLS, otherwise through hls.js, self-hosted at `public/vendor/hls.light.min.js` (hls.js 1.7.3, Apache-2.0, loaded
