@@ -221,6 +221,13 @@ function countOccurrences(haystack, needle) {
         live.setChatDown(false);
     });
 
+    await check('the video host answers /release.json too (the shared release check reads its own origin)', async () => {
+        const r = await getVideo('/release.json');
+        assert.strictEqual(r.status, 200);
+        const j = JSON.parse(r.text);
+        assert.ok(j.release && j.service, JSON.stringify(j).slice(0, 200));
+    });
+
     await check('the video home shows both latest grids and links the watch pages', async () => {
         const r = await getVideo('/');
         assert.strictEqual(r.status, 200);

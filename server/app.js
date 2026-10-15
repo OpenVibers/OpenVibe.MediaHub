@@ -122,6 +122,10 @@ async function createApp(opts = {}) {
     app.use('/auth/', rateLimit({ windowMs: 15 * 60_000, limit: 60, standardHeaders: true, legacyHeaders: false }));
     app.use('/auth', sso.routes());
 
+    // /release.json (and loopback /metrics) answer on both hosts: the shared release check on openvibe.video reads its own
+    // origin's /release.json, and so does the host's browser watch.
+    release.mount(app, { registry: metrics.registry });
+
     // ── Host routing: openvibe.video is OpenVibe.Video; every other host (openvibe.download) stays
     // the drive. On the video host the drive's pages, API and legal pages never answer.
     const videoHost = (() => { try { return new URL(config.video.url).hostname; } catch { return null; } })();
@@ -133,7 +137,6 @@ async function createApp(opts = {}) {
 
     // ── Machine endpoints ───────────────────────────────────
     app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'openvibe-media-hub', version: VERSION }));
-    release.mount(app, { registry: metrics.registry });
     const readiness = createServiceReadiness({ s, config, release: release.release, valkey });
     app.get('/api/ready', readiness.handler);
 
