@@ -40,6 +40,7 @@ const { createService } = require('./drive/service');
 const { createUploads } = require('./drive/upload');
 const { createAccount, createSender } = require('./account');
 const { createPlaylists } = require('./video/playlists');
+const { createIndexNow } = require('openvibe-shared/indexnow');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const VERSION = require('../package.json').version;
@@ -65,6 +66,14 @@ async function createApp(opts = {}) {
     const account = createAccount({ db: s.db, config, media, log });
     const playlists = createPlaylists({ s, config, log });
     const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, fetchImpl, log };
+    // IndexNow for openvibe.video: off without a key; a malformed key warns and stays off rather than stopping the site.
+    ctx.indexnow = opts.indexnow || (() => {
+        const warn = (...a) => (log.warn || console.warn)(...a);
+        try { return createIndexNow({ host: config.video.url, key: config.video.indexnowKey, fetch: fetchImpl, log: warn }); } catch (err) {
+            warn(`[MediaHub] ${err.message} — IndexNow is off until INDEXNOW_KEY is fixed`);
+            return createIndexNow({ host: config.video.url, key: '', fetch: fetchImpl, log: warn });
+        }
+    })();
 
     const app = express();
     app.disable('x-powered-by');
@@ -130,6 +139,8 @@ async function createApp(opts = {}) {
     // the drive. On the video host the drive's pages, API and legal pages never answer.
     const videoHost = (() => { try { return new URL(config.video.url).hostname; } catch { return null; } })();
     const videoRoutes = createVideoRoutes(ctx);
+    // GET /<key>.txt on the video host: IndexNow's key file, only when a key is configured.
+    if (ctx.indexnow.enabled) app.use((req, res, next) => (videoHost && req.hostname === videoHost ? ctx.indexnow.keyFile(req, res, next) : next()));
     app.use((req, res, next) => {
         if (videoHost && req.hostname === videoHost) return videoRoutes(req, res, next);
         return next();

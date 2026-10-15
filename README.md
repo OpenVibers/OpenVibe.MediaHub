@@ -171,6 +171,7 @@ does not sign in on the other.
 | `/v/:id/captions.vtt` | anyone | the AI transcript as WebVTT captions |
 | `/v/:id/chapters.vtt` | anyone | the AI moments as WebVTT chapters |
 | `/sitemap.xml`, `/robots.txt`, `/llms.txt` | anyone | crawl artifacts for the video host |
+| `/<INDEXNOW_KEY>.txt` | anyone | IndexNow's key file, only with a key: every 10 minutes a sweep of Live's public feed sends new watch pages, their channel pages and the sitemap to search engines ([server/video/indexnow.js](server/video/indexnow.js)) |
 
 Configuration: `MEDIAHUB_VIDEO_URL` (default `https://openvibe.video`; its hostname is the video host),
 `MEDIAHUB_LIVE_URL` (default `https://openvibe.live`; production points it at the loopback address),

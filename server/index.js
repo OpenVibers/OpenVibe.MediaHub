@@ -31,7 +31,12 @@ async function start() {
     // Subscribe to the two ADR-033 topics at OpenVibe.Events (idempotent; off without MEDIAHUB_EVENTS_URL and
     // MEDIAHUB_EVENTS_SECRET). The consumer itself is mounted in server/app.js.
     const subscriptions = require('./events-consumer').startSubscriptions({ config, port: config.port, secret: config.events.secrets[0] || '' });
-    createLifecycle({ server, ctx, extra: [() => { if (subscriptions) subscriptions.stop(); }] });
+    // New watch pages on openvibe.video reach search engines (server/video/indexnow.js; off without INDEXNOW_KEY).
+    const { createVideoIndexNow } = require('./video/indexnow');
+    const { createLiveClient } = require('./video/live-client');
+    const videoIndexNow = createVideoIndexNow({ config, live: createLiveClient({ config, fetchImpl: ctx.fetchImpl, log: ctx.log }), indexnow: ctx.indexnow, log: ctx.log });
+    videoIndexNow.start();
+    createLifecycle({ server, ctx, extra: [() => videoIndexNow.stop(), () => { if (subscriptions) subscriptions.stop(); }] });
     return { server, ctx };
 }
 
