@@ -106,6 +106,14 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
                 'X-Content-Type-Options': 'nosniff',
                 'Accept-Ranges': 'bytes',
             };
+            // ?w=&fmt= on an image: Media's resized variant (here a stand-in body naming the size; private needs the signature).
+            const vw = url.searchParams.get('w');
+            if (vw && /^image\/(jpeg|png|webp|gif|avif)$/.test(obj.mime_type || '')) {
+                const fmt = url.searchParams.get('fmt') || 'webp';
+                const body = Buffer.from(`variant:${vw}:${fmt}:${obj.id}`);
+                res.writeHead(200, { ...headers, 'Content-Type': `image/${fmt}`, 'Content-Length': String(body.length) });
+                return res.end(body);
+            }
             // A Range read, as Media serves one for a packed or large object.
             const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ''));
             if (range && (range[1] || range[2])) {

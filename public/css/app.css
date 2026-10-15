@@ -52,6 +52,10 @@ button.sc-btn.sc-primary { border: 0; }
 .file-list .file:last-child { border-bottom: 0; }
 .file-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .file-name { font-weight: 600; overflow-wrap: anywhere; }
+.file-thumb { width: 48px; height: 48px; flex: none; border-radius: 6px; object-fit: cover; background: var(--surface-2, #111a2e); }
+.file-thumb-type { display: grid; place-items: center; font: 700 10px/1 ui-monospace, monospace; letter-spacing: .04em; color: var(--text-secondary, #96a7c2); border: 1px solid var(--border, #1f2d47); }
+.file-preview { margin: 0 0 16px; }
+.file-preview img { display: block; max-width: 100%; max-height: 480px; height: auto; border-radius: 8px; background: var(--surface-2, #111a2e); }
 .file-meta { margin-top: 2px; }
 .upload progress { max-width: 420px; }
 .staff-item h2 { margin-top: 0; }

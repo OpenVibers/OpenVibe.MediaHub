@@ -150,13 +150,15 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
 
         /**
          * The object's bytes, streamed. `range` (a Range header value) is passed through, so a browser can
-         * resume a download; the caller answers 206 from the upstream status and Content-Range.
+         * resume a download; the caller answers 206 from the upstream status and Content-Range. `variant`
+         * ({ w, fmt }) asks Media for a resized image instead (its signed variants of a private object).
          */
-        async bytes(objectId, { range = null } = {}) {
+        async bytes(objectId, { range = null, variant = null } = {}) {
             const signed = await this.downloadUrl(objectId);
             if (!signed.ok) return signed;
+            const url = variant ? `${signed.url}&w=${encodeURIComponent(variant.w)}&fmt=${encodeURIComponent(variant.fmt || 'webp')}` : signed.url;
             try {
-                const res = await fetchImpl(signed.url, {
+                const res = await fetchImpl(url, {
                     headers: { ...(range ? { Range: String(range) } : {}) },
                     redirect: 'follow',   // Media may hand the read to its own storage provider; that is Media's choice
                     signal: AbortSignal.timeout(media.timeoutMs),

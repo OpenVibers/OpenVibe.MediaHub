@@ -59,6 +59,13 @@ function normalizeType(value) {
  * anything executable — is served as application/octet-stream, so a browser never treats an upload as a document
  * of its own. SVG is deliberately out: it is a script container wearing an image's type.
  */
+/** Images a preview is made of (Media's variants: JPEG, PNG, WebP, GIF's first frame, AVIF); never SVG. */
+function isPreviewable(type) {
+    return /^image\/(jpeg|png|webp|gif|avif)$/.test(normalizeType(type) || '');
+}
+/** The preview widths the pages ask for: a list thumbnail and the file page's picture. */
+const PREVIEW_WIDTHS = [96, 640];
+
 function safeContentType(type) {
     const t = normalizeType(type);
     if (!t) return null;
@@ -135,6 +142,7 @@ function formatBytes(n) {
 }
 
 module.exports = {
+    isPreviewable, PREVIEW_WIDTHS,
     ID_RE, SLUG_RE, isFileId, isFolderId, isUploadId, isSlug, isUsername,
     NAME_MAX, FOLDER_NAME_MAX, REASONS, REASON_TEXT, SUSPEND_AT_REPORTS, SUSPEND_IMMEDIATELY,
     EXPIRY_MIN_HOURS, EXPIRY_MAX_HOURS, EXPIRY_DEFAULT_HOURS, EXPIRY_CHOICES,
