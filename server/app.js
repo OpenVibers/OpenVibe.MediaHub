@@ -29,6 +29,8 @@ const { createPrincipal } = require('./http/principal');
 const { createApi } = require('./http/api');
 const { createPageRoutes } = require('./http/pages');
 const { createVideoRoutes } = require('./video/pages');
+const { createPicsRoutes } = require('./pics/pages');
+const { createPics } = require('./pics/service');
 const { createServiceReadiness } = require('./observability');
 const { createCallerLimits } = require('./http/caller-limits');
 const { assetVersion, send } = require('./render/layout');
@@ -67,7 +69,8 @@ async function createApp(opts = {}) {
     const uploads = createUploads({ s, media, config, service: drive, log });
     const account = createAccount({ db: s.db, config, media, log });
     const playlists = createPlaylists({ s, config, log });
-    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, fetchImpl, log };
+    const pics = createPics({ s, media, config, log });
+    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, pics, fetchImpl, log };
     // IndexNow for openvibe.video: off without a key; a malformed key warns and stays off rather than stopping the site.
     ctx.indexnow = opts.indexnow || (() => {
         const warn = (...a) => (log.warn || console.warn)(...a);
@@ -142,14 +145,17 @@ async function createApp(opts = {}) {
     // origin's /release.json, and so does the host's browser watch.
     release.mount(app, { registry: metrics.registry });
 
-    // ── Host routing: openvibe.video is OpenVibe.Video; every other host (openvibe.download) stays
-    // the drive. On the video host the drive's pages, API and legal pages never answer.
+    // ── Host routing: openvibe.video is OpenVibe.Video, openvibe.pics is OpenVibe.Pics; every other host
+    // (openvibe.download) stays the drive. On those hosts the drive's pages, API and legal pages never answer.
     const videoHost = (() => { try { return new URL(config.video.url).hostname; } catch { return null; } })();
+    const picsHost = (() => { try { return new URL(config.pics.url).hostname; } catch { return null; } })();
     const videoRoutes = createVideoRoutes(ctx);
+    const picsRoutes = createPicsRoutes(ctx);
     // GET /<key>.txt on the video host: IndexNow's key file, only when a key is configured.
     if (ctx.indexnow.enabled) app.use((req, res, next) => (videoHost && req.hostname === videoHost ? ctx.indexnow.keyFile(req, res, next) : next()));
     app.use((req, res, next) => {
         if (videoHost && req.hostname === videoHost) return videoRoutes(req, res, next);
+        if (picsHost && req.hostname === picsHost) return picsRoutes(req, res, next);
         return next();
     });
 

@@ -71,6 +71,27 @@ function load(env = process.env) {
             indexnowKey: String(env.INDEXNOW_KEY || '').trim(),
         },
 
+        // OpenVibe.Pics (server/pics): picture hosting on openvibe.pics, chosen by Host header like the video host.
+        // The bytes are private Media objects, re-encoded here with their metadata stripped and served only through
+        // this service (/i/<slug>.<ext>). Signed-out uploads stay off until the DMCA agent and the CSAM
+        // hash-matching account exist (plan T10 gate, owner items O25 and the CSAM tool account): `anonymous` is
+        // MEDIAHUB_PICS_ANONYMOUS=1 then.
+        pics: {
+            url: trim(env.MEDIAHUB_PICS_URL || 'https://openvibe.pics'),
+            maxImageBytes: size(env.MEDIAHUB_PICS_MAX_IMAGE_BYTES, 20 * MB),
+            maxPixels: size(env.MEDIAHUB_PICS_MAX_PIXELS, 100_000_000),
+            quotaBytes: size(env.MEDIAHUB_PICS_QUOTA_BYTES, 5 * GB),
+            imagesPerDay: size(env.MEDIAHUB_PICS_IMAGES_PER_DAY, 200),
+            albumsMax: size(env.MEDIAHUB_PICS_ALBUMS_MAX, 200),
+            albumImagesMax: size(env.MEDIAHUB_PICS_ALBUM_IMAGES_MAX, 500),
+            reportsToHide: Math.max(1, size(env.MEDIAHUB_PICS_REPORTS_TO_HIDE, 3)),
+            anonymous: env.MEDIAHUB_PICS_ANONYMOUS === '1',
+            anonymousMaxImageBytes: size(env.MEDIAHUB_PICS_ANONYMOUS_MAX_IMAGE_BYTES, 10 * MB),
+            anonymousPerDay: size(env.MEDIAHUB_PICS_ANONYMOUS_PER_DAY, 20),
+            // A signed-out upload is deleted after this many days without a view.
+            anonymousIdleDays: Math.max(1, size(env.MEDIAHUB_PICS_ANONYMOUS_IDLE_DAYS, 30)),
+        },
+
         // What one person may keep and do here. Media's own quotas are per tenant (this whole service is one
         // tenant), so the per-person numbers are enforced in MediaHub and nowhere else.
         quotas: {

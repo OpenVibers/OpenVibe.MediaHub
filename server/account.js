@@ -3,7 +3,8 @@
 /**
  * This service's share of a person's account export and deletion (ADR-033), through openvibe-sdk/account-data.
  *
- *   network.account.export_requested   the person's files, folders, shares, reports and upload counts, as JSON
+ *   network.account.export_requested   the person's files, folders, shares, reports and upload counts, playlists, and
+ *                                      their OpenVibe.Pics pictures, albums, reports and upload counts, as JSON
  *   network.account.deleted            the same rows erased, and every Media object they held deleted
  *
  * The events arrive signed on POST /internal/events (loopback only). `apply` is wrapped here for one reason: an
@@ -35,6 +36,13 @@ const TABLES = [
     // An upload that never finished is this service's own state, not something the person made: it is erased with
     // the account but is not part of the export.
     { table: 'mh_uploads', subject: 'owner', value: AS_REQUESTER, file: null },
+    // OpenVibe.Pics (migrations/0006_pics.sql). The reports a person filed go first; the reports other people filed
+    // on their pictures, and the album places, cascade with the pictures and albums (exported with extraExport).
+    // pics_blocklist is staff's record of what was taken down, not the person's data, so it stays.
+    { table: 'pics_reports', subject: 'reporter', value: AS_REQUESTER, file: 'pics_reports.json' },
+    { table: 'pics_albums', subject: 'owner', value: AS_REQUESTER, file: 'pics_albums.json' },
+    { table: 'pics_images', subject: 'owner', value: AS_REQUESTER, file: 'pics_images.json' },
+    { table: 'pics_usage', subject: 'uploader', value: AS_REQUESTER, file: 'pics_usage.json' },
 ];
 
 function createAccount({ db, config, media, log = console }) {
@@ -45,7 +53,7 @@ function createAccount({ db, config, media, log = console }) {
         db,
         service: 'media-hub',
         tables: TABLES,
-        note: 'OpenVibe.MediaHub: your files, folders, share links, the reports you filed, your upload counts and your playlists. The bytes of your files live in OpenVibe.Media.',
+        note: 'OpenVibe.MediaHub: your files, folders, share links, the reports you filed, your upload counts and your playlists, and your OpenVibe.Pics pictures and albums. The bytes of your files and pictures live in OpenVibe.Media.',
         extraExport: async (db, subject) => {
             const rows = await db.many(
                 `SELECT i.playlist_id, i.kind, i.item_id, i.position, i.added_at
@@ -53,7 +61,17 @@ function createAccount({ db, config, media, log = console }) {
                    JOIN video_playlists p ON p.id = i.playlist_id
                   WHERE p.owner = $1
                   ORDER BY i.playlist_id, i.position ASC`, [`user:${subject}`]);
-            return rows.length ? [{ name: 'playlist_items.json', content: rows }] : [];
+            const albumRows = await db.many(
+                `SELECT ai.album_id, a.slug AS album_slug, i.slug AS image_slug, ai.position, ai.added_at
+                   FROM pics_album_images ai
+                   JOIN pics_albums a ON a.id = ai.album_id
+                   JOIN pics_images i ON i.id = ai.image_id
+                  WHERE a.owner = $1
+                  ORDER BY ai.album_id, ai.position ASC`, [`user:${subject}`]);
+            return [
+                ...(rows.length ? [{ name: 'playlist_items.json', content: rows }] : []),
+                ...(albumRows.length ? [{ name: 'pics_album_images.json', content: albumRows }] : []),
+            ];
         },
         extraErase: async () => {
             const ids = pendingObjects;
@@ -78,8 +96,11 @@ function createAccount({ db, config, media, log = console }) {
         if (ev && ev.event_type === 'network.account.deleted' && ev.source === 'network') {
             const payload = ev.payload && typeof ev.payload === 'object' ? ev.payload : {};
             // Read the media objects first: the erase deletes the rows that name them.
-            pendingObjects = (await db.many('SELECT object_id FROM mh_files WHERE owner = ANY($1::text[])', [subjectsOf(payload)]))
-                .map((r) => r.object_id).filter(Boolean);
+            const subjects = subjectsOf(payload);
+            pendingObjects = [
+                ...(await db.many('SELECT object_id FROM mh_files WHERE owner = ANY($1::text[])', [subjects])).map((r) => r.object_id),
+                ...(await db.many('SELECT object_id, thumb_object_id FROM pics_images WHERE owner = ANY($1::text[])', [subjects])).flatMap((r) => [r.object_id, r.thumb_object_id]),
+            ].filter(Boolean);
         }
         return await accountData.apply(ev, { send });
     }
