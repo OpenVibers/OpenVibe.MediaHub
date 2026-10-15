@@ -5,7 +5,7 @@
  * Network service token (audience `openvibe.media`), and never hands that token, an upload token or a signed URL
  * to a browser.
  *
- *   init({ size, contentType, name, ownerSubject, multipart })  POST  /api/v2/media-hub/objects
+ *   init({ size, contentType, name, ownerSubject, multipart, visibility, ownerless })  POST  /api/v2/media-hub/objects
  *   putContent(objectId, buffer)                                PUT   …/objects/:id/content
  *   complete(objectId)                                          POST  …/objects/:id/complete
  *   multipartStatus(objectId, uploadId)                         GET   …/objects/:id/multipart/:uploadId
@@ -84,14 +84,16 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
         enabled,
 
         /** Start an object. Media gives it back `uploading` until its bytes arrive and it is completed. */
-        async init({ size, contentType, name, ownerSubject, multipart = false, partSize = null }) {
+        async init({ size, contentType, name, ownerSubject, multipart = false, partSize = null, visibility = 'private', ownerless = false }) {
+            // A drive file always belongs to a person. A picture uploaded signed out (Pics, `ownerless`) is the
+            // service's own object, with no subject on it.
             const subject = subjectHeader(ownerSubject);
-            if (!subject) return { ok: false, status: 400, code: 'file.bad_owner', detail: 'a file belongs to a person with a canonical subject' };
+            if (!subject && !ownerless) return { ok: false, status: 400, code: 'file.bad_owner', detail: 'a file belongs to a person with a canonical subject' };
             return await call('', {
                 method: 'POST',
-                headers: { 'X-OV-Subject': subject },
+                headers: subject ? { 'X-OV-Subject': subject } : {},
                 json: {
-                    kind: 'file', visibility: 'private', size_bytes: size,
+                    kind: 'file', visibility: ['private', 'unlisted', 'public'].includes(visibility) ? visibility : 'private', size_bytes: size,
                     // Media only needs a label: the real name (any script) is MediaHub's, and Media's own download
                     // header takes a filename as is, so it gets the printable-ASCII rendering.
                     mime_type: contentType || null, filename: headerSafeName(name), multipart: multipart === true,

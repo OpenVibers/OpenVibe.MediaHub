@@ -59,9 +59,14 @@ function createSso({ config, keys, fetchImpl = globalThis.fetch, now = () => Dat
     // host-only (no Domain), so each host keeps its own session.
     const videoRedirectUri = (() => { try { return `${String(config.video.url).replace(/\/+$/, '')}/auth/callback`; } catch { return null; } })();
     const videoHostname = (() => { try { return new URL(config.video.url).hostname; } catch { return null; } })();
-    const redirectUriFor = (req) => (videoRedirectUri && videoHostname && req && req.hostname === videoHostname
-        ? videoRedirectUri
-        : config.oauth.redirectUri);
+    // openvibe.pics likewise (https://openvibe.pics/auth/callback, registered for client media-hub on 2026-10-15).
+    const picsRedirectUri = (() => { try { return `${String(config.pics.url).replace(/\/+$/, '')}/auth/callback`; } catch { return null; } })();
+    const picsHostname = (() => { try { return new URL(config.pics.url).hostname; } catch { return null; } })();
+    const redirectUriFor = (req) => {
+        if (videoRedirectUri && videoHostname && req && req.hostname === videoHostname) return videoRedirectUri;
+        if (picsRedirectUri && picsHostname && req && req.hostname === picsHostname) return picsRedirectUri;
+        return config.oauth.redirectUri;
+    };
 
     function setSession(res, data) {
         res.cookie(ACCESS_COOKIE, data.access_token, { ...cookieBase(), maxAge: 24 * 60 * 60 * 1000 });

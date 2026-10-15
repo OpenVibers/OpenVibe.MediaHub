@@ -2,9 +2,9 @@
 
 > Your files, shared on your terms.
 
-**Status:** alpha. One process serves **openvibe.download** (a private drive, live in v1) and
-**openvibe.video** (public watch pages and playlists for OpenVibe.Live's stream recordings and clips), chosen by Host
-header. **openvibe.pics** is still parked: it redirects to `https://openvibe.network/` until Pics is built.
+**Status:** alpha. One process serves **openvibe.download** (a private drive, live in v1), **openvibe.video** (public
+watch pages and playlists for OpenVibe.Live's stream recordings and clips) and **openvibe.pics** (picture hosting,
+2026-10-15), chosen by Host header.
 **Port:** 4990 · **Service id:** `media-hub` · **Env prefix:** `MEDIAHUB` · **License:** AGPL-3.0.
 
 ## Purpose
@@ -13,8 +13,7 @@ OpenVibe.MediaHub is the network's file service: it serves **openvibe.download**
 signed-in person can upload, organise, share and delete their own files. The bytes live in OpenVibe.Media; MediaHub
 keeps the metadata, the per-person limits, the share links and the report queue. It also answers OpenVibe.Network's
 account export and deletion events (ADR-033). The same process serves **openvibe.video**, the public watch pages for
-OpenVibe.Live's stream recordings and clips (OpenVibe.Video v1, step A). openvibe.pics is parked in nginx and redirects
-to openvibe.network.
+OpenVibe.Live's stream recordings and clips (OpenVibe.Video v1, step A), and **openvibe.pics**, OpenVibe.Pics (below).
 
 ## Owns
 
@@ -33,6 +32,10 @@ creates none):
   (openvibe-sdk/account-data, ADR-033).
 - `video_playlists` and `video_playlist_items` — the person's playlists and their ordered Live items
   (`migrations/0003_video_playlists.sql`); the items cascade from their playlist.
+- `pics_images`, `pics_albums`, `pics_album_images`, `pics_reports`, `pics_blocklist`, `pics_usage`
+  (`migrations/0006_pics.sql`) — OpenVibe.Pics: each picture (its Media object and thumbnail, size, hashes, state and
+  report count; a signed-out upload's delete key only as its sha256), albums and their order, one report per reporter
+  per picture, the takedown blocklist (sha256 and difference hashes) and uploads per uploader per day.
 - `telemetry_samples` (`migrations/0005_telemetry.sql`) — requests aggregated by route template, method and status class,
   never by raw URL; `/shared`, static assets, health, readiness, `/metrics` not counted; one `http.request` sample per key each
   minute plus active-requests, p95 latency and event-loop-lag gauges (openvibe-sdk 0.46, `platform.telemetry-sample@1`); 14-day
@@ -46,8 +49,8 @@ creates none):
   `identity.subject.resolve`.
 - Event delivery, and the account export/deletion topics, are **OpenVibe.Events**': MediaHub only creates its
   subscriptions and consumes the two deliveries.
-- The **openvibe.pics** product (image hosting and albums) is not built here yet: that domain is parked in nginx.
-  Previews and thumbnails are not built either.
+- **CSAM hash-matching against known material** (PhotoDNA, NCMEC hash lists): that needs the owner's NCMEC / Cloudflare
+  CSAM Scanning Tool account. Pics matches only its own takedown blocklist, and child-safety reports hide at once.
 
 ## Depends on
 
@@ -121,6 +124,51 @@ calls Media server-side only, naming the person with `X-OV-Subject`, and never h
   so downloads resume.
 
 MediaHub owns the drive: `mh_files`, `mh_folders`, `mh_shares`, `mh_reports`, `mh_usage` (migrations/0002_mediahub.sql).
+
+## OpenVibe.Pics (openvibe.pics)
+
+An open, ad-free picture host: drop a picture, get a link to share or embed. Built in [server/pics/](server/pics/).
+
+- **Upload:** a signed-in person uploads JPEG, PNG, GIF, WebP or AVIF (20 MB, 100 megapixels): the plain form at `/`
+  works without JavaScript; [public/js/pics.js](public/js/pics.js) adds drag-and-drop, paste and several files at once
+  through the API. Limits: 200 a day, 5 GB a person (`MEDIAHUB_PICS_*`).
+- **Every picture is re-encoded** ([server/pics/images.js](server/pics/images.js), sharp/libvips): it must decode as
+  one of those formats (a renamed script, an SVG or a truncated file is refused), the EXIF orientation is applied and
+  every metadata block is dropped (GPS position, camera serial, XMP, IPTC), animations keep their frames, colour goes
+  to sRGB, and a 640-pixel WebP thumbnail is made. Nothing is ever served as it was uploaded.
+- **Storage and serving:** the picture and its thumbnail are **private** OpenVibe.Media objects (`MEDIAHUB_MEDIA_APP`).
+  `/i/<slug>.<ext>` (the direct link) and `/i/<slug>/thumb.webp` read them from Media and serve them with `nosniff`, a
+  sandboxing CSP, `Access-Control-Allow-Origin: *` and a 10-minute public cache, so the Media id never reaches a
+  browser and a hidden picture leaves shared caches within minutes.
+- **Unlisted:** `/i/<slug>` (8 random characters) is reachable by its link only, noindex, never listed; robots.txt
+  disallows `/i/` and `/a/`. The page has the links to share and embed: the page, the direct link, Markdown, BBCode
+  and HTML.
+- **Albums** (`/albums`, `/a/<slug>`): a person's own, shown to anyone with the link (hidden pictures left out).
+- **Reports and takedown:** anyone may report a picture once (signed out: counted by a keyed hash of the address).
+  A child-safety report hides it at once; any other reason hides it at 3 distinct reports. Hidden is 404 for everyone
+  but its uploader and staff. Staff (`/staff`, Network `admin`/`global_mod`) restore, hide, or take down: a takedown
+  deletes the bytes in Media and puts the picture's sha256 (uploaded and served) and its 64-bit difference hash on
+  `pics_blocklist`, so the same picture, or a resized, re-compressed or retouched copy (within 10 bits: measured on
+  real photos, such copies land 0–10 bits away and different photos 23–42), cannot be uploaded again.
+- **Signed out** (`MEDIAHUB_PICS_ANONYMOUS=1`, **off**): uploads up to 10 MB, 20 a day per address, each with a delete
+  key shown once and stored only as its sha256; a picture nobody has viewed for 30 days is deleted by an hourly sweep.
+  It stays off until the owner registers the DMCA designated agent and the CSAM hash-matching account (NCMEC /
+  Cloudflare CSAM Scanning Tool): plan T10's gate.
+- **Legal:** `/terms`, `/privacy` and `/dmca` name openvibe.pics (openvibe-shared/legal, the `ugc` profile).
+
+API on the pics host (`/api/v1`, a person; app, agent and service tokens are refused):
+
+| Route | |
+|---|---|
+| `POST /images` | upload: the picture is the body (`Content-Type: image/*`; optional `X-Title`, `X-Filename`, URI-encoded); 201 with the links |
+| `GET /images/:slug` | metadata and links (hidden: uploader and staff only; 410 when taken down) |
+| `PATCH /images/:slug` | the uploader: `{ title, description }` |
+| `DELETE /images/:slug` | the uploader (signed out: `X-Delete-Key`) |
+| `POST /images/:slug/reports` | anyone: `{ reason, note }`; `reason` one of `child_safety`, `illegal`, `copyright`, `sexual`, `violence`, `harassment`, `private_info`, `spam`, `other` |
+| `GET /me/images` | your pictures, newest first, with your usage |
+| `GET /albums`, `POST /albums` | your albums; create one `{ title, description }` |
+| `GET /albums/:slug` | an album and its pictures |
+| `POST /albums/:slug/images`, `DELETE /albums/:slug/images/:image`, `DELETE /albums/:slug` | the owner adds or takes out a picture, or deletes the album (the pictures stay) |
 
 ## OpenVibe.Video (openvibe.video)
 
@@ -279,14 +327,17 @@ are Live ids only; the watch pages resolve their display fields lazily through t
 takes `network.account.export_requested` and `network.account.deleted`, and the subscriptions are created at boot
 (`MEDIAHUB_EVENTS_URL`).
 
-- **Export:** the person's files, folders, shares, the reports they made and their usage.
-- **Deletion:** all of it is erased, and each object is deleted in Media too.
+- **Export:** the person's files, folders, shares, the reports they made and their usage; their playlists; and their
+  OpenVibe.Pics pictures, albums (with their pictures' order), the reports they filed and their upload counts.
+- **Deletion:** all of it is erased, and each object (a file, a picture and its thumbnail) is deleted in Media too.
+  The takedown blocklist is staff's record, not the person's, and stays.
 
 ## Configuration
 
 Every name is in [.env.example](.env.example): the Network client (`OV_OAUTH_CLIENT_ID=media-hub`, secret, internal
 URL), PostgreSQL and Valkey (written by the host's data role), Media (`MEDIAHUB_MEDIA_URL`, `MEDIAHUB_MEDIA_APP`),
-Live (`MEDIAHUB_LIVE_URL`, `MEDIAHUB_LIVE_PUBLIC_URL`) and Video (`MEDIAHUB_VIDEO_URL`),
+Live (`MEDIAHUB_LIVE_URL`, `MEDIAHUB_LIVE_PUBLIC_URL`), Video (`MEDIAHUB_VIDEO_URL`), Pics (`MEDIAHUB_PICS_URL` and the
+`MEDIAHUB_PICS_*` limits, `MEDIAHUB_PICS_ANONYMOUS`),
 Events, and the limits (`MEDIAHUB_QUOTA_BYTES`, `MEDIAHUB_MAX_FILE_BYTES`,
 `MEDIAHUB_UPLOADS_PER_DAY`, `MEDIAHUB_MAX_SHARES`, `MEDIAHUB_SINGLE_UPLOAD_BYTES`, `MEDIAHUB_PART_BYTES`).
 

@@ -43,7 +43,15 @@ async function start() {
     const { createLiveClient } = require('./video/live-client');
     const videoIndexNow = createVideoIndexNow({ config, live: createLiveClient({ config, fetchImpl: ctx.fetchImpl, log: ctx.log }), indexnow: ctx.indexnow, log: ctx.log });
     videoIndexNow.start();
-    createLifecycle({ server, ctx, extra: [() => videoIndexNow.stop(), () => { if (subscriptions) subscriptions.stop(); }] });
+    // OpenVibe.Pics: signed-out pictures nobody has viewed for MEDIAHUB_PICS_ANONYMOUS_IDLE_DAYS go, hourly (only while
+    // signed-out uploads are on; account pictures stay until their owner deletes them).
+    const timers = [];
+    if (config.pics.anonymous) {
+        const sweep = setInterval(() => { ctx.pics.sweep().then((n) => { if (n) console.log(`[OpenVibe.Pics] deleted ${n} idle signed-out picture(s)`); }).catch((err) => console.warn('[OpenVibe.Pics] sweep failed:', err && err.message)); }, 3_600_000);
+        sweep.unref();
+        timers.push(sweep);
+    }
+    createLifecycle({ server, ctx, timers, extra: [() => videoIndexNow.stop(), () => { if (subscriptions) subscriptions.stop(); }] });
     return { server, ctx };
 }
 

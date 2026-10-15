@@ -25,6 +25,7 @@ const READ = 'media-hub.api.read';
             'media-hub.folder.create', 'media-hub.playlist.create', 'media-hub.playlist.write',
             'media-hub.share.create',
             'media-hub.upload.complete', 'media-hub.upload.part', 'media-hub.upload.start',
+            'pics.album.create', 'pics.image.upload', 'pics.image.write', 'pics.report.create',
         ]);
         for (const [name, own] of Object.entries(BUDGETS)) {
             assert.ok(own.minute > 0 && own.hour >= own.minute, `${name}: minute and hour`);

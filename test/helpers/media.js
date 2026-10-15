@@ -141,8 +141,9 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
             if (!body) return problem(res, 400, 'media.object.invalid', 'body is not JSON');
             const size = Number(body.size_bytes);
             if (!Number.isInteger(size) || size < 1) return problem(res, 400, 'media.object.invalid', 'size_bytes must be a positive integer');
-            const subject = req.headers['x-ov-subject'];
-            if (!subject || !ids.isSubjectId('user', subject)) return problem(res, 400, 'media.object.invalid', 'X-OV-Subject must be a user subject');
+            // No X-OV-Subject: the tenant's own object (Media's subjectFrom answers null); a malformed one is refused.
+            const subject = req.headers['x-ov-subject'] || null;
+            if (subject !== null && !ids.isSubjectId('user', subject)) return problem(res, 400, 'media.object.invalid', 'X-OV-Subject must be a user subject');
             const wantParts = body.multipart === true;
             if (!wantParts && size > maxSingle) return problem(res, 413, 'media.object.too_large', 'Single-part uploads are limited; send multipart: true');
             seq += 1;
@@ -173,7 +174,7 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
         const sub = tail.slice(1);
 
         // PUT /objects/:id/content
-        if (!sub.length && req.method === 'PUT') {
+        if (sub.length === 1 && sub[0] === 'content' && req.method === 'PUT') {
             if (obj.lifecycle_status !== 'uploading') return problem(res, 409, 'media.object.not_uploading', `Object is ${obj.lifecycle_status}`);
             if (raw.length !== Number(obj.size_bytes)) return problem(res, 400, 'media.object.size_mismatch', `Declared ${obj.size_bytes} bytes, received ${raw.length}`);
             obj.bytes = raw;

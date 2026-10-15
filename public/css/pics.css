@@ -1,0 +1,138 @@
+/* OpenVibe.Pics — openvibe.pics (server/pics/pages.js, ovp-*). Loaded after app.css (the drive's base: body type, links,
+   .page, .notice); colours come from the network theme variables, with the Pics pink as the brand accent. Filled
+   buttons are pink with near-black text (about 8:1), never white on pink. */
+
+.ovp-page {
+  --ovp-pink: #f472b6;
+  --ovp-pink-soft: #f9a8d4;
+  --ovp-on-pink: #1f0a17;
+  --ovp-accent-text: color-mix(in srgb, var(--ovp-pink) 72%, var(--text-primary, #e6edf7));
+  --ovp-card: var(--bg-card, var(--bg-secondary, #101828));
+  --ovp-line: var(--border, #1f2d47);
+  --ovp-line-strong: var(--border-light, #2c3d5c);
+  --ovp-dim: var(--text-secondary, #96a7c2);
+  --ovp-faint: var(--text-muted, #7386a3);
+  max-width: 1120px;
+  padding: 24px 24px 72px;
+}
+.ovp-page h2 { font-size: 1.15rem; margin: 0 0 .75rem; }
+
+/* Buttons */
+.ovp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 7px 14px; border-radius: 10px; border: 1px solid var(--ovp-line-strong); background: var(--bg-tertiary, #16223a); color: var(--text-primary, #e6edf7) !important; font: inherit; font-size: .9rem; font-weight: 700; text-decoration: none; cursor: pointer; }
+.ovp-btn:hover, .ovp-btn:focus-visible { border-color: var(--ovp-pink); }
+.ovp-btn--primary { background: var(--ovp-pink); border-color: var(--ovp-pink); color: var(--ovp-on-pink) !important; }
+.ovp-btn--primary:hover, .ovp-btn--primary:focus-visible { background: var(--ovp-pink-soft); border-color: var(--ovp-pink-soft); }
+.ovp-btn--danger { background: transparent; border-color: color-mix(in srgb, var(--error, #ef4444) 55%, transparent); color: var(--error, #ef4444) !important; }
+.ovp-btn--danger:hover, .ovp-btn--danger:focus-visible { background: color-mix(in srgb, var(--error, #ef4444) 12%, transparent); border-color: var(--error, #ef4444); }
+
+/* Home */
+.ovp-hero { padding: 12px 0 18px; }
+.ovp-eyebrow { display: inline-block; margin: 0; padding: 4px 12px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--ovp-pink) 45%, var(--ovp-line-strong)); color: var(--ovp-accent-text); font-size: .78rem; font-weight: 700; letter-spacing: .3px; }
+.ovp-hero h1 { margin: .6rem 0 .5rem; font-size: clamp(1.9rem, 4.6vw, 3rem); line-height: 1.08; letter-spacing: -.02em; }
+.ovp-accent { background: linear-gradient(92deg, var(--ovp-pink), #c084fc 70%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ovp-lede { margin: 0; max-width: 62ch; font-size: 1.05rem; color: var(--ovp-dim); }
+
+/* The drop zone: a plain form without JavaScript; public/js/pics.js adds drag, paste and many files. */
+.ovp-drop { position: relative; margin: 6px 0 0; border: 2px dashed color-mix(in srgb, var(--ovp-pink) 55%, var(--ovp-line-strong)); border-radius: 20px; background: radial-gradient(120% 140% at 50% 0%, color-mix(in srgb, var(--ovp-pink) 10%, transparent), transparent 60%), var(--ovp-card); transition: border-color .15s ease, background-color .15s ease; }
+.ovp-drop.is-dragover { border-color: var(--ovp-pink); border-style: solid; background-color: color-mix(in srgb, var(--ovp-pink) 10%, var(--ovp-card)); }
+.ovp-drop-inner { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 36px 20px 30px; text-align: center; }
+.ovp-drop--compact .ovp-drop-inner { padding: 20px 16px; }
+.ovp-drop--compact .ovp-drop-icon, .ovp-drop--compact .ovp-drop-hint { display: none; }
+.ovp-drop-icon { color: var(--ovp-pink); opacity: .9; }
+.ovp-drop-title { margin: 0; font-size: 1.15rem; font-weight: 700; }
+.ovp-drop-hint { margin: 0; max-width: 52ch; color: var(--ovp-dim); font-size: .92rem; }
+.ovp-file { position: relative; overflow: hidden; }
+.ovp-file input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; font-size: 0; }
+.ovp-file:focus-within { outline: 3px solid var(--ovp-pink-soft); outline-offset: 2px; }
+.ovp-drop-fields { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; font-size: .9rem; color: var(--ovp-dim); }
+.ovp-drop.is-enhanced .ovp-nojs-submit, .ovp-drop.is-enhanced .ovp-drop-fields { display: none; }
+.ovp-drop--signin .ovp-drop-inner { padding: 30px 20px; }
+
+/* Upload results (the script) */
+.ovp-results { list-style: none; margin: 0; padding: 0 16px; display: grid; gap: 10px; }
+.ovp-results:not(:empty) { padding-bottom: 16px; }
+.ovp-result { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px; border-radius: 14px; border: 1px solid var(--ovp-line); background: var(--bg-secondary, #0f1729); text-align: left; }
+.ovp-result img, .ovp-result .ovp-result-ph { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; background: var(--bg-tertiary, #16223a); }
+.ovp-result-main { min-width: 0; display: grid; gap: 6px; }
+.ovp-result-name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ovp-result-error { color: var(--error, #ef4444); font-size: .9rem; }
+.ovp-progress { height: 6px; border-radius: 999px; background: var(--bg-tertiary, #16223a); overflow: hidden; }
+.ovp-progress span { display: block; height: 100%; width: 0; background: var(--ovp-pink); transition: width .15s linear; }
+.ovp-result .ovp-copy-row input { font-size: .82rem; }
+
+/* Sections, grids */
+.ovp-section { margin-top: 2.2rem; }
+.ovp-section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; margin: 0 0 .9rem; }
+.ovp-section-head h1, .ovp-section-head h2 { margin: 0; }
+.ovp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.ovp-tile { position: relative; display: block; aspect-ratio: 1; overflow: hidden; border-radius: 12px; border: 1px solid var(--ovp-line); background: var(--bg-tertiary, #16223a); }
+.ovp-tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s ease; }
+.ovp-tile:hover img, .ovp-tile:focus-visible img { transform: scale(1.03); }
+.ovp-tile.is-hidden img { opacity: .45; }
+.ovp-flag { position: absolute; left: 8px; top: 8px; padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, .7); color: #fff; font-size: .72rem; font-weight: 700; }
+.ovp-features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.ovp-feature { padding: 16px 18px; border-radius: 14px; border: 1px solid var(--ovp-line); background: var(--ovp-card); }
+.ovp-feature h3 { margin: 0 0 6px; font-size: 1rem; }
+.ovp-feature p { margin: 0; color: var(--ovp-dim); font-size: .92rem; }
+
+/* A picture */
+.ovp-picture { margin: 0; }
+.ovp-title { margin: 0 0 12px; font-size: clamp(1.4rem, 3vw, 2rem); overflow-wrap: anywhere; }
+.ovp-figure { margin: 0; display: flex; justify-content: center; border-radius: 16px; overflow: hidden; border: 1px solid var(--ovp-line);
+  background-color: var(--bg-tertiary, #16223a);
+  background-image: linear-gradient(45deg, rgba(255,255,255,.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.04) 75%), linear-gradient(45deg, rgba(255,255,255,.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.04) 75%);
+  background-size: 24px 24px; background-position: 0 0, 12px 12px; }
+.ovp-figure a { display: flex; max-width: 100%; }
+.ovp-figure img { display: block; max-width: 100%; max-height: 78vh; width: auto; height: auto; object-fit: contain; }
+.ovp-meta { margin: 10px 0 0; color: var(--ovp-faint); font-size: .88rem; }
+.ovp-desc { max-width: 70ch; white-space: pre-line; overflow-wrap: anywhere; }
+.ovp-share { margin-top: 1.6rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 16px; }
+.ovp-share h2 { grid-column: 1 / -1; margin-bottom: 0; }
+.ovp-copy { display: grid; gap: 4px; min-width: 0; }
+.ovp-copy label { font-size: .8rem; font-weight: 700; color: var(--ovp-dim); }
+.ovp-copy-row { display: flex; gap: 6px; min-width: 0; }
+.ovp-copy-row input { flex: 1; min-width: 0; font: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--ovp-line-strong); background: var(--bg-secondary, #0f1729); color: var(--text-primary, #e6edf7); }
+.ovp-copy-row .ovp-btn { min-width: 74px; }
+.ovp-page > .ovp-copy { max-width: 640px; margin: 0 0 14px; }
+.ovp-key { display: inline-block; margin-top: 6px; overflow-wrap: anywhere; }
+.ovp-confirm-thumb { max-width: 240px; border-radius: 12px; }
+
+/* Forms */
+.ovp-form { display: grid; gap: 6px; max-width: 640px; margin: 0 0 14px; }
+.ovp-form label, .ovp-form legend { font-size: .85rem; font-weight: 700; color: var(--ovp-dim); }
+.ovp-page input[type=text], .ovp-page textarea, .ovp-page select { font: inherit; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--ovp-line-strong); background: var(--bg-secondary, #0f1729); color: var(--text-primary, #e6edf7); max-width: 100%; }
+.ovp-page textarea { resize: vertical; }
+.ovp-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: none; }
+.ovp-inline label { width: 100%; }
+.ovp-owner { padding: 16px 18px; border-radius: 16px; border: 1px solid var(--ovp-line); background: var(--ovp-card); }
+.ovp-report { margin-top: 1.6rem; }
+.ovp-report summary { cursor: pointer; color: var(--ovp-faint); font-size: .9rem; width: fit-content; }
+.ovp-report fieldset { border: 0; padding: 0; margin: 8px 0; display: grid; gap: 4px; }
+.ovp-radio { font-weight: 400 !important; color: var(--text-primary, #e6edf7) !important; display: flex; gap: 8px; align-items: center; }
+
+/* Albums */
+.ovp-albums { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-top: 1rem; }
+.ovp-album { display: grid; gap: 4px; padding: 8px; border-radius: 14px; border: 1px solid var(--ovp-line); background: var(--ovp-card); text-decoration: none; color: inherit; }
+.ovp-album:hover, .ovp-album:focus-visible { border-color: var(--ovp-pink); }
+.ovp-album img, .ovp-album-empty { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; background: var(--bg-tertiary, #16223a); }
+.ovp-album-title { font-weight: 700; padding: 2px 4px 0; overflow-wrap: anywhere; }
+.ovp-album .muted { padding: 0 4px; font-size: .85rem; }
+
+/* Staff */
+.ovp-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 1rem; }
+.ovp-tab { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--ovp-line-strong); text-decoration: none; color: inherit; font-size: .9rem; }
+.ovp-tab.on { border-color: var(--ovp-pink); font-weight: 700; }
+.ovp-staff { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 14px; padding: 12px 0; border-top: 1px solid var(--ovp-line); }
+.ovp-staff img, .ovp-staff .ovp-album-empty { width: 120px; aspect-ratio: 1; object-fit: cover; border-radius: 10px; }
+.ovp-staff p { margin: 0 0 6px; }
+
+@media (max-width: 640px) {
+  .ovp-page { padding: 16px 16px 56px; }
+  .ovp-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+  .ovp-tile { border-radius: 8px; }
+  .ovp-share { grid-template-columns: minmax(0, 1fr); }
+  .ovp-staff { grid-template-columns: 72px minmax(0, 1fr); }
+  .ovp-staff img, .ovp-staff .ovp-album-empty { width: 72px; }
+  .ovp-drop-inner { padding: 28px 14px 24px; }
+}
+@media (prefers-reduced-motion: reduce) { .ovp-tile img, .ovp-drop { transition: none; } .ovp-tile:hover img { transform: none; } }
