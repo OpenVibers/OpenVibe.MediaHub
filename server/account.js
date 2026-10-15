@@ -43,17 +43,22 @@ const TABLES = [
     { table: 'pics_albums', subject: 'owner', value: AS_REQUESTER, file: 'pics_albums.json' },
     { table: 'pics_images', subject: 'owner', value: AS_REQUESTER, file: 'pics_images.json' },
     { table: 'pics_usage', subject: 'uploader', value: AS_REQUESTER, file: 'pics_usage.json' },
+    // OpenVibe.Video uploads (migrations/0008_video_uploads.sql): the reports a person filed, then their videos (other
+    // people's reports on them cascade). The bytes are Media VODs, deleted with extraErase.
+    { table: 'video_upload_reports', subject: 'reporter', value: AS_REQUESTER, file: 'video_upload_reports.json' },
+    { table: 'video_uploads', subject: 'owner', value: AS_REQUESTER, file: 'videos.json' },
 ];
 
 function createAccount({ db, config, media, log = console }) {
     /** The object ids of a deletion, read before the rows go (extraErase runs after them). */
     let pendingObjects = [];
+    let pendingVods = [];
 
     const accountData = createAccountData({
         db,
         service: 'media-hub',
         tables: TABLES,
-        note: 'OpenVibe.MediaHub: your files, folders, share links, the reports you filed, your upload counts and your playlists, and your OpenVibe.Pics pictures and albums. The bytes of your files and pictures live in OpenVibe.Media.',
+        note: 'OpenVibe.MediaHub: your files, folders, share links, the reports you filed, your upload counts and your playlists, your OpenVibe.Pics pictures and albums, and the videos you uploaded to OpenVibe.Video. The bytes of your files, pictures and videos live in OpenVibe.Media.',
         extraExport: async (db, subject) => {
             const rows = await db.many(
                 `SELECT i.playlist_id, i.kind, i.item_id, i.position, i.added_at
@@ -74,6 +79,12 @@ function createAccount({ db, config, media, log = console }) {
             ];
         },
         extraErase: async () => {
+            const vods = pendingVods;
+            pendingVods = [];
+            for (const id of vods) {
+                const out = await media.vodDelete(id);
+                if (!out.ok && out.status !== 404 && out.status !== 410) log.warn(`[MediaHub] account deletion: Media refused to delete VOD ${id}: ${out.status} ${out.code}`);
+            }
             const ids = pendingObjects;
             pendingObjects = [];
             for (const id of ids) {
@@ -101,6 +112,7 @@ function createAccount({ db, config, media, log = console }) {
                 ...(await db.many('SELECT object_id FROM mh_files WHERE owner = ANY($1::text[])', [subjects])).map((r) => r.object_id),
                 ...(await db.many('SELECT object_id, thumb_object_id FROM pics_images WHERE owner = ANY($1::text[])', [subjects])).flatMap((r) => [r.object_id, r.thumb_object_id]),
             ].filter(Boolean);
+            pendingVods = (await db.many('SELECT media_vod_id FROM video_uploads WHERE owner = ANY($1::text[]) AND media_vod_id IS NOT NULL', [subjects])).map((r) => Number(r.media_vod_id));
         }
         return await accountData.apply(ev, { send });
     }
