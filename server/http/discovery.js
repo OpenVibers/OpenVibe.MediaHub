@@ -13,15 +13,15 @@ const seo = require('openvibe-shared/seo');
 const cache = require('openvibe-shared/cache-policy');
 const { asyncRouter } = require('./router');
 
-const SITE_NAME = 'OpenVibe.MediaHub';
-const DESCRIPTION = 'OpenVibe.MediaHub — Your files, shared on your terms.';
+const SITE_NAME = 'OpenVibe.Download';
+const DESCRIPTION = 'OpenVibe.Download — Your files, shared on your terms.';
 // /s/ (with the slash) rather than /s, or the rule would also swallow /safety, which is a public page.
 const DISALLOW = ['/auth/', '/api/', '/files', '/s/', '/staff'];
 
 const PAGE_TEXT = {
-    '/': ['OpenVibe.MediaHub home', 'OpenVibe.MediaHub: Your files, shared on your terms. A private drive for a signed-in OpenVibe account, with share links that expire, can be revoked and need the downloader to be signed in too.'],
+    '/': ['OpenVibe.Download home', 'OpenVibe.Download: Your files, shared on your terms. A private drive for a signed-in OpenVibe account, with share links that expire, can be revoked and need the downloader to be signed in too.'],
     '/safety': ['Safety rules', 'What OpenVibe.Download allows and does not, who can upload and download, how reports work, and who to write to about abuse or copyright.'],
-    '/updates': ['What shipped on OpenVibe.MediaHub', 'This site\'s update log, from the network changelog feed.'],
+    '/updates': ['What shipped on OpenVibe.Download', 'This site\'s update log, from the network changelog feed.'],
 };
 
 function dayOf(ts) {
@@ -67,11 +67,11 @@ function createDiscoveryRoutes(ctx) {
     r.get('/llms.txt', (_req, res) => {
         res.type('text/plain').set('Cache-Control', TEXT).send(seo.llmsTxt({
             name: SITE_NAME,
-            summary: 'OpenVibe.MediaHub: Your files, shared on your terms.',
+            summary: 'OpenVibe.Download: Your files, shared on your terms.',
             details: 'Every page is server-rendered and readable without JavaScript.',
             sections: [
                 { title: 'Start here', links: [
-                    { title: 'OpenVibe.MediaHub', url: abs('/'), note: 'Your files, shared on your terms.' },
+                    { title: 'OpenVibe.Download', url: abs('/'), note: 'Your files, shared on your terms.' },
                     { title: 'Safety rules', url: abs('/safety'), note: 'what is allowed, how reports work, who to write to' },
                     { title: 'What shipped on OpenVibe.MediaHub', url: abs('/updates') },
                 ] },

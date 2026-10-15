@@ -151,7 +151,7 @@ ${notice(p && p.detail ? p.detail : 'You are over the limit for this.', 'warn')}
             eyebrow: `${SITE_NAME} · a private drive`,
             title: 'Your files,',
             accent: 'shared on your terms.',
-            lede: 'A private drive for your files, 25 GB free, with share links you control: for named people, for anyone signed in, or a public download page anyone with the link can use. Uploading needs a signed-in OpenVibe account.',
+            lede: `A private drive for your files, ${rules.formatBytes(config.quotas.bytes)} free, with share links you control: for named people, for anyone signed in, or a public download page anyone with the link can use. Uploading needs a signed-in OpenVibe account.`,
             actions: signedIn(req)
                 ? [{ label: 'Your files', href: '/files', primary: true }, { label: 'The safety rules', href: '/safety' }]
                 : [{ label: 'Sign in with OpenVibe', href: '/auth/login?next=%2Ffiles', primary: true }, { label: 'The safety rules', href: '/safety' }],
@@ -166,9 +166,9 @@ ${raw(showcase.features({
                 title: 'What you get',
                 lede: 'A drive, not a locker: everything here is yours, and everything you hand out can be taken back.',
                 items: [
-                    { icon: 'ov:upload', title: 'Your own drive', text: 'Folders and files, private to you. 2 GB stored and 512 MB in one file, from this service\'s own configuration.' },
+                    { icon: 'ov:upload', title: 'Your own drive', text: `Folders and files, private to you: ${rules.formatBytes(config.quotas.bytes)} stored, up to ${rules.formatBytes(config.quotas.maxFileBytes)} in one file.` },
                     { icon: 'ov:link', title: 'Share links', text: 'One link per file or folder, expiring in an hour to seven days, revocable at any moment, with its downloads counted.' },
-                    { icon: 'ov:account', title: 'Signed in, always', text: 'Nobody opens a share link without an OpenVibe account. No app tokens, no anonymous anything — a shared link still needs a person.' },
+                    { icon: 'ov:account', title: 'You choose who opens it', text: 'Named OpenVibe accounts, anyone signed in, or a public download page for anyone with the link. Uploading always needs a signed-in person.' },
                     { icon: 'ov:shield', title: 'Reports that act', text: REPORT_NOTE },
                     { icon: 'ov:tools', title: 'A drive with an API', text: 'The same actions over /api/v1: list, upload, share, revoke, and see your usage.' },
                     { icon: 'ov:db', title: 'Bytes in OpenVibe.Media', text: 'Files are objects in the network\'s own media service; deleting one here asks Media to delete it too.' },
