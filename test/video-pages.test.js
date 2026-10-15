@@ -330,6 +330,15 @@ function countOccurrences(haystack, needle) {
         assert.strictEqual(r.text, 'WEBVTT\n\n00:00:10.000 --> 00:00:30.000\nIntro &amp; setup\n\n00:00:30.000 --> 00:00:45.000\nThe &lt;main&gt; part\n');
     });
 
+    await check('/updates: the shared update log on the video host, one heading, in the sitemap', async () => {
+        const r = await getVideo('/updates');
+        assert.strictEqual(r.status, 200);
+        assert.ok(r.text.includes('<h1>What shipped on OpenVibe.Video</h1>') && r.text.includes('data-ov-shipped="log" data-service="media-hub"'));
+        assert.strictEqual((r.text.match(/<h1[\s>]/g) || []).length, 1);
+        assert.match(r.text, /<script src="\/shared\/shipped\.js\?v=[0-9a-f]+" defer><\/script>/);
+        assert.match((await getVideo('/sitemap.xml')).text, /<loc>[^<]+\/updates<\/loc>/);
+    });
+
     await check('the sitemap lists public items and leaves the unlisted VOD out', async () => {
         const r = await getVideo('/sitemap.xml');
         assert.match(r.text, /<loc>https:\/\/openvibe\.video\/<\/loc><lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/, 'the home, dated by the newest item');
