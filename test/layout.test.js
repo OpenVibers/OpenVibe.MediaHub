@@ -63,6 +63,8 @@ const BOOST = /<script src="\/shared\/boost\.js\?v=[0-9a-f]{12}" data-main="#mai
         assert.match(r.headers.get('content-type'), /^text\/html/);
         assert.ok(r.text.includes('OpenVibe.MediaHub'), 'the service name is on the page');
         assert.ok(r.text.includes('Your files, shared on your terms.'), 'the tagline is on the page');
+        const h1 = (/<h1[^>]*>([\s\S]*?)<\/h1>/.exec(r.text) || [])[1] || '';
+        assert.strictEqual(h1.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(), 'Your files, shared on your terms.', 'the heading is one sentence');
         assert.ok(r.text.includes('/shared/showcase.css'), 'the showcase stylesheet');
         assert.ok(!r.text.includes('/home/') && !r.text.includes('/mnt/'), 'no local filesystem path on the page');
     });

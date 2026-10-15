@@ -143,9 +143,10 @@ ${notice(p && p.detail ? p.detail : 'You are over the limit for this.', 'warn')}
     // ── Home ─────────────────────────────────────────────────
     r.get('/', (req, res) => {
         const hero = showcase.hero({
-            eyebrow: `${SITE_NAME} · ${TAGLINE}`,
-            title: 'OpenVibe.Download',
-            accent: TAGLINE,
+            // One sentence in the heading (it read "OpenVibe.Download Your files, …"), the tagline not said twice.
+            eyebrow: `${SITE_NAME} · a private drive`,
+            title: 'Your files,',
+            accent: 'shared on your terms.',
             lede: 'A private drive for your files, with share links you control. Uploads and every file page need a signed-in OpenVibe account — there is no anonymous upload and no anonymous download here.',
             actions: signedIn(req)
                 ? [{ label: 'Your files', href: '/files', primary: true }, { label: 'The safety rules', href: '/safety' }]
