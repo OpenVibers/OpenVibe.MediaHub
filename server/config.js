@@ -66,6 +66,9 @@ function load(env = process.env) {
             // Playlists (step C): the per-person caps the pages and the API enforce together.
             playlistsMax: size(env.MEDIAHUB_VIDEO_PLAYLISTS_MAX, 100),
             playlistItemsMax: size(env.MEDIAHUB_VIDEO_PLAYLIST_ITEMS_MAX, 500),
+            // IndexNow (server/video/indexnow.js): with a key, new watch pages are sent to search engines and the key
+            // is served at https://openvibe.video/<key>.txt. Unset: off.
+            indexnowKey: String(env.INDEXNOW_KEY || '').trim(),
         },
 
         // What one person may keep and do here. Media's own quotas are per tenant (this whole service is one
