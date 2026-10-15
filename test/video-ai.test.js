@@ -61,10 +61,10 @@ const OUTPUT = {
     const runs = [];
     let mode = 'running';
     const ai = await startStub((req, body) => {
-        runs.push({ path: req.url, body, auth: req.headers.authorization });
+        runs.push({ method: req.method, path: req.url, body, auth: req.headers.authorization });
         if (mode === 'fail') return { status: 503, body: { code: 'ai.unavailable' } };
         if (mode === 'running') return { status: 202, body: { run: { id: 'run_1', status: 'running' } } };
-        return { status: 201, body: { run: { id: 'run_1', status: 'succeeded', output: OUTPUT } } };
+        return { status: req.method === 'GET' ? 200 : 201, body: { run: { id: 'run_1', status: 'succeeded', output: OUTPUT } } };
     });
     const live = await startStub(() => ({ body: { vods: [], clips: [], items: [], hasMore: false } }));
     const t = await boot({ env: { MEDIAHUB_VIDEO_URL: 'https://openvibe.video', MEDIAHUB_LIVE_URL: live.url, MEDIAHUB_LIVE_PUBLIC_URL: 'https://openvibe.live', MEDIAHUB_CHAT_URL: live.url, OV_AI_INTERNAL_URL: ai.url } });
@@ -74,7 +74,7 @@ const OUTPUT = {
     const samCookie = t.signIn(sam);
     let id;
 
-    await check('a finished private upload is analysed through a signed URL, never a paid model; a run still going is joined by its key', async () => {
+    await check('a finished private upload is analysed through a signed URL, never a paid model; a run still going is read again by its id', async () => {
         const start = await vreq(t.base, '/api/v1/videos', { method: 'POST', json: { title: 'Coast', size: 10, content_type: 'video/mp4', name: 'c.mp4', visibility: 'private' }, cookie: kimCookie });
         id = start.json().upload.id;
         await vreq(t.base, `/api/v1/videos/${id}/parts/1`, { method: 'PUT', body: Buffer.alloc(10, 1), cookie: kimCookie });
@@ -91,11 +91,11 @@ const OUTPUT = {
         assert.ok(String(r.auth).startsWith('Bearer '));
         const row = await t.ctx.videoAi.forUpload({ id });
         assert.strictEqual(row.status, 'running');
-        // Due again later: join the same run by the same key.
+        // Due again later: read the same run by its id (posting again would carry a new signed URL under the same key).
         await t.ctx.s.db.query('UPDATE video_upload_ai SET next_at = $1 WHERE upload_id = $2', ['2000-01-01T00:00:00.000Z', id]);
         mode = 'done';
         await t.ctx.videoAi.sweep();
-        assert.strictEqual(runs[1].body.idempotency_key, `media-hub.video.analyze:${id}:1`, 'the same key: joined, not a second analysis');
+        assert.deepStrictEqual([runs[1].method, runs[1].path], ['GET', '/api/v1/runs/run_1'], 'read, not a second analysis');
         assert.strictEqual((await t.ctx.videoAi.forUpload({ id })).status, 'done');
     });
 
