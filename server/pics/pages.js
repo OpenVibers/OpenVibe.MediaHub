@@ -266,7 +266,7 @@ ${owner ? html`<section class="ovp-section ovp-owner" aria-labelledby="h-yours">
 <input name="new_title" type="text" maxlength="120" placeholder="New album name" aria-label="New album name">
 <button class="ovp-btn" type="submit">Add</button></form>
 ${holding.length ? html`<p class="muted">In ${holding.map((a, i) => html`${i ? ', ' : ''}<a href="/a/${a.slug}">${a.title}</a>`)}.</p>` : ''}
-<form class="ovp-form ovp-inline" method="post" action="/i/${row.slug}/delete" data-confirm="Delete this picture for good?"><button class="ovp-btn ovp-btn--danger" type="submit">Delete this picture</button> <span class="muted">Its links stop working at once.</span></form>
+<form class="ovp-form ovp-inline" method="post" action="/i/${row.slug}/delete" data-confirm="Delete this picture for good?"><button class="ovp-btn ovp-btn--danger" type="submit">Delete this picture</button> <span class="muted">Its page goes at once; copies other sites already loaded can show for up to ten minutes.</span></form>
 </section>` : ''}
 ${!owner && !hidden ? html`<details class="ovp-report"><summary>Report this picture</summary>
 <form class="ovp-form" method="post" action="/i/${row.slug}/report">
@@ -322,7 +322,7 @@ ${pics.REASONS.map((r) => html`<label class="ovp-radio"><input type="radio" name
         const byKey = row && pics.deleteKeyMatches(row, String(req.body.key || ''));
         if (!row || !(pics.isOwner(row, whoOf(req)) || byKey)) return notFound(req, res);
         await pics.remove(row);
-        return page(req, res, { title: 'Deleted', body: html`<h1>Deleted</h1><p>The picture and its links are gone.</p><p><a class="ovp-btn ovp-btn--primary" href="/">Upload another</a>${signedIn(req) ? html` <a class="ovp-btn" href="/mine">Your pictures</a>` : ''}</p>` });
+        return page(req, res, { title: 'Deleted', body: html`<h1>Deleted</h1><p>The picture is gone. Places that already showed it may keep a copy for up to ten minutes.</p><p><a class="ovp-btn ovp-btn--primary" href="/">Upload another</a>${signedIn(req) ? html` <a class="ovp-btn" href="/mine">Your pictures</a>` : ''}</p>` });
     });
 
     // The delete link a signed-out uploader keeps: a page with one button (a GET never deletes).
