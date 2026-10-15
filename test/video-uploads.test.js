@@ -111,6 +111,27 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         assert.ok(mine.text.includes('Trip to the coast') && mine.text.includes('Public'));
     });
 
+    await check('a ready upload goes in a playlist (kind upload, by its number): listed, played, and next in line', async () => {
+        const watch = await vreq(t.base, `/u/${id}`, { cookie: samCookie });
+        assert.ok(watch.text.includes('Save to playlist'), 'a signed-in viewer can save it');
+        assert.ok(watch.text.includes('<input type="hidden" name="kind" value="upload">'));
+        const seq = Number((/<input type="hidden" name="id" value="(\d+)">/.exec(watch.text) || [])[1]);
+        assert.ok(seq > 0, 'the form carries the upload\'s number');
+        const saved = await vreq(t.base, '/playlists/add', { method: 'POST', cookie: samCookie, form: { kind: 'upload', id: String(seq), title: 'Road trips' } });
+        assert.strictEqual(saved.status, 303, saved.text.slice(0, 200));
+        const listUrl = saved.headers.location;
+        const listId = listUrl.split('/').pop();
+        const list = await vreq(t.base, listUrl, { cookie: samCookie });
+        assert.ok(list.text.includes(`href="/u/${id}"`) && list.text.includes('Trip to the coast'), 'the playlist shows the upload');
+        assert.ok(list.text.includes(`href="/u/${id}?list=${listId}"`), 'Play all starts it');
+        await vreq(t.base, `/playlists/${listId}/visibility`, { method: 'POST', cookie: samCookie, form: { visibility: 'public' } });
+        await vreq(t.base, '/playlists/add', { method: 'POST', cookie: samCookie, form: { kind: 'vod', id: '101', playlist: listId } });
+        const inList = await vreq(t.base, `/u/${id}?list=${listId}`);
+        assert.ok(inList.text.includes('Up next in') && inList.text.includes(`data-ovv-next="/v/101?list=${listId}"`), 'the next item plays after it');
+        const api = await vreq(t.base, `/api/v1/video/playlists/${listId}`, { cookie: samCookie });
+        assert.ok(api.text.includes('"kind":"upload"'), api.text.slice(0, 300));
+    });
+
     await check('the owner edits (Media follows) and makes it private: gone for everyone else, still the owner\'s', async () => {
         const r = await vreq(t.base, `/u/${id}/manage`, { method: 'POST', cookie: kimCookie, form: { title: 'Coast trip', description: 'x', visibility: 'private' } });
         assert.strictEqual(r.status, 303);

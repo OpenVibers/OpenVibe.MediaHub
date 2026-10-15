@@ -1,9 +1,10 @@
 'use strict';
 
 /**
- * Playlists on openvibe.video (step C): a signed-in person's named lists of OpenVibe.Live recordings and clips.
- * The rows hold only Live's public ids (kind + numeric id), never the media bytes — the watch pages ask Live for
- * the card and player details through the existing, cached Live client.
+ * Playlists on openvibe.video (step C): a signed-in person's named lists of OpenVibe.Live recordings and clips and of
+ * videos uploaded here. The rows hold only a kind and a number, never the media bytes: Live's public id for a vod or
+ * a clip (the watch pages ask Live for the card through the cached Live client), an upload's seq for an upload
+ * (migration 0010; the card comes from video_uploads).
  *
  * The rules here are shared by the pages (server/video/pages.js) and the API (server/video/api.js) so a form and
  * a POST enforce the same numbers: 100 playlists per owner, 500 items per playlist (both from the environment),
@@ -17,7 +18,7 @@
 const TITLE_MAX = 120;
 const DESCRIPTION_MAX = 2000;
 const VISIBILITIES = ['public', 'unlisted', 'private'];
-const KINDS = ['vod', 'clip'];
+const KINDS = ['vod', 'clip', 'upload'];
 const PLAYLIST_ID_RE = /^vpl_[0-9A-HJKMNP-TV-Z]{26}$/;
 
 /** Live's ids: positive safe integers (what /v/:id and /c/:id accept). */
@@ -173,7 +174,7 @@ function createPlaylists({ s, config, log = console }) {
     async function addItem(owner, playlistId, { kind, id }) {
         const row = await own(owner, playlistId);
         if (!row) return { ok: false, code: 'playlist.not_found', detail: 'No such playlist.' };
-        if (!KINDS.includes(kind)) return { ok: false, code: 'playlist.invalid_kind', detail: 'kind is vod or clip.' };
+        if (!KINDS.includes(kind)) return { ok: false, code: 'playlist.invalid_kind', detail: 'kind is vod, clip or upload.' };
         if (!isItemId(id)) return { ok: false, code: 'playlist.invalid_item', detail: 'item id must be a positive whole number.' };
         const itemId = Number(id);
         const n = await s.db.value('SELECT count(*) FROM video_playlist_items WHERE playlist_id = $1', [playlistId]).then(Number);

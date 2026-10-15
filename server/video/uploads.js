@@ -50,6 +50,8 @@ function createUploads({ s, media, config, log = console }) {
     const running = new Map();   // upload id → the completion in flight in this process
 
     const byId = (id) => (/^vup_[0-9A-HJKMNP-TV-Z]{26}$/.test(String(id)) ? s.db.maybe('SELECT * FROM video_uploads WHERE id = $1', [String(id)]) : null);
+    /** An upload by its playlist number (seq, migration 0010). */
+    const bySeq = (seq) => (/^[1-9]\d{0,15}$/.test(String(seq)) ? s.db.maybe('SELECT * FROM video_uploads WHERE seq = $1', [Number(seq)]) : null);
     const patchRow = async (id, patch) => {
         const cols = Object.keys(patch);
         await s.db.query(`UPDATE video_uploads SET ${cols.map((c, i) => `${c} = $${i + 3}`).join(', ')}, updated_at = $2 WHERE id = $1`, [id, s.iso(), ...cols.map((c) => patch[c])]);
@@ -208,7 +210,7 @@ function createUploads({ s, media, config, log = console }) {
 
     return {
         PART_SIZE, REASONS, UploadError, kindOf, addressId, canSee,
-        byId, start, part, complete, refresh, update, remove, report, startRecording, chunk,
+        byId, bySeq, start, part, complete, refresh, update, remove, report, startRecording, chunk,
         mine: (owner, limit = 60) => s.db.many("SELECT * FROM video_uploads WHERE owner = $1 AND state <> 'removed' ORDER BY id DESC LIMIT $2", [owner, limit]),
         latest: (limit = 12) => s.db.many("SELECT * FROM video_uploads WHERE visibility = 'public' AND status = 'ready' AND state = 'active' ORDER BY id DESC LIMIT $1", [limit]),
         channel: (username, limit = 48) => s.db.many("SELECT * FROM video_uploads WHERE lower(owner_username) = lower($1) AND visibility = 'public' AND status = 'ready' AND state = 'active' ORDER BY id DESC LIMIT $2", [String(username), limit]),
