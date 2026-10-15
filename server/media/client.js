@@ -94,10 +94,13 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
     return {
         enabled,
 
-        /** A VOD row for an upload (Media's user_id is the uploader's usr_… subject; MediaHub owns the meaning). */
+        /**
+         * A VOD row for an upload. Media's user_id is an app-local number (Live's users), so the uploader's usr_… subject
+         * goes in the VOD's meta instead; MediaHub's own row is what says whose it is.
+         */
         vodCreate: ({ title, visibility = 'public', ownerSubject }) => call('', {
             root: vods(), method: 'POST',
-            json: { title: String(title || 'Video').slice(0, 300), visibility: ['public', 'unlisted', 'private'].includes(visibility) ? visibility : 'private', user_id: subjectHeader(ownerSubject) },
+            json: { title: String(title || 'Video').slice(0, 300), visibility: ['public', 'unlisted', 'private'].includes(visibility) ? visibility : 'private', meta: { source: 'openvibe.video upload', owner_subject: subjectHeader(ownerSubject) } },
         }),
         /** One part of the file, appended to the VOD's file in the order sent (segment 1: one continuous file). */
         vodChunk(vodId, buffer, contentType) {

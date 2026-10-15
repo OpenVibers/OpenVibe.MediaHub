@@ -110,7 +110,8 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
             if (parts.length === 4 && req.method === 'POST') {
                 const body = JSON.parse(raw.toString('utf8') || '{}');
                 const id = ++vodSeq;
-                vods.set(id, { id, title: body.title, visibility: body.visibility, user_id: body.user_id, bytes: Buffer.alloc(0), types: [], status: 'recording' });
+                if (body.user_id != null && !/^\d+$/.test(String(body.user_id))) return problem(res, 500, 'vod.create', 'invalid input syntax for type bigint');   // as Media's column refuses it
+                vods.set(id, { id, title: body.title, visibility: body.visibility, user_id: body.user_id, meta: body.meta, bytes: Buffer.alloc(0), types: [], status: 'recording' });
                 return json(res, 201, { id });
             }
             const v = vods.get(Number(parts[4]));

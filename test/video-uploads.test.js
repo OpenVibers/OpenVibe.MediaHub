@@ -83,7 +83,8 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         const vod = [...t.media.vods.values()][0];
         assert.ok(vod.bytes.equals(file), 'Media has the file, byte for byte');
         assert.deepStrictEqual(vod.types, ['video/mp4', 'video/mp4'], 'QuickTime is sent as MP4');
-        assert.strictEqual(vod.user_id, kim.subject);
+        assert.strictEqual(vod.user_id, undefined, 'Media\'s user_id is a number: no subject there');
+        assert.strictEqual(vod.meta.owner_subject, kim.subject, 'the uploader is in the VOD\'s meta');
         const done1 = await vreq(t.base, `/api/v1/videos/${id}/complete`, { method: 'POST', cookie: kimCookie });
         assert.strictEqual(done1.status, 202);
         assert.strictEqual(done1.json().video.url, `/u/${id}`);
