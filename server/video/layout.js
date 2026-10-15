@@ -73,10 +73,11 @@ ${render(o.body)}
         ...(o.image ? { image: o.image, imageAlt: title } : {}),
         ...(o.ogType ? { type: o.ogType } : {}),
         home: '/',
-        navLinks: [],
+        navLinks: NAV_LINKS,
         navbar: {
             service: 'media-hub',
             apiBase: NETWORK_URL,
+            links: NAV_LINKS.map((l) => ({ ...l, active: l.href === '/' ? o.path === '/' : String(o.path || '').startsWith(l.href) })),
             history: { type: 'page', title },
             sessionUrl: '/auth/me',
             loginUrl: '/auth/login?next={path}',
@@ -88,6 +89,9 @@ ${render(o.body)}
         body,
     });
 }
+
+// The site's own places in the navbar: the videos, and your playlists (signed in; the page asks you to sign in).
+const NAV_LINKS = [{ label: 'Videos', href: '/' }, { label: 'Playlists', href: '/playlists' }];
 
 /** Send a video page. Signed-out pages are public; a session cookie makes a page private, no-store. */
 function send(res, status, o) {
