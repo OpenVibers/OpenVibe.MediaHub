@@ -96,6 +96,12 @@ OpenVibe.Download v1 is a **private drive**, not a public host:
   `Content-Security-Policy: default-src 'none'; sandbox` and a real `Content-Type` only for a short safe list (images
   except SVG, audio, video, PDF, plain text, zip). HTML, SVG and anything executable come back as
   `application/octet-stream`. The name survives in any script (`filename*=UTF-8''…`) and can never break the header.
+- **Previews** (`/files/:id/preview?w=96|640`, and `/s/:slug/preview` for a single-file share):
+  - An image (JPEG, PNG, WebP, GIF or AVIF, never SVG) shows a picture of itself in the list (96 px) and on its page
+    and share page (640 px).
+  - OpenVibe.Media makes it as a signed WebP variant of the private object, and MediaHub passes it through: `nosniff`,
+    a sandbox CSP, `private, max-age=300`, never an attachment and never counted as a download.
+  - Only the owner gets one, or whoever may open the share. Other files show their extension.
 - Per-person limits, all from the environment: 2 GB stored, 512 MB per file, 50 uploads a day, 20 live share links.
 
 ## How it works

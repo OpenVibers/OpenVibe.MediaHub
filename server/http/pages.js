@@ -82,7 +82,11 @@ function createPageRoutes(ctx) {
     const SHARE_STATE = { live: ['live', 'ok'], expired: ['expired', 'warn'], revoked: ['revoked', 'bad'], suspended: ['suspended — with staff', 'bad'] };
     const shareBadge = (state) => badge(SHARE_STATE[state] ? SHARE_STATE[state][0] : state, SHARE_STATE[state] ? SHARE_STATE[state][1] : '');
 
-    const fileRow = (row) => html`<li class="file">
+    // An image shows a small preview of itself (GET /files/:id/preview, Media's signed variant); anything else, its type.
+    const fileThumb = (row) => (rules.isPreviewable(row.content_type)
+        ? html`<img class="file-thumb" src="/files/${row.id}/preview?w=96" alt="" width="48" height="48" loading="lazy" decoding="async">`
+        : html`<span class="file-thumb file-thumb-type" aria-hidden="true">${((/\.([A-Za-z0-9]{1,4})$/.exec(String(row.name || '')) || [])[1] || 'file').toUpperCase()}</span>`);
+    const fileRow = (row) => html`<li class="file">${fileThumb(row)}
 <span class="file-main"><a class="file-name" href="/files/${row.id}">${row.name}</a>
 <span class="file-meta small muted">${fileSize(row)} · ${row.content_type} · added ${time(row.created_at)}</span></span>
 <a class="sc-btn" href="/files/${row.id}/download">Download</a></li>`;
@@ -247,6 +251,7 @@ ${shares.length ? html`<ul class="file-list">${shares.map((sh) => html`<li class
             title: row.name,
             crumbs: [{ label: 'Home', href: '/' }, { label: 'Your files', href: '/files' }, { label: row.name }],
             body: html`<h1>${row.name}</h1>
+${rules.isPreviewable(row.content_type) ? html`<figure class="file-preview"><img src="/files/${row.id}/preview?w=640" alt="${row.name}" decoding="async"></figure>` : ''}
 ${table(['Size', 'Type', 'SHA-256', 'Added'], [[fileSize(row), row.content_type, row.sha256 || '—', time(row.created_at)]])}
 <p><a class="sc-btn sc-primary" href="/files/${row.id}/download">Download</a></p>
 <section aria-labelledby="h-share"><h2 id="h-share">Make a share link</h2>
@@ -418,6 +423,35 @@ ${shares.length ? html`<h3>Its links</h3><ul class="file-list">${shares.map((sh)
         return undefined;
     }
 
+    /**
+     * A preview of an image: Media's resized WebP of the object (a signed variant; the original when Media cannot make
+     * one), for the person allowed to see the file. Private to their browser for five minutes; never an attachment.
+     */
+    async function sendPreview(req, res, row) {
+        if (!row || !rules.isPreviewable(row.content_type)) return res.status(404).type('text/plain').send('No preview.');
+        const w = rules.PREVIEW_WIDTHS.includes(Number(req.query.w)) ? Number(req.query.w) : rules.PREVIEW_WIDTHS[0];
+        const got = await media.bytes(row.object_id, { variant: { w, fmt: 'webp' } });
+        const type = got.ok ? String(got.res.headers.get('content-type') || '') : '';
+        if (!got.ok || !rules.isPreviewable(type)) return res.status(got.ok ? 404 : 502).type('text/plain').send('No preview.');
+        res.status(200).set({
+            'Content-Type': type,
+            'X-Content-Type-Options': 'nosniff',
+            'Content-Security-Policy': "default-src 'none'; sandbox",
+            'X-Robots-Tag': 'noindex',
+            'Cache-Control': 'private, max-age=300',
+        });
+        const len = got.res.headers.get('content-length');
+        if (len) res.set('Content-Length', len);
+        if (!got.res.body) return res.end();
+        try { await pipeline(Readable.fromWeb(got.res.body), res); } catch { res.destroy(); }
+        return undefined;
+    }
+
+    r.get('/files/:id/preview', mustSignIn('/files'), async (req, res) => {
+        const row = await drive.ownFile(requesterOf(req), String(req.params.id || ''));
+        return sendPreview(req, res, row);
+    });
+
     r.get('/files/:id/download', mustSignIn('/files'), async (req, res) => {
         const row = await drive.ownFile(requesterOf(req), String(req.params.id || ''));
         if (!row) return notFoundFile(req, res);
@@ -462,6 +496,13 @@ ${shares.length ? html`<h3>Its links</h3><ul class="file-list">${shares.map((sh)
         return share;
     }
 
+    // A single-file share's picture, for whoever may open the share (the same checks as the page; not a download).
+    r.get('/s/:slug/preview', mustSignIn('here', 'A share link still needs an OpenVibe account.'), async (req, res) => {
+        const share = await openShare(req, res);
+        if (!share) return undefined;
+        return sendPreview(req, res, share.file_id ? await fileById(share) : null);
+    });
+
     r.get('/s/:slug', mustSignIn('here', 'A share link still needs an OpenVibe account: uploads, downloads and reports here all belong to a signed-in person.'), async (req, res) => {
         const share = await openShare(req, res);
         if (!share) return undefined;
@@ -474,6 +515,7 @@ ${shares.length ? html`<h3>Its links</h3><ul class="file-list">${shares.map((sh)
                 crumbs: [{ label: 'Home', href: '/' }, { label: 'Shared file' }],
                 body: html`<h1>${file.name}</h1>
 ${notice(`Shared with you by ${share.owner_username ? `@${share.owner_username}` : 'an OpenVibe member'}.`, 'info')}
+${rules.isPreviewable(file.content_type) ? html`<figure class="file-preview"><img src="/s/${share.slug}/preview?w=640" alt="${file.name}" decoding="async"></figure>` : ''}
 ${table(['Size', 'Type', 'Expires', 'Downloads'], [[fileSize(file), file.content_type, time(share.expires_at), String(Number(share.downloads) || 0)]])}
 <p><a class="sc-btn sc-primary" href="/s/${share.slug}/download">Download</a></p>
 ${mine ? '' : reportForm(share)}
