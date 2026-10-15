@@ -533,7 +533,7 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
     r.use(express.urlencoded({ extended: false, limit: '64kb' }));
 
     // ── Uploads: /upload, /u/:id, /me/videos (server/video/upload-routes.js) ──
-    const uploadCard = mountUploadPages(r, { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt });
+    const uploadCard = mountUploadPages(r, { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt, playlistForm, upNext });
 
     // ── Playlist page pieces ───────────────────────────────
     async function playlistForm(req, kind, id) {
@@ -552,6 +552,41 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
 </form></details>`;
     }
 
+    /**
+     * What a playlist item shows and where it plays: a Live recording or clip through the cached Live client, an upload
+     * from video_uploads (by its seq). Null when it is gone or nobody but its owner may watch it any more.
+     */
+    async function itemInfo(kind, itemId) {
+        if (kind === 'upload') {
+            const row = await ctx.videoUploads.bySeq(itemId);
+            if (!row || row.status !== 'ready' || row.state !== 'active' || row.visibility === 'private') return null;
+            return { href: `/u/${row.id}`, title: row.title, thumb: httpsUrl(row.thumbnail_url), channel: row.owner_username || null, duration: row.duration_seconds, icon: 'fa-film' };
+        }
+        let info = null;
+        try {
+            const data = kind === 'vod' ? await live.vod(itemId) : await live.clip(itemId);
+            info = data && (kind === 'vod' ? data.vod : data.clip);
+        } catch { info = null; }
+        if (!info) return null;
+        return {
+            href: kind === 'vod' ? `/v/${itemId}` : `/c/${itemId}`,
+            title: info.title || (kind === 'clip' ? 'Clip' : 'Stream recording'),
+            thumb: httpsUrl(info.thumbnail_url),
+            channel: info.username || info.display_name || null,
+            duration: info.duration_seconds != null ? info.duration_seconds : info.duration,
+            icon: kind === 'clip' ? 'fa-scissors' : 'fa-video',
+        };
+    }
+
+    /** Where an item plays, without asking anyone (the up-next link and "Play all"). */
+    async function itemHref(kind, itemId) {
+        if (kind === 'upload') {
+            const row = await ctx.videoUploads.bySeq(itemId);
+            return row ? `/u/${row.id}` : null;
+        }
+        return kind === 'vod' ? `/v/${itemId}` : `/c/${itemId}`;
+    }
+
     async function upNext(req, kind, id) {
         const listId = String(req.query.list || '');
         if (!playlists.isPlaylistId(listId)) return { html: '', nextUrl: null };
@@ -562,13 +597,11 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
         const next = idx >= 0 ? items[idx + 1] : items[0];
         if (!next) return { html: '', nextUrl: null };
         const nextId = Number(next.item_id);
-        const nextUrl = `${next.kind === 'vod' ? '/v/' : '/c/'}${nextId}?list=${encodeURIComponent(pl.id)}`;
-        let label = `${next.kind === 'vod' ? 'VOD' : 'Clip'} ${nextId}`;
-        try {
-            const data = next.kind === 'vod' ? await live.vod(nextId) : await live.clip(nextId);
-            const info = data && (next.kind === 'vod' ? data.vod : data.clip);
-            if (info && info.title) label = info.title;
-        } catch { /* Live unavailable: keep the id label */ }
+        const nextHref = await itemHref(next.kind, nextId);
+        if (!nextHref) return { html: '', nextUrl: null };
+        const nextUrl = `${nextHref}?list=${encodeURIComponent(pl.id)}`;
+        const info = await itemInfo(next.kind, nextId);
+        const label = (info && info.title) || `${next.kind === 'vod' ? 'VOD' : next.kind === 'clip' ? 'Clip' : 'Video'} ${nextId}`;
         return {
             html: html`<section class="ovv-panel ovv-upnext" aria-label="Up next"><p class="ovv-upnext-in">Up next in <a href="/playlists/${pl.id}">${pl.title}</a></p><a class="ovv-upnext-link" href="${nextUrl}"><i class="fa-solid fa-play" aria-hidden="true"></i> <span>${label}</span></a><p class="ovv-fine">Plays on its own when this one ends.</p></section>`,
             nextUrl,
@@ -1078,30 +1111,23 @@ ${rows.length ? html`<ul class="ovv-playlist-list">${rows.map(playlistRow)}</ul>
         const listLd = [];
         for (const it of items) {
             const itemId = Number(it.item_id);
-            let info = null;
-            try {
-                const data = it.kind === 'vod' ? await live.vod(itemId) : await live.clip(itemId);
-                info = data && (it.kind === 'vod' ? data.vod : data.clip);
-            } catch { info = null; }
+            const info = await itemInfo(it.kind, itemId);
             if (!info) {
                 if (isOwner) rows.push(html`<li class="ovv-item-row ovv-item-row--gone"><div class="ovv-playlist-main"><span class="ovv-item-title">No longer available</span><span class="ovv-meta">${it.kind} ${itemId}</span></div>${itemControls(pl.id, it)}</li>`);
                 continue;
             }
-            const href = it.kind === 'vod' ? `/v/${itemId}` : `/c/${itemId}`;
-            listLd.push({ '@type': 'ListItem', position: listLd.length + 1, url: `${base}${href}`, name: String(info.title || (it.kind === 'vod' ? 'Stream recording' : 'Clip')).slice(0, 110) });
-            const thumb = httpsUrl(info.thumbnail_url);
-            const title = info.title || (it.kind === 'clip' ? 'Clip' : 'Stream recording');
-            const channel = info.username || info.display_name || null;
-            const dur = info.duration_seconds != null ? info.duration_seconds : info.duration;
+            const { href, thumb, title, channel, duration: dur } = info;
+            listLd.push({ '@type': 'ListItem', position: listLd.length + 1, url: `${base}${href}`, name: String(title).slice(0, 110) });
             rows.push(html`<li class="ovv-item-row">
-<a class="ovv-item-media" href="${href}" tabindex="-1" aria-hidden="true">${thumb ? thumbImg(thumb, '132px') : html`<span class="ovv-card-placeholder"><i class="fa-solid ${it.kind === 'clip' ? 'fa-scissors' : 'fa-video'}"></i></span>`}${dur != null ? html`<span class="ovv-dur">${durationLabel(dur)}</span>` : ''}</a>
+<a class="ovv-item-media" href="${href}" tabindex="-1" aria-hidden="true">${thumb ? thumbImg(thumb, '132px') : html`<span class="ovv-card-placeholder"><i class="fa-solid ${info.icon}"></i></span>`}${dur != null ? html`<span class="ovv-dur">${durationLabel(dur)}</span>` : ''}</a>
 <div class="ovv-playlist-main"><a class="ovv-item-title" href="${href}">${title}</a>${channel ? html`<span class="ovv-meta">@${channel}</span>` : ''}</div>
 ${isOwner ? itemControls(pl.id, it) : ''}
 </li>`);
         }
 
         const first = items[0];
-        const playAllHref = first ? `${first.kind === 'vod' ? '/v/' : '/c/'}${Number(first.item_id)}?list=${encodeURIComponent(pl.id)}` : null;
+        const firstHref = first ? await itemHref(first.kind, Number(first.item_id)) : null;
+        const playAllHref = firstHref ? `${firstHref}?list=${encodeURIComponent(pl.id)}` : null;
 
         return page(req, res, {
             index: pl.visibility === 'public',

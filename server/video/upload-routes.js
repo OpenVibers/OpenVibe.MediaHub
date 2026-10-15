@@ -105,7 +105,7 @@ function createUploadApi({ ctx, config }) {
 
 /** The pages; `h` carries the video site's helpers (page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, cards). */
 function mountUploadPages(r, h) {
-    const { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt } = h;
+    const { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt, playlistForm, upNext } = h;
     const up = ctx.videoUploads;
     const cfg = ctx.config.videoUploads;
     const whoOf = (req) => ({ requester: signedIn(req) ? ownerOf(req) : null, staff: isStaff(req) });
@@ -193,6 +193,10 @@ ${fresh.map((x) => html`<tr><td><a href="/u/${x.id}">${x.title}</a></td><td>${st
         const metaParts = [row.ready_at ? html`<time datetime="${row.ready_at}">${dateLabel(row.ready_at)}</time>` : null, row.duration_seconds ? durationLabel(row.duration_seconds) : null, `${Number(row.views) || 0} views`].filter(Boolean);
         const thumb = httpsUrl(row.thumbnail_url);
         if (row.status === 'processing') res.set('Refresh', '15');   // the page reloads itself until Media is done
+        // Playlists (kind upload, by seq): a ready video anyone else may watch can be saved, and ?list= plays the next one.
+        const saveForm = ready && row.state === 'active' && row.visibility !== 'private' && playlistForm ? await playlistForm(req, 'upload', row.seq) : '';
+        const inList = upNext ? await upNext(req, 'upload', row.seq) : { html: '', nextUrl: null };
+        const nextAttr = inList.nextUrl ? html` data-ovv-next="${inList.nextUrl}"` : '';
         return page(req, res, {
             index: listed, noindex: !listed,
             ...(listed ? {} : { cache: cache.htmlHeaders({ private: true }) }),
@@ -205,7 +209,7 @@ ${fresh.map((x) => html`<tr><td><a href="/u/${x.id}">${x.title}</a></td><td>${st
 ${req.query.saved === '1' ? notice('Saved.', 'ok') : ''}${req.query.reported === '1' ? notice('Thanks: the report reached OpenVibe staff.', 'ok') : ''}
 ${row.state === 'hidden' ? notice('Hidden after reports: only you and OpenVibe staff can see it until staff decide.', 'warn') : ''}
 ${row.visibility === 'private' && ready ? notice('Private: only you (and OpenVibe staff) can see this video.', 'info') : ''}
-${ready && vod ? html`<div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline${thumb ? html` poster="${`${thumb}?w=1280&fmt=webp`}"` : ''} src="${fileOf(vod) || ''}" data-ovv-video${hlsAttrs(vod)}>${tracks}</video></div>`
+${ready && vod ? html`<div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline${thumb ? html` poster="${`${thumb}?w=1280&fmt=webp`}"` : ''} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${hlsAttrs(vod)}>${tracks}</video></div>`
         : html`<div class="ovv-player-wrap ovv-processing" role="status">${row.status === 'processing' ? html`<p><i class="fa-solid fa-gear fa-spin" aria-hidden="true"></i> Processing: OpenVibe.Media is making it playable. This page reloads by itself.</p>`
             : row.status === 'failed' ? html`<p>This upload could not be processed. ${row.error || ''}</p>`
                 : html`<p>The upload stopped before the end (${row.parts_received} of ${row.parts_expected} parts). Upload the file again from <a href="/upload">Upload</a>.</p>`}</div>`}
@@ -214,6 +218,7 @@ ${ready && vod ? html`<div class="ovv-player-wrap"><video class="ovv-player" con
 ${channel ? html`<a class="ovv-avatar" href="/@${channel}" aria-hidden="true" tabindex="-1">${channel.slice(0, 1).toUpperCase()}</a>` : ''}
 <div class="ovv-byline-text">${channel ? html`<a class="ovv-channel-name" href="/@${channel}">@${channel}</a>` : ''}
 ${metaParts.length ? html`<span class="ovv-meta">${metaParts.map((p, i) => (i === 0 ? p : [html` · `, p]))}</span>` : ''}</div>
+${saveForm ? html`<div class="ovv-byline-actions">${saveForm}</div>` : ''}
 </div>
 ${row.description ? html`<section class="ovv-panel ovv-description"><p>${row.description}</p></section>` : ''}
 ${aiDone && ai.overview ? html`<section class="ovv-panel" aria-labelledby="h-ai"><h2 id="h-ai">About this video</h2><p>${ai.overview}</p><p class="ovv-fine">Written by AI from the video's sound and pictures (OpenVibe.AI, run on OpenVibe's own servers).</p>
@@ -222,6 +227,7 @@ ${aiDone && ai.segments.length ? html`<details class="ovv-panel ovv-transcript">
 ${manage && ready && ai && (ai.status === 'queued' || ai.status === 'running') ? html`<p class="ovv-fine">Captions, chapters and a summary are being made by OpenVibe.AI.</p>` : ''}
 </div>
 <aside class="ovv-side">
+${inList.html}
 ${manage ? html`<section class="ovv-panel ovv-owner" aria-labelledby="h-owner"><h2 id="h-owner">Manage this video</h2>
 <form class="ovv-owner-form" method="post" action="/u/${row.id}/manage">
 <label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="120" value="${row.title}" required></label>

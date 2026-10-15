@@ -277,13 +277,16 @@ never answer there. Only https URLs from Live (player source, thumbnails, the th
 else is dropped.
 
 Playlists: 100 per owner and 500 items per playlist, from `MEDIAHUB_VIDEO_PLAYLISTS_MAX` and
-`MEDIAHUB_VIDEO_PLAYLIST_ITEMS_MAX`. A playlist holds Live ids only (`vod` or `clip` plus the numeric id); the
+`MEDIAHUB_VIDEO_PLAYLIST_ITEMS_MAX`. A playlist holds a kind and a number: a Live id (`vod` or `clip`) or an upload's number (`upload`, the `seq` of
+`video_uploads`, migration 0010); the
 watch pages fetch the cards through the cached Live client, and an item Live no longer answers is "No longer
 available" to the owner and hidden for everyone else. "Play all" starts the first item with `?list=<id>`, and each
 watch page opened with `?list=` shows "Up next" and advances when the video ends. A playlist may also be owned by
 an app, agent or service through the API below; its public page attributes it "Curated by an app".
 
-A channel page (`/@user`) lists that person's public playlists (newest twelve). Not built yet: uploads.
+A channel page (`/@user`) lists that person's public playlists (newest twelve). An upload's watch page has the same
+"Save to playlist" form (a ready video that is not private) and the same "Up next" panel; an upload that is made
+private, hidden or removed drops out of everyone's playlists (its owner's list shows "No longer available").
 
 ## Pages
 
@@ -323,7 +326,7 @@ session, an app/agent/service token needs the capability the route names, and pu
 | `GET /api/v1/video/playlists/:id` | owner (private too); anyone for public/unlisted; app with `video.playlist.read` for others' public/unlisted | one playlist and its items |
 | `PATCH /api/v1/video/playlists/:id` | owner, or app with `video.playlist.manage` | rename / describe / change visibility |
 | `DELETE /api/v1/video/playlists/:id` | owner, or app with `video.playlist.manage` | delete it (its items go with it) |
-| `POST /api/v1/video/playlists/:id/items` | owner, or app with `video.playlist.manage` | add one `{ kind: 'vod'|'clip', id }` |
+| `POST /api/v1/video/playlists/:id/items` | owner, or app with `video.playlist.manage` | add one `{ kind: 'vod'|'clip'|'upload', id }` |
 | `PATCH /api/v1/video/playlists/:id/items` | owner, or app with `video.playlist.manage` | reorder: the full ordered list `{ items: [{ kind, id }, …] }` |
 | `DELETE /api/v1/video/playlists/:id/items/:kind/:itemId` | owner, or app with `video.playlist.manage` | remove one |
 | `GET /api/v1/video/users/:username/playlists` | anyone | that person's public playlists, newest first, `limit` (default 20, max 50) and an opaque `cursor` |
@@ -362,7 +365,8 @@ curl -sS https://openvibe.video/api/v1/video/playlists/<id>
 ```
 
 `owner` is `{ kind: 'user', username }` for a person, or `{ kind: 'app' | 'agent' | 'service' }` otherwise. Items
-are Live ids only; the watch pages resolve their display fields lazily through the cached Live client.
+are Live ids (`vod`, `clip`) or upload numbers (`upload`); the watch pages resolve their display fields lazily, through
+the cached Live client for Live's and from `video_uploads` for uploads.
 
 ## Account export and deletion (ADR-033)
 
