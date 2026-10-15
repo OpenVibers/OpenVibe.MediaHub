@@ -644,8 +644,8 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
             description: 'Videos people upload, and stream recordings and clips from OpenVibe.Live with AI chapters and captions.',
             body: html`<header class="ovv-hero"><p class="ovv-eyebrow"><i class="fa-solid fa-circle-play" aria-hidden="true"></i> OpenVibe.Video</p>
 <h1>Watch, upload, stream.</h1>
-<p class="ovv-lede">Videos people upload here, and the recordings and clips of streams on OpenVibe.Live with AI chapters and captions. Sign in with your OpenVibe account to upload: it plays everywhere, on your channel at openvibe.video/@you.</p>
-<p class="ovv-hero-actions"><a class="ovv-btn ovv-btn--primary" href="/upload"><i class="fa-solid fa-upload" aria-hidden="true"></i> Upload a video</a> <a class="ovv-btn" href="${livePublic}/">Live now on OpenVibe.Live</a> <a class="ovv-btn" href="${livePublic}/docs/go-live-in-your-browser">Go live from your browser</a></p></header>
+<p class="ovv-lede">Upload a video or record your camera or screen right here, and OpenVibe.AI adds captions, chapters and a summary you can use as the description. The recordings and clips of streams on OpenVibe.Live are here too. Everything you post plays on your channel at openvibe.video/@you.</p>
+<p class="ovv-hero-actions"><a class="ovv-btn ovv-btn--primary" href="/upload"><i class="fa-solid fa-upload" aria-hidden="true"></i> Upload a video</a> <a class="ovv-btn" href="/record"><i class="fa-solid fa-video" aria-hidden="true"></i> Record in the browser</a> <a class="ovv-btn" href="${livePublic}/">Live now on OpenVibe.Live</a> <a class="ovv-btn" href="${livePublic}/docs/go-live-in-your-browser">Go live from your browser</a></p></header>
 ${uploaded.length ? html`<section class="ovv-section" aria-labelledby="h-uploads"><h2 id="h-uploads">Latest uploads</h2>${grid(uploaded.map(uploadCard))}</section>` : ''}
 <section class="ovv-section" aria-labelledby="h-vods"><h2 id="h-vods">Latest recordings</h2>${grid(vodItems.map(feedCard), 'No recordings yet.')}</section>
 <section class="ovv-section" aria-labelledby="h-clips"><h2 id="h-clips">Latest clips</h2>${grid(clipItems.map(feedCard), 'No clips yet.')}</section>`,
@@ -1188,8 +1188,8 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
         const links = (items, kind) => items.map((it) => ({ title: it.title || (kind === 'vod' ? 'Recording' : 'Clip'), url: `${base}/${kind === 'vod' ? 'v' : 'c'}/${it.id}` }));
         return res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(seo.llmsTxt({
             name: SITE_NAME,
-            summary: 'Public watch pages for stream recordings and clips from OpenVibe.Live.',
-            details: 'AI chapters and captions are rendered on the watch pages. Uploads are not open.',
+            summary: 'Videos people upload or record in the browser, and stream recordings and clips from OpenVibe.Live, each with a watch page.',
+            details: 'AI captions, chapters and a summary are made for uploads (OpenVibe.AI, on OpenVibe\'s own servers) and rendered on the watch pages, as are the AI chapters and captions of stream recordings. Uploading needs a signed-in OpenVibe account; /upload and /record.',
             sections: [
                 { title: 'Start here', links: [{ title: SITE_NAME, url: `${base}/` }] },
                 { title: 'Latest recordings', links: links(vodItems, 'vod') },

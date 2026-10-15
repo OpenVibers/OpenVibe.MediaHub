@@ -19,7 +19,8 @@ const cache = require('openvibe-shared/cache-policy');
 const { html, raw, esc } = require('./html');
 
 const NETWORK_URL = 'https://openvibe.network';
-const SITE_NAME = 'OpenVibe.MediaHub';
+// openvibe.download's name (the service is MediaHub; Video and Pics name themselves in their own pages).
+const SITE_NAME = 'OpenVibe.Download';
 const TAGLINE = 'Your files, shared on your terms.';
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 // The product's own navigation: one entry per public page it serves.

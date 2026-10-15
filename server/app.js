@@ -172,7 +172,7 @@ async function createApp(opts = {}) {
     // through a proxy, so only loopback can reach it even though nginx proxies this path.
     app.use('/internal/events', account.consumer({ send: createSender({ config, fetchImpl }) }));
 
-    { const legal = require('openvibe-shared/legal'); app.get(legal.PATHS, legal.handler({ id: 'media-hub', service: 'media-hub', host: 'openvibe.download', name: 'OpenVibe.MediaHub', profile: 'ugc' })); }
+    { const legal = require('openvibe-shared/legal'); app.get(legal.PATHS, legal.handler({ id: 'media-hub', service: 'media-hub', host: 'openvibe.download', name: 'OpenVibe.Download', profile: 'ugc' })); }
 
     // ── Static assets (content-hashed ?v= → immutable) ──────
     app.use('/shared', require('openvibe-shared/serve').handler());

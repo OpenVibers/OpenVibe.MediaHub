@@ -38,7 +38,7 @@ const BOOST = /<script src="\/shared\/boost\.js\?v=[0-9a-f]{12}" data-main="#mai
         assert.strictEqual(r.status, 200);
         const head = r.text.slice(0, r.text.indexOf('</head>'));
         assert.strictEqual((r.text.match(/<title>/g) || []).length, 1, 'exactly one <title>');
-        assert.ok(head.includes('<title>OpenVibe.MediaHub: Your files, shared on your terms.</title>'), 'home title');
+        assert.ok(head.includes('<title>OpenVibe.Download: Your files, shared on your terms.</title>'), 'home title');
         assert.ok(head.includes('<link rel="canonical" href="https://openvibe.download/">'), 'canonical');
         assert.ok(head.includes('<meta name="robots" content="index, follow">'), 'robots');
         const ld = [...head.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])['@type']);
@@ -61,7 +61,7 @@ const BOOST = /<script src="\/shared\/boost\.js\?v=[0-9a-f]{12}" data-main="#mai
         const r = await t.get('/');
         assert.strictEqual(r.status, 200, r.text.slice(0, 300));
         assert.match(r.headers.get('content-type'), /^text\/html/);
-        assert.ok(r.text.includes('OpenVibe.MediaHub'), 'the service name is on the page');
+        assert.ok(r.text.includes('OpenVibe.Download'), 'the site name is on the page');
         assert.ok(r.text.includes('Your files, shared on your terms.'), 'the tagline is on the page');
         const h1 = (/<h1[^>]*>([\s\S]*?)<\/h1>/.exec(r.text) || [])[1] || '';
         assert.strictEqual(h1.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(), 'Your files, shared on your terms.', 'the heading is one sentence');

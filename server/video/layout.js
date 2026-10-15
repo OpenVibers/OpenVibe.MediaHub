@@ -19,7 +19,7 @@ const { html, raw, esc, render } = require('../render/html');
 
 const NETWORK_URL = 'https://openvibe.network';
 const SITE_NAME = 'OpenVibe.Video';
-const TAGLINE = 'Stream recordings and clips from OpenVibe.Live';
+const TAGLINE = 'Upload, record and watch, with AI captions and chapters';
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 
 const hashes = new Map();
@@ -36,7 +36,7 @@ const asset = (rel) => `/${rel}?v=${assetVersion(rel)}`;
  *     jsonLd (structured data for the page), image (its share image, an https URL), ogType */
 function renderPage(o) {
     // The front page's title says what the site is (search results show it; at most 60 characters).
-    const title = o.title || (o.path === '/' ? `${SITE_NAME}: recordings and clips from OpenVibe.Live` : SITE_NAME);
+    const title = o.title || (o.path === '/' ? `${SITE_NAME}: upload, record and watch, with AI captions` : SITE_NAME);
     const viewer = o.viewer || { kind: 'anonymous' };
     const signedIn = viewer.kind === 'user';
     const pathNow = o.path || '/';
