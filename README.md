@@ -33,6 +33,10 @@ creates none):
   (openvibe-sdk/account-data, ADR-033).
 - `video_playlists` and `video_playlist_items` — the person's playlists and their ordered Live items
   (`migrations/0003_video_playlists.sql`); the items cascade from their playlist.
+- `telemetry_samples` (`migrations/0005_telemetry.sql`) — requests aggregated by route template, method and status class,
+  never by raw URL; `/shared`, static assets, health, readiness, `/metrics` not counted; one `http.request` sample per key each
+  minute plus active-requests, p95 latency and event-loop-lag gauges (openvibe-sdk 0.46, `platform.telemetry-sample@1`); 14-day
+  rows pruned daily. `server/app.js` builds it (`createHttpTelemetry`); `server/index.js` flushes it every minute and on stop.
 
 ## Does not own
 
