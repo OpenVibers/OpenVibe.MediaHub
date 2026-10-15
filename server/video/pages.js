@@ -48,6 +48,19 @@ function httpsUrl(u) {
 }
 
 /**
+ * A card's thumbnail: openvibe.media's thumbnails come in sizes (Media's /t/:id?w=&fmt=, Fabric F4), so a card asks for
+ * a WebP near the width it shows (about 13 KB for 480 px instead of the 24 KB 640 px JPEG). Any other image is used
+ * as it is. `sizes` is the card's rendered width in the grid (one column on a phone, five across a desktop).
+ */
+const THUMB_WIDTHS = [320, 480, 640];
+function thumbImg(url, sizes) {
+    if (!/^https:\/\/openvibe\.media\/t\/[^?#\s]+$/.test(url || '')) return html`<img src="${url}" alt="" loading="lazy">`;
+    const srcset = THUMB_WIDTHS.map((w) => `${url}?w=${w}&fmt=webp ${w}w`).join(', ');
+    return html`<img src="${`${url}?w=480&fmt=webp`}" srcset="${srcset}" sizes="${sizes}" alt="" loading="lazy">`;
+}
+const CARD_SIZES = '(max-width: 520px) calc(100vw - 32px), (max-width: 820px) 45vw, 240px';
+
+/**
  * An item's playable file. Live's `file_url` is always the file; its `playback_url` is the HLS playlist when Media has
  * one (Live T4 step 5), so it is only the fallback for answers from before `file_url` existed.
  */
@@ -313,7 +326,7 @@ function meta(parts) {
 function card(o) {
     const channel = o.channel ? html`<a href="${o.channelHref}">@${o.channel}</a>` : null;
     return html`<article class="ovv-card">
-<a class="ovv-card-media" href="${o.href}" tabindex="-1" aria-hidden="true">${o.thumb ? html`<img src="${o.thumb}" alt="" loading="lazy">` : html`<span class="ovv-card-placeholder"><i class="fa-solid ${o.kind === 'clip' ? 'fa-scissors' : 'fa-video'}"></i></span>`}${o.duration ? html`<span class="ovv-dur">${o.duration}</span>` : ''}${o.badge ? html`<span class="ovv-tag">${o.badge}</span>` : ''}</a>
+<a class="ovv-card-media" href="${o.href}" tabindex="-1" aria-hidden="true">${o.thumb ? thumbImg(o.thumb, CARD_SIZES) : html`<span class="ovv-card-placeholder"><i class="fa-solid ${o.kind === 'clip' ? 'fa-scissors' : 'fa-video'}"></i></span>`}${o.duration ? html`<span class="ovv-dur">${o.duration}</span>` : ''}${o.badge ? html`<span class="ovv-tag">${o.badge}</span>` : ''}</a>
 <div class="ovv-card-body">
 <h3 class="ovv-card-title"><a href="${o.href}">${o.title}</a></h3>
 ${meta([channel, o.date ? html`<time datetime="${o.iso}">${o.date}</time>` : null])}
@@ -1062,7 +1075,7 @@ ${rows.length ? html`<ul class="ovv-playlist-list">${rows.map(playlistRow)}</ul>
             const channel = info.username || info.display_name || null;
             const dur = info.duration_seconds != null ? info.duration_seconds : info.duration;
             rows.push(html`<li class="ovv-item-row">
-<a class="ovv-item-media" href="${href}" tabindex="-1" aria-hidden="true">${thumb ? html`<img src="${thumb}" alt="" loading="lazy">` : html`<span class="ovv-card-placeholder"><i class="fa-solid ${it.kind === 'clip' ? 'fa-scissors' : 'fa-video'}"></i></span>`}${dur != null ? html`<span class="ovv-dur">${durationLabel(dur)}</span>` : ''}</a>
+<a class="ovv-item-media" href="${href}" tabindex="-1" aria-hidden="true">${thumb ? thumbImg(thumb, '132px') : html`<span class="ovv-card-placeholder"><i class="fa-solid ${it.kind === 'clip' ? 'fa-scissors' : 'fa-video'}"></i></span>`}${dur != null ? html`<span class="ovv-dur">${durationLabel(dur)}</span>` : ''}</a>
 <div class="ovv-playlist-main"><a class="ovv-item-title" href="${href}">${title}</a>${channel ? html`<span class="ovv-meta">@${channel}</span>` : ''}</div>
 ${isOwner ? itemControls(pl.id, it) : ''}
 </li>`);

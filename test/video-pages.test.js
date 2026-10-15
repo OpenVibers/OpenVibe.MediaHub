@@ -230,6 +230,10 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('/v/101'));
         assert.ok(r.text.includes('/c/201'));
         assert.ok(!r.text.includes('/v/102'), 'the unlisted VOD is not in a list');
+        // openvibe.media thumbnails are asked for in sizes: a 480 px WebP by default, 320/480/640 in the srcset.
+        assert.ok(r.text.includes('src="https://openvibe.media/t/101.jpg?w=480&amp;fmt=webp"'), 'a WebP thumbnail near the card width');
+        assert.ok(r.text.includes('https://openvibe.media/t/101.jpg?w=320&amp;fmt=webp 320w, https://openvibe.media/t/101.jpg?w=480&amp;fmt=webp 480w, https://openvibe.media/t/101.jpg?w=640&amp;fmt=webp 640w'), 'the srcset ladder');
+        assert.ok(/sizes="\(max-width: 520px\) calc\(100vw - 32px\)/.test(r.text), 'sizes follows the grid');
     });
 
     await check('the VOD watch page has a player, both tracks, chapters and a transcript', async () => {
