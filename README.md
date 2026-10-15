@@ -209,6 +209,16 @@ pages read Live's public JSON API server-side, signed out (Live already applies 
     (`POST /api/v1/videos/recordings`, then `PUT /api/v1/videos/:id/chunks/:n`, up to 9 MB each) to the same kind of
     Media VOD.
   - Stop completes it like an upload. Size and quota are checked as it grows, and a recording is private by default.
+- **AI edit** (`server/video/ai-edit.js`, migration `0009_video_ai.sql`):
+  - Every few minutes, OpenVibe.AI's `media.analyze` runs on each finished upload or recording. It reads the video
+    through Media's signed URL (private ones too), runs locally (whisper.cpp, the local model) and never uses a paid
+    model (`allow_paid: false`).
+  - The transcript becomes captions (`/u/:id/captions.vtt`, a track) and a transcript panel; the highlights become
+    chapters (`/u/:id/chapters.vtt` and a list); the overview becomes an "About this video" summary, labelled as AI,
+    which the owner can make the description in one click.
+  - A run still going is joined again by its key; a failure retries with backoff, 4 attempts at most.
+  - Needs `OV_AI_INTERNAL_URL` and the Network grant `[media-hub, ai.run.create, openvibe.ai, ['media.analyze']]`;
+    `VIDEO_AI_ANALYSIS=off` turns it off.
 
 The player plays Media's segment timeline (`hls_url`, HLS) when the recording has one: natively where the browser
 plays HLS, otherwise through hls.js, self-hosted at `public/vendor/hls.light.min.js` (hls.js 1.7.3, Apache-2.0, loaded

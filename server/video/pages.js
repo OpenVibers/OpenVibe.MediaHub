@@ -533,7 +533,7 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
     r.use(express.urlencoded({ extended: false, limit: '64kb' }));
 
     // ── Uploads: /upload, /u/:id, /me/videos (server/video/upload-routes.js) ──
-    const uploadCard = mountUploadPages(r, { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card });
+    const uploadCard = mountUploadPages(r, { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt });
 
     // ── Playlist page pieces ───────────────────────────────
     async function playlistForm(req, kind, id) {

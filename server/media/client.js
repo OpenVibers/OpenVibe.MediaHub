@@ -112,6 +112,8 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
         /** Close the file: Media remuxes, probes, makes the thumbnail and announces it. A big file takes minutes. */
         vodComplete: (vodId) => call(`/${Number(vodId)}/complete`, { root: vods(), method: 'POST', json: {}, timeoutMs: 30 * 60_000 }),
         vodGet: (vodId) => call(`/${Number(vodId)}`, { root: vods() }),
+        /** A signed URL to read the VOD's file for `ttlS` seconds (private ones too): what OpenVibe.AI reads it through. */
+        vodSignedUrl: (vodId, ttlS = 3600) => call(`/${Number(vodId)}/signed-url?ttl=${Number(ttlS)}`, { root: vods() }),
         vodUpdate: (vodId, patch) => call(`/${Number(vodId)}`, { root: vods(), method: 'PUT', json: patch }),
         vodDelete: (vodId) => call(`/${Number(vodId)}`, { root: vods(), method: 'DELETE' }),
 

@@ -72,7 +72,8 @@ async function createApp(opts = {}) {
     const pics = createPics({ s, media, config, log });
     // OpenVibe.Video uploads (server/video/uploads.js): Media VODs in this tenant.
     const videoUploads = require('./video/uploads').createUploads({ s, media, config, log });
-    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, pics, videoUploads, fetchImpl, log };
+    const videoAi = opts.videoAi || require('./video/ai-edit').createAiEdit({ s, media, config, fetchImpl, log });
+    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, pics, videoUploads, videoAi, fetchImpl, log };
     // IndexNow for openvibe.video: off without a key; a malformed key warns and stays off rather than stopping the site.
     ctx.indexnow = opts.indexnow || (() => {
         const warn = (...a) => (log.warn || console.warn)(...a);

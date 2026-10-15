@@ -134,6 +134,7 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
                 v.status = 'ready';
                 return json(res, 200, { vod: vodPublicOf(v) });
             }
+            if (parts[5] === 'signed-url' && req.method === 'GET') return json(res, 200, { url: `https://openvibe.media/v/vod-${v.id}.mp4?exp=9999999999&sig=stand-in`, expires_in: Number(url.searchParams.get('ttl')) || 3600 });
             if (parts.length === 5 && req.method === 'GET') return json(res, 200, vodPublicOf(v));
             if (parts.length === 5 && req.method === 'PUT') { Object.assign(v, JSON.parse(raw.toString('utf8') || '{}')); return json(res, 200, vodPublicOf(v)); }
             if (parts.length === 5 && req.method === 'DELETE') { v.deleted = true; deletedVods.push(v.id); return json(res, 200, { ok: true }); }
