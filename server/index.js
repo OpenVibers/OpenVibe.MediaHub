@@ -70,9 +70,11 @@ async function start() {
         cutTimer.unref();
         timers.push(cutTimer);
     }
+    // MediaHub's own events (server/events-outbox.js): the relay is off without the events URL and client secret.
+    ctx.eventsOutbox.start();
     // Public uploads in OpenVibe.Search (server/video/search-index.js; off without MEDIAHUB_SEARCH_URL).
     ctx.videoSearch.start();
-    createLifecycle({ server, ctx, timers, extra: [() => videoIndexNow.stop(), () => ctx.videoSearch.stop(), () => { if (subscriptions) subscriptions.stop(); }] });
+    createLifecycle({ server, ctx, timers, extra: [() => videoIndexNow.stop(), () => ctx.videoSearch.stop(), () => ctx.eventsOutbox.stop(), () => { if (subscriptions) subscriptions.stop(); }] });
     return { server, ctx };
 }
 

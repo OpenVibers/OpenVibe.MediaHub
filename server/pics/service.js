@@ -44,7 +44,7 @@ const cleanText = (v, max) => String(v == null ? '' : v).replace(/\r\n?/g, '\n')
 /** A hash with too few or too many set bits is a near-flat picture: its dHash is noise, not an identity. */
 const distinctive = (h) => { const n = images.distance(h, '0000000000000000'); return n >= 8 && n <= 56; };
 
-function createPics({ s, media, config, log = console }) {
+function createPics({ s, media, config, log = console, events = null }) {
     const cfg = config.pics;
     const addressKey = crypto.createHash('sha256').update(`pics-address:${config.oauth.clientSecret || 'dev'}`).digest();
 
@@ -115,7 +115,8 @@ function createPics({ s, media, config, log = console }) {
         if (!main.ok) return { ok: false, status: 503, code: 'pics.storage', detail: 'The picture could not be stored just now. Try again in a minute.' };
         const thumb = await putObject(prepared.thumb.buffer, { mime: 'image/webp', name: `${id}-thumb.webp`, owner: who && who.requester, anonymous });
         const deleteKey = anonymous ? crypto.randomBytes(18).toString('base64url') : null;
-        const row = await store.insertImage(s, {
+        // The row and its mediahub.picture.uploaded event (signed-in uploads only) commit together.
+        const row = await s.tx(async () => { const r = await store.insertImage(s, {
             id, slug: slug(), owner: anonymous ? null : who.requester,
             delete_key_hash: deleteKey ? images.sha256(Buffer.from(deleteKey)) : null,
             title: base, description: cleanText(description, LIMITS.description),
@@ -124,6 +125,8 @@ function createPics({ s, media, config, log = console }) {
             bytes: prepared.image.buffer.length, animated: prepared.image.animated,
             sha256: prepared.sha256, source_sha256: prepared.sourceSha256, dhash: prepared.dhash, created_at: s.iso(),
         });
+        if (events && !anonymous) await events.pictureUploaded(r);
+        return r; });
         return { ok: true, image: row, ...(deleteKey ? { deleteKey } : {}) };
     }
 
