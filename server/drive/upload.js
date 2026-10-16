@@ -40,8 +40,8 @@ function createUploads({ s, media, config, service, log = console }) {
     const nowIso = () => new Date(s.now()).toISOString();
 
     /** Media's object is `uploading`; the session is Media's, the row is ours. */
-    async function startSession({ owner, name, size, contentType, folderId = null }) {
-        const room = await service.uploadAllowed(owner, size);
+    async function startSession({ owner, name, size, contentType, folderId = null, perDay }) {
+        const room = await service.uploadAllowed(owner, size, perDay ? { perDay } : {});
         if (!room.ok) return room;
         if (folderId && !await service.ownFolder(owner, folderId)) {
             return { ok: false, code: 'folder.not_found', detail: 'That folder does not exist.' };

@@ -110,6 +110,8 @@ function load(env = process.env) {
             bytes: size(env.MEDIAHUB_QUOTA_BYTES, 25 * GB),             // 25 GB stored (the owner's Q10: free accounts)
             maxFileBytes: size(env.MEDIAHUB_MAX_FILE_BYTES, 2 * GB),    // 2 GB per file
             uploadsPerDay: size(env.MEDIAHUB_UPLOADS_PER_DAY, 50),      // 50 uploads a day (UTC)
+            syncUploadsPerDay: size(env.MEDIAHUB_SYNC_UPLOADS_PER_DAY, 1000),   // uploads a day through sync keys (backups)
+            syncKeys: size(env.MEDIAHUB_SYNC_KEYS_MAX, 10),               // live sync keys per person
             maxShares: size(env.MEDIAHUB_MAX_SHARES, 20),               // 20 live share links
         },
         // A plain <input type=file> form posts the whole file in one request; past this the page offers the

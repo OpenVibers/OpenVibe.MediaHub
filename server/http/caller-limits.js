@@ -44,6 +44,11 @@ const BUDGETS = {
     'media-hub.upload.part': { minute: 300, hour: 5_000 },
     'media-hub.upload.complete': { minute: 30, hour: 300 },
     'media-hub.folder.create': { minute: 20, hour: 120 },
+    'media-hub.sync_key.create': { minute: 5, hour: 20 },
+    // A backup through a sync key starts and finishes many small files: its own, larger numbers (the daily file cap
+    // and the storage quota still hold).
+    'media-hub.sync.upload.start': { minute: 120, hour: 1_000 },
+    'media-hub.sync.upload.complete': { minute: 120, hour: 1_000 },
     'media-hub.share.create': { minute: 20, hour: 200 },
     'media-hub.playlist.create': { minute: 30, hour: 300 },
     'media-hub.playlist.write': { minute: 120, hour: 1_200 },

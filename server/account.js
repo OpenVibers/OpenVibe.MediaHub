@@ -47,6 +47,8 @@ const TABLES = [
     // people's reports on them cascade). The bytes are Media VODs, deleted with extraErase.
     { table: 'video_upload_reports', subject: 'reporter', value: AS_REQUESTER, file: 'video_upload_reports.json' },
     { table: 'video_uploads', subject: 'owner', value: AS_REQUESTER, file: 'videos.json' },
+    // Sync keys (migrations/0011_sync_keys.sql): their names and dates, never the key's hash.
+    { table: 'mh_sync_keys', subject: 'owner', value: AS_REQUESTER, file: 'sync_keys.json', columns: ['id', 'name', 'prefix', 'created_at', 'last_used_at', 'revoked_at'] },
 ];
 
 function createAccount({ db, config, media, log = console }) {
