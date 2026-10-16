@@ -63,7 +63,9 @@ async function start() {
         aiTimer.unref();
         timers.push(aiTimer);
     }
-    createLifecycle({ server, ctx, timers, extra: [() => videoIndexNow.stop(), () => { if (subscriptions) subscriptions.stop(); }] });
+    // Public uploads in OpenVibe.Search (server/video/search-index.js; off without MEDIAHUB_SEARCH_URL).
+    ctx.videoSearch.start();
+    createLifecycle({ server, ctx, timers, extra: [() => videoIndexNow.stop(), () => ctx.videoSearch.stop(), () => { if (subscriptions) subscriptions.stop(); }] });
     return { server, ctx };
 }
 

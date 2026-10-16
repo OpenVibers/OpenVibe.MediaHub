@@ -84,6 +84,10 @@ On other services it calls:
 
 - OpenVibe.Network `identity.subject.resolve` — to turn the usernames a share names into canonical account subjects.
 - OpenVibe.Events `events.subscription.manage` — to create its account export/deletion subscriptions at boot.
+- OpenVibe.Search `search.document.write` — OpenVibe.Video's public, ready uploads as Search documents (owner
+  `media-hub`, type `video`, `/u/<id>`) through the owner API ([server/video/search-index.js](server/video/search-index.js),
+  `MEDIAHUB_SEARCH_URL`; a minute after boot, hourly, and 30 s after an edit; a private, hidden or removed upload is
+  tombstoned; `video_search_state`, migration 0013).
 
 ## Why v1 is narrow
 
