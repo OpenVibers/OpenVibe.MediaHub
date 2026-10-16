@@ -52,12 +52,21 @@ function readBody(req, cap) {
 }
 
 function createApi(ctx) {
-    const { config, s, principal, limits, drive, uploads } = ctx;
+    const { config, s, principal, limits, drive, uploads, syncKeys } = ctx;
     const r = asyncRouter();
     const problem = (req, res, status, code, detail) => contracts.http.sendProblem(res, status, code, { detail, ctx: req.ov });
 
     r.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
-    r.use(principal.middleware);
+    // A sync key (server/drive/syncKeys.js) acts for its owner here and nowhere else: this router is the drive's API,
+    // so the key never reaches Pics, Video or the pages. Anything else goes through the shared principal.
+    r.use(async (req, res, next) => {
+        const header = String(req.headers.authorization || '');
+        if (!header.startsWith('Bearer ovdl_') || !syncKeys) return principal.middleware(req, res, next);
+        const owner = await syncKeys.resolve(header.slice(7).trim());
+        if (!owner) return problem(req, res, 401, 'sync_key.invalid', 'This sync key is not valid: it was revoked or never issued. Make a new one at openvibe.download/sync.');
+        req.principal = { kind: 'user', requester: owner, project: null, viaSession: false, viaSyncKey: true, username: null, role: 'user' };
+        return next();
+    });
 
     /**
      * The chunked upload's part body is raw bytes, so it is mounted before the JSON parser: express must never try
@@ -152,7 +161,14 @@ function createApi(ctx) {
     });
 
     /** Start an upload. The bytes follow through PUT /uploads/:id/parts/:n (see the page's script). */
-    r.post('/files', person, limits.budget('media-hub.upload.start'), async (req, res) => {
+    /** A sync key's uploads are counted on their own budget (server/http/caller-limits.js). */
+    const uploadBudget = (name) => {
+        const plain = limits.budget(`media-hub.upload.${name}`);
+        const sync = limits.budget(`media-hub.sync.upload.${name}`);
+        return (req, res, next) => (req.principal.viaSyncKey ? sync : plain)(req, res, next);
+    };
+
+    r.post('/files', person, uploadBudget('start'), async (req, res) => {
         const owner = personOf(req);
         const b = req.body || {};
         const size = Number(b.size);
@@ -160,7 +176,8 @@ function createApi(ctx) {
         const contentType = rules.normalizeType(b.content_type) || 'application/octet-stream';
         const folderId = b.folder_id ? String(b.folder_id) : null;
         if (folderId && !rules.isFolderId(folderId)) return problem(req, res, 422, 'folder.invalid', 'folder_id must be a folder id.');
-        const out = await uploads.startSession({ owner, name, size, contentType, folderId });
+        const perDay = req.principal.viaSyncKey ? config.quotas.syncUploadsPerDay : undefined;
+        const out = await uploads.startSession({ owner, name, size, contentType, folderId, perDay });
         if (!out.ok) return problem(req, res, refused(out.code), out.code, out.detail);
         res.set('Location', `/api/v1/uploads/${out.upload.id}`);
         return res.status(201).json({
@@ -198,7 +215,13 @@ function createApi(ctx) {
     });
 
     // ── Shares ──────────────────────────────────────────────
-    r.post('/shares', person, limits.budget('media-hub.share.create'), async (req, res) => {
+    /** A share link is made by the person themself (signed in, or their Network token), never by a sync key. */
+    function notSyncKey(req, res, next) {
+        if (!req.principal.viaSyncKey) return next();
+        return problem(req, res, 403, 'sync_key.not_allowed', 'A sync key backs files up; share links are made at openvibe.download.');
+    }
+
+    r.post('/shares', person, notSyncKey, limits.budget('media-hub.share.create'), async (req, res) => {
         const b = req.body || {};
         const fileId = b.file_id ? String(b.file_id) : null;
         const folderId = b.folder_id ? String(b.folder_id) : null;
@@ -217,7 +240,7 @@ function createApi(ctx) {
         });
     });
 
-    r.delete('/shares/:slug', person, async (req, res) => {
+    r.delete('/shares/:slug', person, notSyncKey, async (req, res) => {
         const row = await drive.revokeShare(personOf(req), String(req.params.slug || ''));
         if (!row) return problem(req, res, 404, 'share.not_found', 'No such share.');
         return res.status(204).end();
@@ -240,7 +263,7 @@ function createApi(ctx) {
         return res.json({ upload: out.upload });
     });
 
-    r.post('/uploads/:id/complete', person, limits.budget('media-hub.upload.complete'), async (req, res) => {
+    r.post('/uploads/:id/complete', person, uploadBudget('complete'), async (req, res) => {
         const out = await uploads.complete(personOf(req), String(req.params.id || ''));
         if (!out.ok) {
             const status = out.code === 'upload.not_found' ? 404 : (out.code === 'file.quota' ? 429 : 409);

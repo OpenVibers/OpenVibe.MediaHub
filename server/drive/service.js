@@ -65,8 +65,11 @@ function createService({ s, media, identity, config, log = console }) {
 
     // ── Limits ──────────────────────────────────────────────
 
-    /** Room for one more file of `size` bytes, and for uploads not to run past the day's cap. */
-    async function uploadAllowed(owner, size) {
+    /**
+     * Room for one more file of `size` bytes, and for uploads not to run past the day's cap. `perDay` is a larger cap
+     * for a sync key's uploads (a backup sends many files); storage stays capped the same.
+     */
+    async function uploadAllowed(owner, size, { perDay = config.quotas.uploadsPerDay } = {}) {
         if (!Number.isInteger(size) || size < 1) return { ok: false, code: 'file.invalid_size', detail: 'A file needs a size of at least one byte.' };
         if (size > config.quotas.maxFileBytes) {
             return { ok: false, code: 'file.too_large', detail: `One file may be at most ${rules.formatBytes(config.quotas.maxFileBytes)}. This one is ${rules.formatBytes(size)}.` };
@@ -76,8 +79,8 @@ function createService({ s, media, identity, config, log = console }) {
             return { ok: false, code: 'file.quota', detail: `Your drive holds ${rules.formatBytes(used)} of ${rules.formatBytes(config.quotas.bytes)}. This file needs ${rules.formatBytes(size)} more; delete something first.` };
         }
         const today = await store.uploadsToday(s, owner, dayOf(s.now()));
-        if (today >= config.quotas.uploadsPerDay) {
-            return { ok: false, code: 'file.daily_limit', detail: `You have uploaded ${config.quotas.uploadsPerDay} files today (the most one person may). Try again tomorrow.` };
+        if (today >= perDay) {
+            return { ok: false, code: 'file.daily_limit', detail: `You have uploaded ${perDay} files today (the most one person may). Try again tomorrow.` };
         }
         return { ok: true };
     }

@@ -90,7 +90,8 @@ On other services it calls:
 Public file hosting is the riskiest surface on the network: OpenVibe.Media has no malware or CSAM scanning yet. So
 OpenVibe.Download v1 is a **private drive**, not a public host:
 
-- Every upload and every file page needs a signed-in OpenVibe person. Apps, agents and anonymous callers cannot upload.
+- Every upload and every file page needs a signed-in OpenVibe person, or a **sync key** that person made for their own
+  backups (below). Apps, agents and anonymous callers cannot upload.
 - Files are private to their owner: another person's file id answers 404.
 - A share link (`/s/<slug>`, 24 random url-safe characters) expires in 1 hour to 30 days (7 by default), can be revoked,
   counts downloads, and is one of three kinds: for anyone **signed in** with the link (the default), for **named**
@@ -299,7 +300,23 @@ private, hidden or removed drops out of everyone's playlists (its owner's list s
 | `/safety` | anyone | what is not allowed, how reports work, abuse@openvibe.network |
 | `/updates` | anyone | what shipped |
 
-## API (`/api/v1`, a signed-in person only)
+## Backups: sync keys and `openvibe-download`
+
+A person keeps a folder on their computer backed up in their drive with the `openvibe-download` command
+(openvibe-sdk 0.49.0, `openvibe-sdk/download`): `openvibe-download sync ~/Documents --to Backups/laptop` sends what is
+new or changed (same size and sha256 is skipped), keeps the folder tree, and with `--delete` removes drive files whose
+local copy is gone. It authenticates with a **sync key** made on `/sync` (`OPENVIBE_DOWNLOAD_KEY`):
+
+- `ovdl_` and 43 url-safe characters, shown once; only its sha256 is stored (`mh_sync_keys`, migration 0011), with
+  the first 12 characters to tell keys apart. 10 live keys per person (`MEDIAHUB_SYNC_KEYS_MAX`).
+- It acts for its owner on the drive's `/api/v1` only (the router checks it before the shared principal): files,
+  folders, uploads and usage. Share links answer 403 `sync_key.not_allowed`, and Pics and Video never see it.
+- Its uploads have their own daily cap (`MEDIAHUB_SYNC_UPLOADS_PER_DAY`, 1,000, against the browser's 50) and their
+  own request budgets (`media-hub.sync.upload.start|complete`, 120 a minute, 1,000 an hour); storage and the per-file
+  size are capped the same. A revoked or unknown key is 401 `sync_key.invalid`.
+- The account export lists keys without their hashes; deleting the account deletes them.
+
+## API (`/api/v1`, a signed-in person, or their sync key)
 
 | Route | |
 |---|---|

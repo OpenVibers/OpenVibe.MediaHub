@@ -58,7 +58,7 @@ const SAFETY_RULES = [
 const REPORT_NOTE = 'Every share page has a Report form. Three different people reporting a share — or one report of illegal content — suspends it at once and puts it in front of OpenVibe staff.';
 
 function createPageRoutes(ctx) {
-    const { config, s, drive, uploads, media } = ctx;
+    const { config, s, drive, uploads, media, syncKeys } = ctx;
     const r = asyncRouter();
     // The pages' forms are web forms (no JavaScript): urlencoded text, and one multipart file upload whose body the
     // upload route reads itself. The JSON parser is deliberately absent here.
@@ -225,6 +225,7 @@ ${folder ? html`<input type="hidden" name="folder" value="${folder.id}">` : ''}
             scripts: ['js/upload.js'],
             body: html`<h1>${folder ? folder.name : 'Your files'}</h1>
 ${usageBar(await drive.usage(owner))}
+<p class="small"><a href="/sync">Back up a folder from your computer</a></p>
 ${folder ? html`<p><a href="/files">← All files</a></p>` : ''}
 <section aria-labelledby="h-upload">${uploadForm(folder)}</section>
 <section aria-labelledby="h-folders"><h2 id="h-folders">Folders</h2>
@@ -702,6 +703,63 @@ ${it.file ? html`<p><b>${it.file.name}</b> · ${rules.formatBytes(it.file.size)}
         body: html`<h1>Staff only</h1><p class="muted">Restoring or removing a share is for OpenVibe staff — a Network role of <code>admin</code> or <code>global_mod</code>.</p>`,
     }, signedIn(req) ? 403 : 401);
 
+    // ── Backups: sync keys for the openvibe-download command ──
+    const SYNC_COMMAND = 'npx -y -p https://codeload.github.com/OpenVibers/OpenVibe.SDK/tar.gz/refs/tags/v0.49.0 openvibe-download';
+    const syncCrumbs = [{ label: 'Home', href: '/' }, { label: 'Your files', href: '/files' }, { label: 'Back up a folder', href: '/sync' }];
+    const keyState = (k) => (k.revoked_at ? `revoked ${time(k.revoked_at)}` : k.last_used_at ? html`last used ${time(k.last_used_at)}` : 'not used yet');
+
+    r.get('/sync', mustSignIn('/sync', 'A backup goes into your own drive, so it needs your OpenVibe account.'), async (req, res) => {
+        const keys = await syncKeys.list(requesterOf(req));
+        return page(req, res, {
+            title: 'Back up a folder',
+            crumbs: syncCrumbs,
+            body: html`<h1>Back up a folder from your computer</h1>
+<p class="sc-prose">The <code>openvibe-download</code> command keeps a folder on your computer copied into your drive: run it once, or on a schedule, and it sends only what is new or changed. It needs Node.js 20 or newer and a sync key from this page.</p>
+<section aria-labelledby="h-steps"><h2 id="h-steps">How</h2>
+<ol class="prose">
+<li>Make a sync key below, named after the computer it is for. Copy it: it is shown once.</li>
+<li>On that computer, put it in the environment as <code>OPENVIBE_DOWNLOAD_KEY</code>.</li>
+<li>Run <code>${SYNC_COMMAND} sync ~/Documents --to Backups/laptop</code></li>
+</ol>
+<p class="small muted">Add <code>--dry-run</code> to see what it would send, and <code>--delete</code> to also remove drive files whose local copy is gone (without it, a backup only ever adds). Files keep their folders; a file is sent again when its size or contents change. Uploads through a sync key count against your ${rules.formatBytes(config.quotas.bytes)} and up to ${config.quotas.syncUploadsPerDay} files a day.</p></section>
+<section aria-labelledby="h-keys"><h2 id="h-keys">Your sync keys</h2>
+${keys.length ? html`<ul class="file-list">${keys.map((k) => html`<li class="file"><span class="file-main"><span class="file-name">${k.name}</span><span class="file-meta small muted"><code>${k.prefix}…</code> · made ${time(k.created_at)} · ${keyState(k)}</span></span>
+${k.revoked_at ? '' : html`<form class="inline" method="post" action="/sync/keys/${k.id}/revoke"><button class="sc-btn" type="submit">Revoke</button></form>`}</li>`)}</ul>` : html`<p class="muted">No sync keys yet.</p>`}
+<form class="inline" method="post" action="/sync/keys">
+<label for="key-name">Computer</label> <input id="key-name" name="name" type="text" maxlength="${syncKeys.NAME_MAX}" placeholder="laptop" required> <button class="sc-btn sc-primary" type="submit">Make a sync key</button>
+</form>
+<p class="small muted">A key can read and fill your drive and nothing else: it cannot make share links, and it does nothing on OpenVibe.Pics or OpenVibe.Video. Revoke it here the moment a computer is lost.</p></section>`,
+        });
+    });
+
+    r.post('/sync/keys', mustSignIn('/sync'), budgeted('media-hub.sync_key.create'), async (req, res) => {
+        if (!sameSite(req, res, '/sync')) return undefined;
+        const out = await syncKeys.create(requesterOf(req), (req.body || {}).name);
+        if (!out.ok) {
+            return page(req, res, {
+                title: 'No key was made', crumbs: syncCrumbs,
+                body: html`<h1>No key was made</h1>${notice(out.detail, 'warn')}<p><a class="sc-btn" href="/sync">Back</a></p>`,
+            }, out.code === 'sync_key.limit' ? 429 : 422);
+        }
+        res.set('Cache-Control', 'no-store');
+        return page(req, res, {
+            title: 'Your new sync key', crumbs: syncCrumbs,
+            body: html`<h1>Your sync key for ${out.row.name}</h1>
+${notice('Copy it now: it is not shown again. Anyone holding it can read and fill your drive.', 'warn')}
+<p><code class="sync-key">${out.key}</code></p>
+<p class="sc-prose">On that computer:</p>
+<pre class="sync-command"><code>export OPENVIBE_DOWNLOAD_KEY=${out.key}
+${SYNC_COMMAND} sync ~/Documents --to Backups/${out.row.name.replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 40) || 'computer'}</code></pre>
+<p><a class="sc-btn" href="/sync">Done</a></p>`,
+        });
+    });
+
+    r.post('/sync/keys/:id/revoke', mustSignIn('/sync'), async (req, res) => {
+        if (!sameSite(req, res, '/sync')) return undefined;
+        await syncKeys.revoke(requesterOf(req), String(req.params.id || ''));
+        return res.redirect(303, '/sync');
+    });
+
     // ── Safety ───────────────────────────────────────────────
     r.get('/safety', (req, res) => page(req, res, {
         index: true, cache: PUBLIC_CACHE,
@@ -715,9 +773,9 @@ ${notice('This is a private drive with share links. It is not a place to hide, a
 <ul class="prose">${SAFETY_RULES.map((x) => html`<li>${x}</li>`)}</ul></section>
 <section class="sc-sec" aria-labelledby="h-uploads"><h2 id="h-uploads">Who can do what</h2>
 <ul class="prose">
-<li><b>Every upload needs a signed-in OpenVibe account.</b> There is no anonymous upload and no app or service token that can post a file here.</li>
+<li><b>Every upload needs a signed-in OpenVibe account</b>, or a sync key its owner made on <a href="/sync">/sync</a> for their own backups. There is no anonymous upload and no app or service token that can post a file here.</li>
 <li><b>Every file is private to the person who uploaded it.</b> Nobody else sees it in a list, and nobody else can download it.</li>
-<li><b>Every download needs a signed-in OpenVibe account too.</b> A share link does not open a file on its own: the person opening it must be signed in, and the share page says who shared it.</li>
+<li><b>A share link is for signed-in people unless its owner makes it public.</b> A signed-in link needs the person opening it to be signed in; a public link opens for anyone who has it. Every share page says who shared it and has a Report form.</li>
 <li><b>A share can be limited to named OpenVibe usernames</b>, expire in an hour to seven days, and be revoked at any moment — after which it stops working at once.</li>
 <li><b>Downloads never happen in a page.</b> A file is always sent as an attachment with a no-sniff header, and a type that is not on a short safe list is sent as an opaque blob. Uploaded HTML and SVG are never rendered.</li>
 </ul></section>
