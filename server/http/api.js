@@ -52,7 +52,7 @@ function readBody(req, cap) {
 }
 
 function createApi(ctx) {
-    const { config, s, principal, limits, drive, uploads, syncKeys } = ctx;
+    const { config, s, principal, limits, drive, uploads, syncKeys, drops } = ctx;
     const r = asyncRouter();
     const problem = (req, res, status, code, detail) => contracts.http.sendProblem(res, status, code, { detail, ctx: req.ov });
 
@@ -81,7 +81,59 @@ function createApi(ctx) {
         return res.json({ part: out.part, size: out.size });
     });
 
+    // ── Drops: uploads without an account (server/drive/drops.js; off until MEDIAHUB_DOWNLOAD_ANONYMOUS=1) ──
+    // The session is proven by X-Drop-Token (shown when it starts), never by the caller's address.
+    const dropToken = (req) => String(req.get('x-drop-token') || '');
+    const dropRefused = (req, res, out) => problem(req, res, out.status || (out.code === 'upload.not_found' ? 404 : 422), out.code, out.detail);
+    r.put('/drops/:id/parts/:n', limits.budget('media-hub.upload.part'), async (req, res) => {
+        if (!drops || !drops.enabled()) return problem(req, res, 403, 'drop.off', 'Uploads without an account are not open yet.');
+        const got = await readBody(req, rawCap(config));
+        if (got.error === 'too_large') return problem(req, res, 413, 'upload.part_too_large', `A part is at most ${config.partBytes} bytes.`);
+        if (got.error) return problem(req, res, 400, 'upload.interrupted', 'The part did not arrive complete.');
+        const out = await drops.putPart(dropToken(req), String(req.params.id || ''), req.params.n, got.buffer);
+        if (!out.ok) return dropRefused(req, res, out);
+        return res.json({ part: out.part, size: out.size });
+    });
+
     r.use(express.json({ limit: '64kb' }));
+
+    r.post('/drops', limits.budget('media-hub.drop.start'), async (req, res) => {
+        if (!drops) return problem(req, res, 403, 'drop.off', 'Uploads without an account are not open yet.');
+        const b = req.body || {};
+        const out = await drops.start({ ip: req.ip, name: b.name, size: b.size, contentType: b.content_type });
+        if (!out.ok) return dropRefused(req, res, out);
+        return res.status(201).json({
+            upload: out.upload, token: out.token,
+            note: 'Send each part with PUT /api/v1/drops/:id/parts/:n and the header X-Drop-Token, then POST /api/v1/drops/:id/complete.',
+        });
+    });
+
+    r.get('/drops/:id', async (req, res) => {
+        if (!drops || !drops.enabled()) return problem(req, res, 403, 'drop.off', 'Uploads without an account are not open yet.');
+        const out = await drops.status(dropToken(req), String(req.params.id || ''));
+        if (!out.ok) return dropRefused(req, res, out);
+        return res.json({ upload: out.upload });
+    });
+
+    r.post('/drops/:id/complete', limits.budget('media-hub.upload.complete'), async (req, res) => {
+        if (!drops || !drops.enabled()) return problem(req, res, 403, 'drop.off', 'Uploads without an account are not open yet.');
+        const out = await drops.complete({ token: dropToken(req), id: String(req.params.id || '') });
+        if (!out.ok) return dropRefused(req, res, out);
+        const d = out.drop;
+        return res.status(201).json({
+            drop: { slug: d.slug, url: `${config.baseUrl}/d/${d.slug}`, name: d.name, size: Number(d.size), content_type: d.content_type, created_at: d.created_at },
+            delete_key: out.deleteKey,
+            delete_url: `${config.baseUrl}/d/${d.slug}/delete?key=${out.deleteKey}`,
+            note: `Keep the delete link: it is shown once. The file is kept ${drops.config.idleDays} days after its last download.`,
+        });
+    });
+
+    r.delete('/drops/:id', async (req, res) => {
+        if (!drops || !drops.enabled()) return problem(req, res, 403, 'drop.off', 'Uploads without an account are not open yet.');
+        const out = await drops.abort(dropToken(req), String(req.params.id || ''));
+        if (!out.ok) return dropRefused(req, res, out);
+        return res.status(204).end();
+    });
 
     const personOf = (req) => (req.principal.kind === 'user' ? req.principal.requester : null);
 
