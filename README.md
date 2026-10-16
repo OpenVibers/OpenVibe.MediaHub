@@ -148,6 +148,10 @@ An open, ad-free picture host: drop a picture, get a link to share or embed. Bui
   `/i/<slug>.<ext>` (the direct link) and `/i/<slug>/thumb.webp` read them from Media and serve them with `nosniff`, a
   sandboxing CSP, `Access-Control-Allow-Origin: *` and a 10-minute public cache, so the Media id never reaches a
   browser and a hidden picture leaves shared caches within minutes.
+- **Resize and convert** ([server/pics/variants.js](server/pics/variants.js)): `/i/<slug>/w/<width>.<webp|avif|jpg|png>`
+  at 320, 640, 1280, 1920 or 2560 px (never wider than the picture), made here with sharp from the stored copy
+  (Media's own variants stop at 640 px), kept in a 64 MB LRU and served with the direct link's 10-minute cache; an
+  animated picture keeps its frames as WebP. The picture page lists them; `pics.image.variant` budgets the misses.
 - **Unlisted:** `/i/<slug>` (8 random characters) is reachable by its link only, noindex, never listed; robots.txt
   disallows `/i/` and `/a/`. The page has the links to share and embed: the page, the direct link, Markdown, BBCode
   and HTML.

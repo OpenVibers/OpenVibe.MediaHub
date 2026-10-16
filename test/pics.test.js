@@ -129,6 +129,22 @@ function multipart(fields, file) {
             assert.ok((await t.get(`/i/${slug}`, { headers: PICS, as: kim })).text.includes('Delete this picture'));
         });
 
+        await check('resize and convert: ladder widths up to the picture\'s own, in WebP, AVIF, JPEG or PNG', async () => {
+            const page = await t.get(`/i/${slug}`, { headers: PICS });
+            assert.ok(page.text.includes('Resize and convert') && page.text.includes(`href="/i/${slug}/w/640.webp"`));
+            assert.ok(!page.text.includes(`/i/${slug}/w/1280.`), 'never wider than the picture (800 px)');
+            const webp = await t.get(`/i/${slug}/w/320.webp`, { headers: PICS });
+            assert.strictEqual(webp.status, 200);
+            assert.strictEqual(webp.headers.get('content-type'), 'image/webp');
+            assert.strictEqual(webp.headers.get('cache-control'), 'public, max-age=600, s-maxage=600');
+            const meta = await sharp(webp.buffer).metadata();
+            assert.deepStrictEqual([meta.format, meta.width], ['webp', 320]);
+            const png = await t.get(`/i/${slug}/w/640.png`, { headers: PICS });
+            assert.deepStrictEqual([png.status, (await sharp(png.buffer).metadata()).format], [200, 'png']);
+            assert.strictEqual((await t.get(`/i/${slug}/w/1280.webp`, { headers: PICS })).status, 400, 'wider than the picture');
+            assert.strictEqual((await t.get(`/i/${slug}/w/500.webp`, { headers: PICS })).status, 400, 'off the ladder');
+        });
+
         await check('the plain form uploads without JavaScript; a write from another site is refused', async () => {
             const png = await photo('#a3c').png().toBuffer();
             const form = multipart({ title: 'From the form' }, { name: 'pink.png', type: 'image/png', buffer: png });

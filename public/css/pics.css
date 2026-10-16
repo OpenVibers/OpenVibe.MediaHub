@@ -136,3 +136,11 @@
   .ovp-drop-inner { padding: 28px 14px 24px; }
 }
 @media (prefers-reduced-motion: reduce) { .ovp-tile img, .ovp-drop { transition: none; } .ovp-tile:hover img { transform: none; } }
+
+/* Resize and convert: formats by width, each cell a link. Scrolls on its own on a narrow screen. */
+.ovp-sizes { overflow-x: auto; }
+.ovp-size-table { border-collapse: collapse; min-width: 320px; font-variant-numeric: tabular-nums; }
+.ovp-size-table th, .ovp-size-table td { padding: 8px 12px; border-bottom: 1px solid var(--border, #1f2d47); text-align: left; white-space: nowrap; }
+.ovp-size-table thead th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint, #7386a3); font-weight: 700; }
+.ovp-size-table tbody th { font-weight: 700; }
+.ovp-size-table a { display: inline-block; min-width: 44px; padding: 4px 0; }

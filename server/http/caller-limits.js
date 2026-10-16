@@ -56,6 +56,8 @@ const BUDGETS = {
     'media-hub.playlist.write': { minute: 120, hour: 1_200 },
     // OpenVibe.Pics (server/pics): a burst of pictures dropped at once, but not a script emptying a disk into it.
     'pics.image.upload': { minute: 30, hour: 300 },
+    // Resize and convert (server/pics/variants.js): each new variant is decoded and encoded here.
+    'pics.image.variant': { minute: 60, hour: 600 },
     'pics.image.write': { minute: 60, hour: 600 },
     'pics.album.create': { minute: 10, hour: 100 },
     'pics.report.create': { minute: 5, hour: 30 },
