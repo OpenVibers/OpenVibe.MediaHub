@@ -58,7 +58,7 @@ const SAFETY_RULES = [
 const REPORT_NOTE = 'Every share page has a Report form. Three different people reporting a share — or one report of illegal content — suspends it at once and puts it in front of OpenVibe staff.';
 
 function createPageRoutes(ctx) {
-    const { config, s, drive, uploads, media, syncKeys } = ctx;
+    const { config, s, drive, uploads, media, syncKeys, drops } = ctx;
     const r = asyncRouter();
     // The pages' forms are web forms (no JavaScript): urlencoded text, and one multipart file upload whose body the
     // upload route reads itself. The JSON parser is deliberately absent here.
@@ -151,7 +151,7 @@ ${notice(p && p.detail ? p.detail : 'You are over the limit for this.', 'warn')}
             eyebrow: `${SITE_NAME} · a private drive`,
             title: 'Your files,',
             accent: 'shared on your terms.',
-            lede: `A private drive for your files, ${rules.formatBytes(config.quotas.bytes)} free, with share links you control: for named people, for anyone signed in, or a public download page anyone with the link can use. Uploading needs a signed-in OpenVibe account.`,
+            lede: `A private drive for your files, ${rules.formatBytes(config.quotas.bytes)} free, with share links you control: for named people, for anyone signed in, or a public download page anyone with the link can use.${drops.enabled() ? ` No account? Upload a file up to ${rules.formatBytes(drops.config.maxBytes)} below and get a public link.` : ' Uploading needs a signed-in OpenVibe account.'}`,
             actions: signedIn(req)
                 ? [{ label: 'Your files', href: '/files', primary: true }, { label: 'The safety rules', href: '/safety' }]
                 : [{ label: 'Sign in with OpenVibe', href: '/auth/login?next=%2Ffiles', primary: true }, { label: 'The safety rules', href: '/safety' }],
@@ -161,16 +161,18 @@ ${notice(p && p.detail ? p.detail : 'You are over the limit for this.', 'warn')}
             index: true, cache: signedIn(req) ? null : PUBLIC_CACHE,
             jsonLd: homeJsonLd(config),
             styles: [showcase.STYLESHEET],
+            scripts: drops.enabled() && !signedIn(req) ? ['js/drop.js'] : [],
             body: html`${raw(hero)}
+${drops.enabled() && !signedIn(req) ? dropForm() : ''}
 ${raw(showcase.features({
                 title: 'What you get',
                 lede: 'A drive, not a locker: everything here is yours, and everything you hand out can be taken back.',
                 items: [
                     { icon: 'ov:upload', title: 'Your own drive', text: `Folders and files, private to you: ${rules.formatBytes(config.quotas.bytes)} stored, up to ${rules.formatBytes(config.quotas.maxFileBytes)} in one file.` },
-                    { icon: 'ov:link', title: 'Share links', text: 'One link per file or folder, expiring in an hour to seven days, revocable at any moment, with its downloads counted.' },
+                    { icon: 'ov:link', title: 'Share links', text: `One link per file or folder, expiring in an hour to ${rules.EXPIRY_MAX_HOURS / 24} days, revocable at any moment, with its downloads counted.` },
                     { icon: 'ov:account', title: 'You choose who opens it', text: 'Named OpenVibe accounts, anyone signed in, or a public download page for anyone with the link. Uploading always needs a signed-in person.' },
                     { icon: 'ov:shield', title: 'Reports that act', text: REPORT_NOTE },
-                    { icon: 'ov:tools', title: 'A drive with an API', text: 'The same actions over /api/v1: list, upload, share, revoke, and see your usage.' },
+                    { icon: 'ov:tools', title: 'Backups and an API', text: 'Keep a folder on your computer backed up with the openvibe-download command, and do everything else over /api/v1.' },
                     { icon: 'ov:db', title: 'Bytes in OpenVibe.Media', text: 'Files are objects in the network\'s own media service; deleting one here asks Media to delete it too.' },
                 ],
             }))}
@@ -180,7 +182,7 @@ ${raw(showcase.steps({
                 items: [
                     { title: 'Sign in', text: 'OpenVibe.Network signs you in. Your session stays in an httpOnly cookie on this site.' },
                     { title: 'Upload', text: 'One request for a file under the single-request limit; a big file goes up in parts with a progress meter. Both need a signed-in person.' },
-                    { title: 'Share', text: 'Make a link that expires in an hour, a day or a week, and optionally name the OpenVibe usernames allowed to open it.' },
+                    { title: 'Share', text: `Make a link that expires in an hour to ${rules.EXPIRY_MAX_HOURS / 24} days, public or for signed-in people, and optionally name the OpenVibe usernames allowed to open it.` },
                     { title: 'Take it back', text: 'Revoke a link and it stops working at once. Delete a file and its shares go with it, and Media is asked to drop the bytes.' },
                 ],
             }))}
@@ -666,6 +668,7 @@ ${notice(out.suspended
         const counts = await ctx.store.staffCounts(s);
         const items = [];
         for (const row of rows) items.push({ row, reports: await drive.reportsFor(row.slug), file: row.file_id ? await fileById(row) : null });
+        const suspendedDrops = await drops.suspended();
         return page(req, res, {
             title: 'Report queue',
             description: 'Share links people reported, for OpenVibe staff to restore or remove.',
@@ -679,7 +682,13 @@ ${it.file ? html`<p><b>${it.file.name}</b> · ${rules.formatBytes(it.file.size)}
 <ul class="report-list small">${it.reports.map((rp) => html`<li><b>${rp.reason}</b> · <code>${rp.reporter}</code> · ${time(rp.created_at)}${rp.note ? html` — ${rp.note}` : ''}</li>`)}</ul>
 <form class="inline" method="post" action="/staff/${it.row.slug}/restore"><button class="sc-btn" type="submit">Restore it</button></form>
 <form class="inline" method="post" action="/staff/${it.row.slug}/remove"><button class="sc-btn" type="submit">Remove the file</button></form>
-</section>`) : html`<p class="muted">Nothing has been reported.</p>`}`,
+</section>`) : html`<p class="muted">Nothing has been reported.</p>`}
+${suspendedDrops.length ? html`<h2>Suspended uploads without an account</h2>${suspendedDrops.map((d) => html`<section class="card staff-item">
+<h3><a href="/d/${d.slug}">/d/${d.slug}</a></h3>
+<p><b>${d.name}</b> · ${rules.formatBytes(Number(d.size))} · ${d.content_type} · ${Number(d.report_count)} report${Number(d.report_count) === 1 ? '' : 's'} · uploaded ${time(d.created_at)} · object <code>${d.object_id}</code></p>
+<form class="inline" method="post" action="/staff/drops/${d.slug}/restore"><button class="sc-btn" type="submit">Restore it</button></form>
+<form class="inline" method="post" action="/staff/drops/${d.slug}/remove"><button class="sc-btn" type="submit">Take it down (and block the file)</button></form>
+</section>`)}` : ''}`,
         });
     });
 
@@ -702,6 +711,113 @@ ${it.file ? html`<p><b>${it.file.name}</b> · ${rules.formatBytes(it.file.size)}
         crumbs: [{ label: 'Home', href: '/' }, { label: 'Report queue' }],
         body: html`<h1>Staff only</h1><p class="muted">Restoring or removing a share is for OpenVibe staff — a Network role of <code>admin</code> or <code>global_mod</code>.</p>`,
     }, signedIn(req) ? 403 : 401);
+
+    // ── Drops: a file uploaded without an account (server/drive/drops.js; off until MEDIAHUB_DOWNLOAD_ANONYMOUS=1) ──
+    const dropForm = () => html`<section class="card upload" aria-labelledby="h-drop" data-drop>
+<h2 id="h-drop">Upload without an account</h2>
+<div class="field"><label for="drop-file">File</label><input id="drop-file" type="file" required></div>
+<p><button class="sc-btn sc-primary" type="button" data-drop-send>Upload and get a link</button></p>
+<p class="small muted">Up to ${rules.formatBytes(drops.config.maxBytes)}, ${drops.config.perDay} files a day. The link is public: anyone who has it can download. The file is kept ${drops.config.idleDays} days after its last download, and you get a delete link once. Read <a href="/safety">the rules</a> first.</p>
+<noscript><p class="small">Uploading without an account needs JavaScript (the file goes up in parts). <a href="/auth/login?next=%2Ffiles">Sign in</a> to upload with a plain form.</p></noscript>
+<progress id="drop-progress" max="100" value="0" hidden></progress>
+<div id="drop-status" class="small" role="status"></div>
+</section>`;
+    const dropCrumbs = (drop) => [{ label: 'Home', href: '/' }, { label: drop ? drop.name : 'A file' }];
+    const dropOff = (req, res) => page(req, res, { title: 'Not found', crumbs: dropCrumbs(null), body: html`<h1>Not found</h1><p class="muted">No file here. <a href="/">OpenVibe.Download</a>.</p>` }, 404);
+    /** The drop behind /d/<slug>: active, or suspended (shown as such); removed or unknown is a 404, or a 410 when it was there. */
+    async function openDrop(req, res) {
+        if (!drops.enabled()) return dropOff(req, res) && null;
+        const drop = await drops.get(req.params.slug);
+        if (!drop) { dropOff(req, res); return null; }
+        if (drop.state === 'removed') {
+            page(req, res, { title: 'The file is gone', crumbs: dropCrumbs(drop), body: html`<h1>This file is gone</h1><p class="muted">It was deleted by its uploader, taken down, or not downloaded for ${drops.config.idleDays} days.</p>` }, 410);
+            return null;
+        }
+        return drop;
+    }
+    const dropReporter = (req) => (signedIn(req) ? requesterOf(req) : drops.addressId(req.ip));
+
+    r.get('/d/:slug', async (req, res) => {
+        const drop = await openDrop(req, res);
+        if (!drop) return undefined;
+        const suspended = drop.state === 'suspended';
+        return page(req, res, {
+            title: `${drop.name} · OpenVibe.Download`,
+            noindex: true, cache: cache.htmlHeaders({ private: true }),
+            crumbs: dropCrumbs(drop),
+            body: html`<h1>${drop.name}</h1>
+${suspended ? notice('This file was reported and is suspended until OpenVibe staff look at it.', 'warn') : notice('Uploaded without an account: OpenVibe does not know who sent it. Download only what you trust.', 'info')}
+${table(['Size', 'Type', 'Uploaded', 'Downloads'], [[rules.formatBytes(Number(drop.size)), drop.content_type, time(drop.created_at), String(Number(drop.downloads) || 0)]])}
+${suspended ? '' : html`<p><a class="sc-btn sc-primary" href="/d/${drop.slug}/download" rel="nofollow">Download</a></p>`}
+<p class="small muted">Kept ${drops.config.idleDays} days after its last download.</p>
+${suspended ? '' : html`<section class="card" aria-labelledby="h-report"><h2 id="h-report">Report this</h2>
+<form method="post" action="/d/${drop.slug}/report">
+<div class="field"><label for="reason">Why?</label><select id="reason" name="reason" required>${rules.REASONS.map((x) => html`<option value="${x}">${rules.REASON_TEXT[x]}</option>`)}</select></div>
+<div class="field"><label for="note">Anything to add? (optional)</label><textarea id="note" name="note" maxlength="500" rows="3"></textarea></div>
+<p><button class="sc-btn" type="submit">Report it</button></p>
+</form><p class="small muted">${REPORT_NOTE}</p></section>`}`,
+        });
+    });
+
+    r.get('/d/:slug/download', async (req, res) => {
+        const drop = await openDrop(req, res);
+        if (!drop) return undefined;
+        if (drop.state !== 'active') return res.redirect(303, `/d/${drop.slug}`);
+        await drops.countDownload(drop);
+        return sendFile(req, res, drop);
+    });
+
+    r.post('/d/:slug/report', async (req, res) => {
+        const drop = await openDrop(req, res);
+        if (!drop) return undefined;
+        if (!sameSite(req, res, `/d/${drop.slug}`)) return undefined;
+        const b = req.body || {};
+        const out = await drops.report(drop, { reporter: dropReporter(req), reason: String(b.reason || ''), note: b.note });
+        return page(req, res, {
+            title: 'Thanks', crumbs: dropCrumbs(drop),
+            body: html`<h1>${out.ok ? 'Thanks: OpenVibe staff will see it' : 'The report did not go through'}</h1>${out.ok ? (out.recorded ? (out.suspended ? notice('The file is suspended until staff decide.', 'ok') : notice('Your report was counted.', 'ok')) : notice('You reported this file already.', 'info')) : notice(out.detail, 'warn')}<p><a class="sc-btn" href="/d/${drop.slug}">Back</a></p>`,
+        }, out.ok ? 200 : 422);
+    });
+
+    r.get('/d/:slug/delete', async (req, res) => {
+        const drop = await openDrop(req, res);
+        if (!drop) return undefined;
+        const key = String(req.query.key || '');
+        return page(req, res, {
+            title: 'Delete this file', noindex: true, cache: cache.htmlHeaders({ private: true }), crumbs: dropCrumbs(drop),
+            body: html`<h1>Delete ${drop.name}?</h1>
+<form method="post" action="/d/${drop.slug}/delete">
+<div class="field"><label for="key">Delete key</label><input id="key" name="key" type="text" value="${key}" required autocomplete="off"></div>
+<p><button class="sc-btn" type="submit">Delete it for good</button></p></form>`,
+        });
+    });
+
+    r.post('/d/:slug/delete', async (req, res) => {
+        const drop = await openDrop(req, res);
+        if (!drop) return undefined;
+        if (!sameSite(req, res, `/d/${drop.slug}`)) return undefined;
+        if (!drops.keyMatches(drop, String((req.body || {}).key || ''))) {
+            return page(req, res, { title: 'Wrong key', crumbs: dropCrumbs(drop), body: html`<h1>That is not this file's delete key</h1><p><a class="sc-btn" href="/d/${drop.slug}/delete">Try again</a></p>` }, 403);
+        }
+        await drops.remove(drop);
+        return page(req, res, { title: 'Deleted', crumbs: dropCrumbs(null), body: html`<h1>Deleted</h1><p class="muted">The file and its link are gone, and OpenVibe.Media was asked to drop the bytes.</p>` });
+    });
+
+    r.post('/staff/drops/:slug/restore', async (req, res) => {
+        if (!signedIn(req) || !staffViewer(req)) return staffOnly(req, res);
+        if (!sameSite(req, res, '/staff')) return undefined;
+        const drop = await drops.get(req.params.slug);
+        if (drop) await drops.restore(drop);
+        return res.redirect(303, '/staff');
+    });
+
+    r.post('/staff/drops/:slug/remove', async (req, res) => {
+        if (!signedIn(req) || !staffViewer(req)) return staffOnly(req, res);
+        if (!sameSite(req, res, '/staff')) return undefined;
+        const drop = await drops.get(req.params.slug);
+        if (drop) await drops.remove(drop, { block: true });
+        return res.redirect(303, '/staff');
+    });
 
     // ── Backups: sync keys for the openvibe-download command ──
     const SYNC_COMMAND = 'npx -y -p https://codeload.github.com/OpenVibers/OpenVibe.SDK/tar.gz/refs/tags/v0.49.0 openvibe-download';
@@ -768,12 +884,12 @@ ${SYNC_COMMAND} sync ~/Documents --to Backups/${out.row.name.replace(/[^A-Za-z0-
         crumbs: [{ label: 'Home', href: '/' }, { label: 'Safety' }],
         styles: [showcase.STYLESHEET],
         body: html`<h1>The rules of OpenVibe.Download</h1>
-${notice('This is a private drive with share links. It is not a place to hide, and nothing here is anonymous.', 'warn')}
+${notice(drops.enabled() ? 'This is a drive with share links, and uploads without an account are counted against the address they came from. It is not a place to hide: reports act on every link.' : 'This is a private drive with share links. It is not a place to hide, and nothing here is anonymous.', 'warn')}
 <section class="sc-sec" aria-labelledby="h-rules"><h2 id="h-rules">What is not allowed</h2>
 <ul class="prose">${SAFETY_RULES.map((x) => html`<li>${x}</li>`)}</ul></section>
 <section class="sc-sec" aria-labelledby="h-uploads"><h2 id="h-uploads">Who can do what</h2>
 <ul class="prose">
-<li><b>Every upload needs a signed-in OpenVibe account</b>, or a sync key its owner made on <a href="/sync">/sync</a> for their own backups. There is no anonymous upload and no app or service token that can post a file here.</li>
+<li><b>Uploads come from a signed-in OpenVibe account</b>, or a sync key its owner made on <a href="/sync">/sync</a> for their own backups${drops.enabled() ? html`, or without an account: up to ${rules.formatBytes(drops.config.maxBytes)}, ${drops.config.perDay} a day per address, with a public page, a delete key shown once, and deleted ${drops.config.idleDays} days after the last download` : ''}. No app or service token can post a file here.</li>
 <li><b>Every file is private to the person who uploaded it.</b> Nobody else sees it in a list, and nobody else can download it.</li>
 <li><b>A share link is for signed-in people unless its owner makes it public.</b> A signed-in link needs the person opening it to be signed in; a public link opens for anyone who has it. Every share page says who shared it and has a Report form.</li>
 <li><b>A share can be limited to named OpenVibe usernames</b>, expire in an hour to seven days, and be revoked at any moment — after which it stops working at once.</li>

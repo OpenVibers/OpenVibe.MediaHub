@@ -27,6 +27,7 @@ const { createKeyStore } = require('./auth/keys');
 const { createSso } = require('./auth/sso');
 const { createPrincipal } = require('./http/principal');
 const { createSyncKeys } = require('./drive/syncKeys');
+const { createDrops } = require('./drive/drops');
 const { createApi } = require('./http/api');
 const { createPageRoutes } = require('./http/pages');
 const { createVideoRoutes } = require('./video/pages');
@@ -75,7 +76,8 @@ async function createApp(opts = {}) {
     const videoUploads = require('./video/uploads').createUploads({ s, media, config, log });
     const videoAi = opts.videoAi || require('./video/ai-edit').createAiEdit({ s, media, config, fetchImpl, log });
     const syncKeys = createSyncKeys({ s, config });
-    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, pics, videoUploads, videoAi, syncKeys, fetchImpl, log };
+    const drops = createDrops({ s, media, config, uploads, log });
+    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, pics, videoUploads, videoAi, syncKeys, drops, fetchImpl, log };
     // IndexNow for openvibe.video: off without a key; a malformed key warns and stays off rather than stopping the site.
     ctx.indexnow = opts.indexnow || (() => {
         const warn = (...a) => (log.warn || console.warn)(...a);

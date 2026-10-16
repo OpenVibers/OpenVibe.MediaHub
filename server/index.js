@@ -51,6 +51,12 @@ async function start() {
         sweep.unref();
         timers.push(sweep);
     }
+    // Drops (uploads without an account) nobody downloaded for MEDIAHUB_DROP_IDLE_DAYS go, hourly, while drops are on.
+    if (config.drops.enabled) {
+        const dropSweep = setInterval(() => { ctx.drops.sweep().then((n) => { if (n) console.log(`[OpenVibe.Download] deleted ${n} idle drop(s)`); }).catch((err) => console.warn('[OpenVibe.Download] drop sweep failed:', err && err.message)); }, 3_600_000);
+        dropSweep.unref();
+        timers.push(dropSweep);
+    }
     // OpenVibe.Video's AI edit (server/video/ai-edit.js): captions, chapters and a summary for finished uploads.
     if (ctx.videoAi.enabled) {
         const aiTimer = setInterval(() => { ctx.videoAi.sweep().catch((err) => console.warn('[OpenVibe.Video] AI sweep failed:', err && err.message)); }, 3 * 60_000);

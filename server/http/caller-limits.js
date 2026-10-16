@@ -45,6 +45,8 @@ const BUDGETS = {
     'media-hub.upload.complete': { minute: 30, hour: 300 },
     'media-hub.folder.create': { minute: 20, hour: 120 },
     'media-hub.sync_key.create': { minute: 5, hour: 20 },
+    // A drop (an upload without an account) started per address: the per-day count and bytes are the drop's own caps.
+    'media-hub.drop.start': { minute: 10, hour: 40 },
     // A backup through a sync key starts and finishes many small files: its own, larger numbers (the daily file cap
     // and the storage quota still hold).
     'media-hub.sync.upload.start': { minute: 120, hour: 1_000 },

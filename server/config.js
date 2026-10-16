@@ -71,6 +71,17 @@ function load(env = process.env) {
             indexnowKey: String(env.INDEXNOW_KEY || '').trim(),
         },
 
+        // Drops (server/drive/drops.js): files uploaded to openvibe.download without an account (the owner's Q10), each
+        // with a public /d/<slug> page and a delete key, kept 30 days after the last download. Off until the DMCA agent
+        // and the CSAM hash-matching account exist (plan T10, with Pics' signed-out uploads): MEDIAHUB_DOWNLOAD_ANONYMOUS=1.
+        drops: {
+            enabled: env.MEDIAHUB_DOWNLOAD_ANONYMOUS === '1',
+            maxBytes: size(env.MEDIAHUB_DROP_MAX_BYTES, 2 * GB),
+            perDay: size(env.MEDIAHUB_DROPS_PER_DAY, 10),            // drops a day per address
+            bytesPerDay: size(env.MEDIAHUB_DROP_BYTES_PER_DAY, 10 * GB),
+            idleDays: Math.max(1, size(env.MEDIAHUB_DROP_IDLE_DAYS, 30)),
+        },
+
         // OpenVibe.Pics (server/pics): picture hosting on openvibe.pics, chosen by Host header like the video host.
         // The bytes are private Media objects, re-encoded here with their metadata stripped and served only through
         // this service (/i/<slug>.<ext>). Signed-out uploads stay off until the DMCA agent and the CSAM

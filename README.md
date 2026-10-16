@@ -300,6 +300,21 @@ private, hidden or removed drops out of everyone's playlists (its owner's list s
 | `/safety` | anyone | what is not allowed, how reports work, abuse@openvibe.network |
 | `/updates` | anyone | what shipped |
 
+## Uploads without an account (drops, off)
+
+The owner's Q10 (MediaFire-style), built and **off** until the DMCA designated agent and the CSAM hash-matching account
+exist (plan T10, the same gate as Pics' signed-out uploads): `MEDIAHUB_DOWNLOAD_ANONYMOUS=1` turns it on.
+
+- The home page (signed out) gets an upload box ([public/js/drop.js](public/js/drop.js)): `POST /api/v1/drops`
+  answers a session and a token, the parts are `PUT /api/v1/drops/:id/parts/:n` with `X-Drop-Token`, and
+  `POST /api/v1/drops/:id/complete` answers the public page `/d/<slug>` and a delete link shown once (the key's sha256 is
+  kept). The token, not the address, holds the session, so a phone that changes network keeps uploading.
+- Up to 2 GB a file, 10 files and 10 GB a day per address (`MEDIAHUB_DROP_*`), an ownerless OpenVibe.Media object,
+  kept 30 days after the last download (an hourly sweep deletes the rest). `mh_drops`, migration 0012.
+- `/d/<slug>`: name, size, downloads, Download (an attachment with the drive's headers), and a Report form. Any report
+  of illegal content, or three distinct ones, suspends it; staff restore it or take it down from `/staff`, and a
+  taken-down drop's sha256 goes on `mh_drop_blocklist`, so the same bytes are refused (451 `drop.blocked`).
+
 ## Backups: sync keys and `openvibe-download`
 
 A person keeps a folder on their computer backed up in their drive with the `openvibe-download` command
