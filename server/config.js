@@ -99,6 +99,19 @@ function load(env = process.env) {
             quotaBytes: size(env.VIDEO_UPLOAD_QUOTA_BYTES, 20 * GB),
             perDay: Math.max(1, size(env.VIDEO_UPLOADS_PER_DAY, 10)),
         },
+        // The AI cut (server/video/cut.js): an edited copy of an upload, made here with ffmpeg one at a time under
+        // nice. VIDEO_CUTS=off turns it off.
+        videoCuts: {
+            enabled: env.VIDEO_CUTS !== 'off',
+            perDay: Math.max(1, size(env.VIDEO_CUTS_PER_DAY, 5)),
+            maxSourceSeconds: Math.max(60, size(env.VIDEO_CUTS_MAX_SOURCE_SECONDS, 3 * 3600)),
+            silenceDb: -Math.abs(Number(env.VIDEO_CUTS_SILENCE_DB) || 40),
+            threads: Math.max(1, size(env.VIDEO_CUTS_THREADS, 2)),
+            nice: Math.min(19, Math.max(0, size(env.VIDEO_CUTS_NICE, 19))),
+            timeoutMs: Math.max(60_000, size(env.VIDEO_CUTS_TIMEOUT_MS, 6 * 3600 * 1000)),
+            ffmpeg: env.FFMPEG_PATH || 'ffmpeg',
+            ffprobe: env.FFPROBE_PATH || 'ffprobe',
+        },
         pics: {
             url: trim(env.MEDIAHUB_PICS_URL || 'https://openvibe.pics'),
             maxImageBytes: size(env.MEDIAHUB_PICS_MAX_IMAGE_BYTES, 20 * MB),

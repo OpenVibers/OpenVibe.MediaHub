@@ -213,6 +213,13 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-description p { white-space: pre-line; margin: 0; }
 .ovv-report fieldset { border: 0; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
 .ovv-radio { display: flex; gap: 8px; align-items: baseline; }
+.ovv-cut-modes { border: 0; padding: 0; margin: 10px 0 12px; display: grid; gap: 8px; }
+.ovv-cut-modes legend { padding: 0; margin-bottom: 4px; font-size: .85rem; font-weight: 700; color: var(--ovv-dim); }
+.ovv-cut-modes .ovv-radio { flex-wrap: wrap; column-gap: 8px; row-gap: 0; }
+.ovv-cut-modes .ovv-fine { flex-basis: 100%; margin: 0 0 0 24px; }
+.ovv-cuts { list-style: none; margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid var(--ovv-line); display: grid; gap: 6px; font-size: .86rem; color: var(--ovv-dim); }
+.ovv-cuts b { color: var(--text-primary, #e6edf7); }
+.ovv-edited-from { margin: 0 0 10px; }
 .ovv-table { width: 100%; border-collapse: collapse; }
 .ovv-table th, .ovv-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--ovv-line); }
 /* Recording (/record) */

@@ -91,7 +91,24 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
         const entry = { method: req.method, path, query: url.search, authorization: req.headers.authorization || null, subject: req.headers['x-ov-subject'] || null, bytes: raw.length };
         requests.push(entry);
         if (state.down) return problem(res, 503, 'media.down', 'Media is restarting');
-        if (!path.startsWith('/api/v2/') && !path.startsWith('/o/') && !path.startsWith('/api/v1/')) return problem(res, 404, 'route.not_found', 'no such route');
+        if (!path.startsWith('/api/v2/') && !path.startsWith('/o/') && !path.startsWith('/api/v1/') && !path.startsWith('/v/')) return problem(res, 404, 'route.not_found', 'no such route');
+
+        // ── A VOD's bytes at its signed address (/v/vod-<id>.mp4?exp=&sig=stand-in, what …/signed-url hands out), with
+        // Range reads, so ffmpeg can read an upload the way it reads one from Media (the AI cut, server/video/cut.js).
+        if (path.startsWith('/v/')) {
+            const v = vods.get(Number((/^\/v\/vod-(\d+)\.mp4$/.exec(path) || [])[1]));
+            if (!v || v.deleted || url.searchParams.get('sig') !== 'stand-in') return problem(res, 404, 'vod.not_found', 'VOD not found');
+            const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ''));
+            if (range && range[1]) {
+                const start = Number(range[1]);
+                const end = range[2] ? Math.min(Number(range[2]), v.bytes.length - 1) : v.bytes.length - 1;
+                if (start >= v.bytes.length) { res.writeHead(416, { 'Content-Range': `bytes */${v.bytes.length}` }); return res.end(); }
+                res.writeHead(206, { 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Range': `bytes ${start}-${end}/${v.bytes.length}`, 'Content-Length': String(end - start + 1) });
+                return res.end(v.bytes.subarray(start, end + 1));
+            }
+            res.writeHead(200, { 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': String(v.bytes.length) });
+            return res.end(req.method === 'HEAD' ? undefined : v.bytes);
+        }
 
         // ── The v1 VOD API OpenVibe.Video uploads use (/api/v1/:app/vods): create, chunks (multipart, appended in
         // order), complete (a probe stand-in: duration from vodState.duration, a thumbnail and the HLS URL), get, put,
