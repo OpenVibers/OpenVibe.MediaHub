@@ -147,6 +147,8 @@ function load(env = process.env) {
         // OpenVibe.Network: SSO (OAuth2 authorization server with PKCE) and its JWKS.
         networkUrl,
         networkInternalUrl: trim(env.OV_NETWORK_INTERNAL_URL || 'http://127.0.0.1:4000'),
+        // OpenVibe.Search's owner API (server/video/search-index.js): public uploads become Search documents. Unset: off.
+        search: { url: trim(env.MEDIAHUB_SEARCH_URL || ''), videoOff: env.MEDIAHUB_VIDEO_SEARCH === 'off' },
         networkIssuer: trim(env.OV_NETWORK_ISSUER || networkUrl),
         // The audience this service's app, agent and service tokens carry.
         audience: env.MEDIAHUB_AUDIENCE || 'openvibe.download',

@@ -277,6 +277,7 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
             if (!(err instanceof UploadError)) throw err;
             return page(req, res, { title: 'Not saved', body: html`<h1>Not saved</h1><p>${err.detail}</p><p><a href="/u/${row.id}">Back</a></p>` }, err.status);
         }
+        if (ctx.videoSearch) ctx.videoSearch.kick();
         return res.redirect(303, `/u/${row.id}?saved=1`);
     });
 
@@ -287,6 +288,7 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
         if (!sameSite(req, res, `/u/${row.id}`)) return undefined;
         if ((req.body || {}).confirm !== '1') return res.redirect(303, `/u/${row.id}`);
         await up.remove(row);
+        if (ctx.videoSearch) ctx.videoSearch.kick();
         return res.redirect(303, '/me/videos');
     });
 
@@ -301,6 +303,7 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
             if (!(err instanceof UploadError)) throw err;
             return page(req, res, { title: 'Not sent', body: html`<h1>Not sent</h1><p>${err.detail}</p><p><a href="/u/${row.id}">Back</a></p>` }, err.status);
         }
+        if (ctx.videoSearch) ctx.videoSearch.kick();
         return res.redirect(303, `/u/${row.id}?reported=1`);
     });
 
