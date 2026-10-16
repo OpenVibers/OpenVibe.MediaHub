@@ -34,6 +34,7 @@ const { ACCESS_COOKIE, REFRESH_COOKIE } = require('../auth/sso');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 const HOME_LIMIT = 10;
+const MIN_HOME_SECONDS = 15;
 const SITEMAP_LIMIT = 30;     // Live's feed page size (its MAX_LIMIT)
 const SITEMAP_PAGES = 5;      // per kind: up to 150 recordings and 150 clips
 const CHANNEL_CLIPS_LIMIT = 12;
@@ -666,10 +667,13 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
     // ── Home ────────────────────────────────────────────────
     r.get('/', async (req, res) => {
         const [vods, clips] = await Promise.all([
-            live.feed({ type: 'vods', limit: HOME_LIMIT }),
+            live.feed({ type: 'vods', limit: HOME_LIMIT + 6 }),
             live.feed({ type: 'clips', limit: HOME_LIMIT }),
         ]);
-        const vodItems = (vods && Array.isArray(vods.items)) ? vods.items : [];
+        // A stream that ended seconds after it started (a test, a dropped connection) is not worth a tile on the front
+        // page; it stays on its channel.
+        const vodItems = ((vods && Array.isArray(vods.items)) ? vods.items : [])
+            .filter((x) => !(Number(x.duration_seconds) > 0 && Number(x.duration_seconds) < MIN_HOME_SECONDS)).slice(0, HOME_LIMIT);
         const clipItems = (clips && Array.isArray(clips.items)) ? clips.items : [];
         const uploaded = await ctx.videoUploads.latest(HOME_LIMIT);
         return page(req, res, {
