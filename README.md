@@ -2,9 +2,10 @@
 
 > Your files, shared on your terms.
 
-**Status:** alpha. One process serves **openvibe.download** (a private drive, live in v1), **openvibe.video** (public
-watch pages and playlists for OpenVibe.Live's stream recordings and clips) and **openvibe.pics** (picture hosting,
-2026-10-15), chosen by Host header.
+**Status:** alpha. One process serves **openvibe.download** (a private drive with share links and folder backup through
+sync keys), **openvibe.video** (uploads and browser recordings with AI captions, chapters and the AI cut, watch pages and
+playlists, and OpenVibe.Live's stream recordings and clips) and **openvibe.pics** (picture hosting with resize, convert
+and alt text, 2026-10-15), chosen by Host header.
 **Port:** 4990 · **Service id:** `media-hub` · **Env prefix:** `MEDIAHUB` · **License:** AGPL-3.0.
 
 ## Purpose
