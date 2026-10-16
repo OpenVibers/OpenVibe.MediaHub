@@ -63,6 +63,13 @@ async function start() {
         aiTimer.unref();
         timers.push(aiTimer);
     }
+    // The AI cut (server/video/cut.js): one edited copy at a time; a cut a restart interrupted is retried once.
+    if (ctx.videoCuts.enabled) {
+        ctx.videoCuts.recover().catch((err) => console.warn('[OpenVibe.Video] cut recovery failed:', err && err.message));
+        const cutTimer = setInterval(() => { ctx.videoCuts.sweep().catch((err) => console.warn('[OpenVibe.Video] cut sweep failed:', err && err.message)); }, 30_000);
+        cutTimer.unref();
+        timers.push(cutTimer);
+    }
     // Public uploads in OpenVibe.Search (server/video/search-index.js; off without MEDIAHUB_SEARCH_URL).
     ctx.videoSearch.start();
     createLifecycle({ server, ctx, timers, extra: [() => videoIndexNow.stop(), () => ctx.videoSearch.stop(), () => { if (subscriptions) subscriptions.stop(); }] });

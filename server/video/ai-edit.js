@@ -34,6 +34,15 @@ function chaptersOf(highlights) {
     return out.slice(0, 30);
 }
 
+/** Highlights as the AI cut's reel wants them: start, end and score, in time order (at most 10). */
+function highlightsOf(highlights) {
+    return (Array.isArray(highlights) ? highlights : [])
+        .filter((h) => h && Number.isFinite(Number(h.start)) && Number.isFinite(Number(h.end)) && Number(h.end) > Number(h.start))
+        .map((h) => ({ start: Math.max(0, Number(h.start)), end: Number(h.end), score: Number(h.score) || 0, excerpt: clean(h.excerpt, 120) }))
+        .sort((a, b) => a.start - b.start)
+        .slice(0, 10);
+}
+
 function createAiEdit({ s, media, config, fetchImpl = globalThis.fetch, log = console }) {
     const url = String(config.ai.internalUrl || '').replace(/\/+$/, '');
     const enabled = Boolean(url && config.oauth.clientSecret && config.ai.videoAnalysis);
@@ -97,6 +106,7 @@ function createAiEdit({ s, media, config, fetchImpl = globalThis.fetch, log = co
                 status: 'done', run_id: r.id || null, error: null, next_at: null,
                 overview: out.overview && out.overview.text ? clean(out.overview.text, 1500) : null,
                 chapters: JSON.stringify(chaptersOf(out.highlights)), segments: JSON.stringify(segments),
+                highlights: JSON.stringify(highlightsOf(out.highlights)),
                 language: out.transcript.language ? clean(out.transcript.language, 8) : null,
             });
         } catch (err) {
@@ -126,9 +136,9 @@ function createAiEdit({ s, media, config, fetchImpl = globalThis.fetch, log = co
         enabled, sweep,
         async forUpload(row) {
             const ai = await s.db.maybe('SELECT * FROM video_upload_ai WHERE upload_id = $1', [row.id]);
-            return ai ? { ...ai, chapters: parse(ai.chapters, []), segments: parse(ai.segments, []) } : null;
+            return ai ? { ...ai, chapters: parse(ai.chapters, []), segments: parse(ai.segments, []), highlights: parse(ai.highlights, null) } : null;
         },
     };
 }
 
-module.exports = { createAiEdit, chaptersOf };
+module.exports = { createAiEdit, chaptersOf, highlightsOf };

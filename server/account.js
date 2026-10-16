@@ -46,6 +46,8 @@ const TABLES = [
     // OpenVibe.Video uploads (migrations/0008_video_uploads.sql): the reports a person filed, then their videos (other
     // people's reports on them cascade). The bytes are Media VODs, deleted with extraErase.
     { table: 'video_upload_reports', subject: 'reporter', value: AS_REQUESTER, file: 'video_upload_reports.json' },
+    // The AI cuts a person asked for (migrations/0015_video_cuts.sql); the edited copies are uploads of their own.
+    { table: 'video_cuts', subject: 'owner', value: AS_REQUESTER, file: 'video_cuts.json' },
     { table: 'video_uploads', subject: 'owner', value: AS_REQUESTER, file: 'videos.json' },
     // Sync keys (migrations/0011_sync_keys.sql): their names and dates, never the key's hash.
     { table: 'mh_sync_keys', subject: 'owner', value: AS_REQUESTER, file: 'sync_keys.json', columns: ['id', 'name', 'prefix', 'created_at', 'last_used_at', 'revoked_at'] },

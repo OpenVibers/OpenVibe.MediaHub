@@ -236,6 +236,21 @@ pages read Live's public JSON API server-side, signed out (Live already applies 
   - A run still going is joined again by its key; a failure retries with backoff, 4 attempts at most.
   - Needs `OV_AI_INTERNAL_URL` and the Network grant `[media-hub, ai.run.create, openvibe.ai, ['media.analyze']]`;
     `VIDEO_AI_ANALYSIS=off` turns it off.
+- **AI cut** (`server/video/cut.js`, migration `0015_video_cuts.sql`): the owner's "AI edit" panel on a finished upload
+  makes an edited copy and never touches the original.
+  - **Cut the pauses** (pauses of 1.5 s or more become half a second, lead-in and tail silence go), **cut tight** (0.7 s
+    or more become 0.3 s), or a **highlights reel** (the best six moments the AI edit found, at most 3 minutes; older
+    AI edits fall back to the chapter starts).
+  - One cut at a time on the host, under `nice 19` with two threads: ffmpeg reads the original through Media's signed
+    URL on `MEDIAHUB_MEDIA_URL`, finds the pauses (`silencedetect` at -40 dB, sound only), re-encodes the kept ranges
+    (trim and concat, H.264 veryfast and AAC, at most 1080 lines; a browser recording may have one keyframe in minutes,
+    so it is not cut on keyframes) as fragmented MP4 on stdout, and sends it to Media in 8 MB pieces as it is made: no
+    file on MediaHub's disk.
+  - The copy is a new private upload of the same person (`video_uploads.edited_from`) through the recording path, so
+    it gets Media's processing, its own AI captions and chapters, and counts toward the daily uploads and the quota.
+  - One waiting or running cut per person, `VIDEO_CUTS_PER_DAY` (5) a day, originals up to
+    `VIDEO_CUTS_MAX_SOURCE_SECONDS` (3 h); a cut a restart interrupted loses its partial copy and is retried once.
+    `POST /u/:id/cut`, `POST /api/v1/videos/:id/cuts` `{ mode }`, `GET …/cuts`; `VIDEO_CUTS=off` turns it off.
 
 The player plays Media's segment timeline (`hls_url`, HLS) when the recording has one: natively where the browser
 plays HLS, otherwise through hls.js, self-hosted at `public/vendor/hls.light.min.js` (hls.js 1.7.3, Apache-2.0, loaded

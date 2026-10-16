@@ -9,6 +9,8 @@
  *   POST /api/v1/videos/:id/complete close the file; Media finishes it in the background → { video: { id, url } }
  *   GET  /u/:id                      the watch page (processing: it says so and reloads itself)
  *   POST /u/:id/manage | /u/:id/delete | /u/:id/report
+ *   POST /u/:id/cut                  the owner queues an AI cut (server/video/cut.js): pauses, tight or highlights
+ *   POST /api/v1/videos/:id/cuts     the same as JSON { mode } → 202 { cut };  GET …/cuts → { cuts }
  *   GET  /me/videos                  your uploads, with their state
  *   GET  /record                     record from the camera or the screen in the browser (public/js/video-record.js)
  *   POST /api/v1/videos/recordings   start: { title, description, visibility, content_type } → { upload }
@@ -100,6 +102,30 @@ function createUploadApi({ ctx, config }) {
         } catch (err) { return problem(res, err); }
     });
 
+    // The AI cut (server/video/cut.js): queue an edited copy, and read how the cuts of an upload are going.
+    const cutWire = (c) => ({
+        id: c.id, mode: c.mode, status: c.status, progress: Number(c.progress) || 0, error: c.error || null,
+        source_seconds: c.source_seconds == null ? null : Number(c.source_seconds), kept_seconds: c.kept_seconds == null ? null : Number(c.kept_seconds),
+        removed_count: c.removed_count == null ? null : Number(c.removed_count),
+        result: c.result_upload_id && c.status === 'done' ? { id: c.result_upload_id, url: `/u/${c.result_upload_id}` } : null,
+        created_at: c.created_at, finished_at: c.finished_at || null,
+    });
+    r.post('/:id/cuts', express.json({ limit: '4kb' }), async (req, res) => {
+        if (!guard(req, res)) return undefined;
+        const row = await own(req, res);
+        if (!row) return undefined;
+        try {
+            const cut = await ctx.videoCuts.request(row, who(req), String((req.body || {}).mode || 'pauses'));
+            return res.status(202).json({ cut: cutWire(cut) });
+        } catch (err) { return problem(res, err); }
+    });
+    r.get('/:id/cuts', async (req, res) => {
+        if (!who(req)) return problem(res, new UploadError(401, 'auth.required', 'Sign in first.'));
+        const row = await own(req, res);
+        if (!row) return undefined;
+        return res.json({ cuts: (await ctx.videoCuts.forUpload(row)).map(cutWire) });
+    });
+
     return r;
 }
 
@@ -114,6 +140,34 @@ function mountUploadPages(r, h) {
     const statusText = (row) => (row.state === 'hidden' ? 'Hidden after reports, waiting for staff'
         : row.status === 'uploading' ? `Upload stopped at ${Math.round((row.parts_received / row.parts_expected) * 100)}%`
             : row.status === 'processing' ? 'Processing' : row.status === 'failed' ? 'Failed' : visibilityLabel(row.visibility));
+
+    const CUT_STATUS = { queued: 'Waiting to start', measuring: 'Finding the pauses', rendering: 'Making the copy' };
+    const CUT_LABEL = { pauses: 'Pauses cut', tight: 'Tight cut', highlights: 'Highlights reel' };
+    function cutLine(c) {
+        const what = html`<b>${CUT_LABEL[c.mode] || c.mode}</b>`;
+        if (c.status === 'done') {
+            const shorter = c.source_seconds && c.kept_seconds ? html` · ${durationLabel(c.source_seconds)} → ${durationLabel(c.kept_seconds)}` : '';
+            const count = c.removed_count ? html` · ${c.removed_count} pause${c.removed_count === 1 ? '' : 's'} out` : '';
+            return html`<li>${what}${shorter}${count} · ${c.result_upload_id ? html`<a href="/u/${c.result_upload_id}">open the copy</a>` : 'done'}</li>`;
+        }
+        if (c.status === 'failed') return html`<li>${what} · not made: ${c.error || 'something went wrong'}</li>`;
+        const pct = c.status === 'rendering' ? html` ${Math.round(Number(c.progress || 0) * 100)}%` : '';
+        return html`<li>${what} · <span role="status">${CUT_STATUS[c.status]}${pct}…</span></li>`;
+    }
+    function cutPanel(row, cuts, busy, reel) {
+        const m = ctx.videoCuts.MODES;
+        return html`<section class="ovv-panel ovv-cut" aria-labelledby="h-cut"><h2 id="h-cut">AI edit</h2>
+<p class="ovv-fine">Make an edited copy. The original stays as it is; the copy is private until you publish it and gets its own captions and chapters.</p>
+<form method="post" action="/u/${row.id}/cut">
+<fieldset class="ovv-cut-modes"><legend>Make</legend>
+<label class="ovv-radio"><input type="radio" name="mode" value="pauses" checked> Cut the pauses <span class="ovv-fine">pauses over ${m.pauses.minPause} s become half a second</span></label>
+<label class="ovv-radio"><input type="radio" name="mode" value="tight"> Cut tight <span class="ovv-fine">pauses over ${m.tight.minPause} s become ${m.tight.keep * 2} s</span></label>
+${reel ? html`<label class="ovv-radio"><input type="radio" name="mode" value="highlights"> Highlights reel <span class="ovv-fine">${reel.ranges.length} moments the AI picked, ${durationLabel(reel.kept_seconds)}</span></label>` : ''}
+</fieldset>
+<button class="ovv-btn" type="submit"${busy ? ' disabled' : ''}>Make the edited copy</button>${busy ? html` <span class="ovv-fine">One cut at a time.</span>` : ''}</form>
+${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
+</section>`;
+    }
 
     r.get('/upload', mustSignIn('/upload', 'Uploads belong to your OpenVibe account: sign in to upload a video.'), async (req, res) => page(req, res, {
         title: 'Upload a video',
@@ -197,6 +251,13 @@ ${fresh.map((x) => html`<tr><td><a href="/u/${x.id}">${x.title}</a></td><td>${st
         const saveForm = ready && row.state === 'active' && row.visibility !== 'private' && playlistForm ? await playlistForm(req, 'upload', row.seq) : '';
         const inList = upNext ? await upNext(req, 'upload', row.seq) : { html: '', nextUrl: null };
         const nextAttr = inList.nextUrl ? html` data-ovv-next="${inList.nextUrl}"` : '';
+        // The AI cut (server/video/cut.js): the owner's panel, and the original an edited copy came from.
+        const cutsOn = Boolean(own && ctx.videoCuts && ctx.videoCuts.enabled && ready && row.state === 'active' && !row.edited_from);
+        const cuts = cutsOn ? await ctx.videoCuts.forUpload(row) : [];
+        const cutBusy = cuts.some((c) => ['queued', 'measuring', 'rendering'].includes(c.status));
+        const reel = cutsOn ? await ctx.videoCuts.highlightsPlan(row) : null;
+        const original = own && row.edited_from ? await up.byId(row.edited_from) : null;
+        if (cutBusy) res.set('Refresh', '15');
         return page(req, res, {
             index: listed, noindex: !listed,
             ...(listed ? {} : { cache: cache.htmlHeaders({ private: true }) }),
@@ -209,6 +270,7 @@ ${fresh.map((x) => html`<tr><td><a href="/u/${x.id}">${x.title}</a></td><td>${st
 ${req.query.saved === '1' ? notice('Saved.', 'ok') : ''}${req.query.reported === '1' ? notice('Thanks: the report reached OpenVibe staff.', 'ok') : ''}
 ${row.state === 'hidden' ? notice('Hidden after reports: only you and OpenVibe staff can see it until staff decide.', 'warn') : ''}
 ${row.visibility === 'private' && ready ? notice('Private: only you (and OpenVibe staff) can see this video.', 'info') : ''}
+${original && original.state !== 'removed' ? html`<p class="ovv-fine ovv-edited-from">An edited copy of <a href="/u/${original.id}">${original.title}</a>, made by the AI cut.</p>` : ''}
 ${ready && vod ? html`<div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline${thumb ? html` poster="${`${thumb}?w=1280&fmt=webp`}"` : ''} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${hlsAttrs(vod)}>${tracks}</video></div>`
         : html`<div class="ovv-player-wrap ovv-processing" role="status">${row.status === 'processing' ? html`<p><i class="fa-solid fa-gear fa-spin" aria-hidden="true"></i> Processing: OpenVibe.Media is making it playable. This page reloads by itself.</p>`
             : row.status === 'failed' ? html`<p>This upload could not be processed. ${row.error || ''}</p>`
@@ -237,6 +299,7 @@ ${manage ? html`<section class="ovv-panel ovv-owner" aria-labelledby="h-owner"><
 <details class="ovv-danger"><summary>Delete this video</summary>
 <form class="ovv-owner-delete" method="post" action="/u/${row.id}/delete"><label class="ovv-confirm"><input type="checkbox" name="confirm" value="1" required> I want to delete it for good</label> <button class="ovv-btn ovv-btn--danger" type="submit">Delete</button></form>
 </details></section>` : ''}
+${cutsOn ? cutPanel(row, cuts, cutBusy, reel) : ''}
 ${aiDone && ai.chapters.length > 1 ? html`<section class="ovv-panel ovv-chapters" aria-labelledby="h-chapters"><h2 id="h-chapters">Chapters</h2><ol>${ai.chapters.map((c) => html`<li><a href="/u/${row.id}?t=${c.start}" data-ovv-chapter="${c.start}"><span class="ovv-time">${vttTime(c.start).slice(0, 8)}</span><span>${c.title}</span></a></li>`)}</ol><p class="ovv-fine">From the video's highlights (AI).</p></section>` : ''}
 ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report this video</summary>
 <form method="post" action="/u/${row.id}/report">
@@ -279,6 +342,20 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
         }
         if (ctx.videoSearch) ctx.videoSearch.kick();
         return res.redirect(303, `/u/${row.id}?saved=1`);
+    });
+
+    r.post('/u/:id/cut', mustSignIn('here'), async (req, res) => {
+        const row = await up.byId(req.params.id);
+        const who = whoOf(req);
+        if (!row || row.state === 'removed' || row.owner !== who.requester) return notFound(req, res);
+        if (!sameSite(req, res, `/u/${row.id}`)) return undefined;
+        try {
+            await ctx.videoCuts.request(row, who, String((req.body || {}).mode || 'pauses'));
+        } catch (err) {
+            if (!(err instanceof UploadError)) throw err;
+            return page(req, res, { title: 'Not started', body: html`<h1>The cut did not start</h1><p>${err.detail}</p><p><a href="/u/${row.id}">Back to the video</a></p>` }, err.status);
+        }
+        return res.redirect(303, `/u/${row.id}#h-cut`);
     });
 
     r.post('/u/:id/delete', mustSignIn('here'), async (req, res) => {
