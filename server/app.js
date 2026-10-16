@@ -71,16 +71,18 @@ async function createApp(opts = {}) {
     const uploads = createUploads({ s, media, config, service: drive, log });
     const account = createAccount({ db: s.db, config, media, log });
     const playlists = createPlaylists({ s, config, log });
-    const pics = createPics({ s, media, config, log });
+    // MediaHub's own events (server/events-outbox.js): written with the change, relayed to OpenVibe.Events.
+    const eventsOutbox = require('./events-outbox').createEventsOutbox({ s, config, log, fetchImpl: opts.fetchImpl || null });
+    const pics = createPics({ s, media, config, log, events: eventsOutbox });
     const picsDescribe = opts.picsDescribe || require('./pics/describe').createPicDescriber({ s, media, config, fetchImpl, log });
     // OpenVibe.Video uploads (server/video/uploads.js): Media VODs in this tenant.
-    const videoUploads = require('./video/uploads').createUploads({ s, media, config, log });
+    const videoUploads = require('./video/uploads').createUploads({ s, media, config, log, events: eventsOutbox });
     const videoAi = opts.videoAi || require('./video/ai-edit').createAiEdit({ s, media, config, fetchImpl, log });
     const videoCuts = require('./video/cut').createCuts({ s, media, uploads: videoUploads, videoAi, config, log, spawnImpl: opts.spawnImpl });
     const syncKeys = createSyncKeys({ s, config });
     const drops = createDrops({ s, media, config, uploads, log });
     const videoSearch = require('./video/search-index').createVideoSearchIndex({ s, config, videoAi, fetchImpl, log });
-    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, pics, picsDescribe, videoUploads, videoAi, videoCuts, syncKeys, drops, videoSearch, fetchImpl, log };
+    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, pics, picsDescribe, eventsOutbox, videoUploads, videoAi, videoCuts, syncKeys, drops, videoSearch, fetchImpl, log };
     // IndexNow for openvibe.video: off without a key; a malformed key warns and stays off rather than stopping the site.
     ctx.indexnow = opts.indexnow || (() => {
         const warn = (...a) => (log.warn || console.warn)(...a);

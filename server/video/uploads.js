@@ -43,7 +43,7 @@ function kindOf(contentType, name) {
     return ext && EXT_KINDS[ext[1]] ? EXT_KINDS[ext[1]] : null;
 }
 
-function createUploads({ s, media, config, log = console }) {
+function createUploads({ s, media, config, log = console, events = null }) {
     const cfg = config.videoUploads;
     const addressKey = crypto.createHash('sha256').update(`video-address:${config.oauth.clientSecret || 'dev'}`).digest();
     const addressId = (ip) => `ip:${crypto.createHmac('sha256', addressKey).update(String(ip || 'unknown')).digest('hex').slice(0, 32)}`;
@@ -57,6 +57,20 @@ function createUploads({ s, media, config, log = console }) {
         await s.db.query(`UPDATE video_uploads SET ${cols.map((c, i) => `${c} = $${i + 3}`).join(', ')}, updated_at = $2 WHERE id = $1`, [id, s.iso(), ...cols.map((c) => patch[c])]);
         return await byId(id);
     };
+
+    /**
+     * The first time an upload is public, ready and active, published_at is set and mediahub.video.published written in
+     * the same transaction (once: private and public again does not repeat it).
+     */
+    async function maybePublished(row) {
+        if (!events || !row || row.published_at || row.status !== 'ready' || row.state !== 'active' || row.visibility !== 'public') return row;
+        const at = s.iso();
+        return await s.tx(async () => {
+            const r = await s.db.maybe('UPDATE video_uploads SET published_at = $2 WHERE id = $1 AND published_at IS NULL RETURNING *', [row.id, at]);
+            if (r) await events.videoPublished(r, at);
+            return r || row;
+        });
+    }
 
     /** May `who` ({ requester, staff }) see this upload at all? */
     function canSee(row, who) {
@@ -148,7 +162,7 @@ function createUploads({ s, media, config, log = console }) {
         const duration = Number(v.duration_seconds);
         const ready = Boolean(v.file_url || v.playback_url) && Number.isFinite(duration) && duration > 0;
         if (!ready) return row;
-        return await patchRow(row.id, { status: 'ready', duration_seconds: duration, thumbnail_url: v.thumbnail_url || null, ready_at: row.ready_at || s.iso(), error: null });
+        return await maybePublished(await patchRow(row.id, { status: 'ready', duration_seconds: duration, thumbnail_url: v.thumbnail_url || null, ready_at: row.ready_at || s.iso(), error: null }));
     }
 
     async function complete(row) {
@@ -188,7 +202,7 @@ function createUploads({ s, media, config, log = console }) {
         if (input.visibility !== undefined) { if (!VISIBILITY.includes(input.visibility)) throw new UploadError(422, 'upload.visibility', 'Public, unlisted or private.'); patch.visibility = input.visibility; }
         if (!Object.keys(patch).length) return row;
         if (patch.title || patch.visibility) await media.vodUpdate(row.media_vod_id, { ...(patch.title ? { title: patch.title } : {}), ...(patch.visibility ? { visibility: patch.visibility } : {}) });
-        return await patchRow(row.id, patch);
+        return await maybePublished(await patchRow(row.id, patch));
     }
 
     async function remove(row) {
