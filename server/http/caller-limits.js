@@ -59,6 +59,8 @@ const BUDGETS = {
     // Resize and convert (server/pics/variants.js): each new variant is decoded and encoded here.
     'pics.image.variant': { minute: 60, hour: 600 },
     'pics.image.write': { minute: 60, hour: 600 },
+    // Alt text from OpenVibe.AI (server/pics/describe.js): one model run each, and the site has a daily cap besides.
+    'pics.image.describe': { minute: 5, hour: 20 },
     'pics.album.create': { minute: 10, hour: 100 },
     'pics.report.create': { minute: 5, hour: 30 },
 };

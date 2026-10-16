@@ -152,6 +152,13 @@ An open, ad-free picture host: drop a picture, get a link to share or embed. Bui
   at 320, 640, 1280, 1920 or 2560 px (never wider than the picture), made here with sharp from the stored copy
   (Media's own variants stop at 640 px), kept in a 64 MB LRU and served with the direct link's 10-minute cache; an
   animated picture keeps its frames as WebP. The picture page lists them; `pics.image.variant` budgets the misses.
+- **Alt text** ([server/pics/describe.js](server/pics/describe.js)): what a screen reader says for a picture, used in
+  its page, the thumbnails and every embed snippet (the title when there is none). The uploader writes it, or presses
+  "Write alt text with AI": only then does the 640-pixel thumbnail go to OpenVibe.AI's `pics.describe_image` (which
+  may use an outside model provider and keeps only the image's hash), and the draft (alt text, a caption labelled
+  "Described by AI", tags) is kept until the uploader edits it. At most `MEDIAHUB_PICS_AI_PER_DAY` (300) pictures a
+  day for the site, `pics.image.describe` per person; off with `MEDIAHUB_PICS_AI=off` or without `OV_AI_INTERNAL_URL`.
+  Network grants `media-hub` the `pics.describe_image` namespace on `ai.run.create`.
 - **Unlisted:** `/i/<slug>` (8 random characters) is reachable by its link only, noindex, never listed; robots.txt
   disallows `/i/` and `/a/`. The page has the links to share and embed: the page, the direct link, Markdown, BBCode
   and HTML.
@@ -174,7 +181,8 @@ API on the pics host (`/api/v1`, a person; app, agent and service tokens are ref
 |---|---|
 | `POST /images` | upload: the picture is the body (`Content-Type: image/*`; optional `X-Title`, `X-Filename`, URI-encoded); 201 with the links |
 | `GET /images/:slug` | metadata and links (hidden: uploader and staff only; 410 when taken down) |
-| `PATCH /images/:slug` | the uploader: `{ title, description }` |
+| `PATCH /images/:slug` | the uploader: `{ title, description, alt }` |
+| `POST /images/:slug/describe` | the uploader: OpenVibe.AI drafts the alt text, a caption and tags (the picture goes to OpenVibe.AI only on this call) |
 | `DELETE /images/:slug` | the uploader (signed out: `X-Delete-Key`) |
 | `POST /images/:slug/reports` | anyone: `{ reason, note }`; `reason` one of `child_safety`, `illegal`, `copyright`, `sexual`, `violence`, `harassment`, `private_info`, `spam`, `other` |
 | `GET /me/images` | your pictures, newest first, with your usage |

@@ -33,7 +33,7 @@ const REASON_TEXT = {
     sexual: 'Sexual content shared without consent', violence: 'Graphic violence or threats', harassment: 'Harassment or hate',
     private_info: 'Someone\'s private information', spam: 'Spam or a scam', other: 'Something else',
 };
-const LIMITS = { title: 120, description: 2000, albumTitle: 120, note: 500 };
+const LIMITS = { title: 120, description: 2000, alt: 160, albumTitle: 120, note: 500 };
 // A difference hash this close (of 64 bits) to a blocked one is the same picture, resized, re-compressed or retouched:
 // measured 2026-10-15, such copies of real photos land 0-10 bits away and different photos 23-42.
 const DHASH_DISTANCE = 10;
@@ -127,12 +127,20 @@ function createPics({ s, media, config, log = console }) {
         return { ok: true, image: row, ...(deleteKey ? { deleteKey } : {}) };
     }
 
-    async function edit(row, { title, description }) {
+    async function edit(row, { title, description, alt }) {
+        // Alt text the uploader changes is theirs; an AI draft left as it was stays labelled as AI's.
+        const altNow = alt !== undefined ? cleanLine(alt, LIMITS.alt) : undefined;
+        const altPatch = altNow === undefined || altNow === (row.alt || '') ? {} : { alt: altNow, alt_source: altNow ? 'person' : null };
         return store.updateImage(s, row.id, {
             ...(title !== undefined ? { title: cleanLine(title, LIMITS.title) } : {}),
             ...(description !== undefined ? { description: cleanText(description, LIMITS.description) } : {}),
+            ...altPatch,
         });
     }
+
+    /** What a screen reader says for it: its alt text, else its title. */
+    const altOf = (row) => row.alt || row.title || 'Picture on OpenVibe.Pics';
+    const tagsOf = (row) => { try { const v = JSON.parse(row.ai_tags || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
 
     const hide = (row) => store.updateImage(s, row.id, { state: 'hidden' });
 
@@ -220,7 +228,7 @@ function createPics({ s, media, config, log = console }) {
         const base = cfg.url;
         const page = `${base}/i/${row.slug}`;
         const direct = `${base}/i/${row.slug}.${row.ext}`;
-        const alt = row.title || 'Picture on OpenVibe.Pics';
+        const alt = altOf(row);
         return {
             page, direct, thumb: `${base}/i/${row.slug}/thumb.webp`,
             markdown: `![${alt.replace(/[[\]]/g, '')}](${direct})`,
@@ -232,6 +240,8 @@ function createPics({ s, media, config, log = console }) {
     const toWire = (row, { owner = false } = {}) => ({
         id: row.id, slug: row.slug, title: row.title, description: row.description, mime_type: row.mime_type, ext: row.ext,
         width: Number(row.width), height: Number(row.height), bytes: Number(row.bytes), animated: Boolean(row.animated),
+        alt: row.alt || '', alt_source: row.alt_source || null,
+        ai: row.ai_described_at ? { caption: row.ai_caption || null, tags: tagsOf(row), described_at: row.ai_described_at } : null,
         state: row.state, created_at: row.created_at, links: links(row),
         ...(owner ? { report_count: Number(row.report_count) } : {}),
     });
@@ -239,7 +249,7 @@ function createPics({ s, media, config, log = console }) {
     return {
         cfg, REASONS, REASON_TEXT, LIMITS, SLUG_RE, isSlug: (v) => SLUG_RE.test(String(v || '')),
         addressId, canSee, isOwner, upload, edit, remove, deleteKeyMatches, report, moderate, viewed, sweep,
-        createAlbum, addToAlbum, links, toWire, isStaff,
+        createAlbum, addToAlbum, links, toWire, isStaff, altOf, tagsOf,
     };
 }
 
