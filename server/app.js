@@ -72,13 +72,14 @@ async function createApp(opts = {}) {
     const account = createAccount({ db: s.db, config, media, log });
     const playlists = createPlaylists({ s, config, log });
     const pics = createPics({ s, media, config, log });
+    const picsDescribe = opts.picsDescribe || require('./pics/describe').createPicDescriber({ s, media, config, fetchImpl, log });
     // OpenVibe.Video uploads (server/video/uploads.js): Media VODs in this tenant.
     const videoUploads = require('./video/uploads').createUploads({ s, media, config, log });
     const videoAi = opts.videoAi || require('./video/ai-edit').createAiEdit({ s, media, config, fetchImpl, log });
     const syncKeys = createSyncKeys({ s, config });
     const drops = createDrops({ s, media, config, uploads, log });
     const videoSearch = require('./video/search-index').createVideoSearchIndex({ s, config, videoAi, fetchImpl, log });
-    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, pics, videoUploads, videoAi, syncKeys, drops, videoSearch, fetchImpl, log };
+    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, pics, picsDescribe, videoUploads, videoAi, syncKeys, drops, videoSearch, fetchImpl, log };
     // IndexNow for openvibe.video: off without a key; a malformed key warns and stays off rather than stopping the site.
     ctx.indexnow = opts.indexnow || (() => {
         const warn = (...a) => (log.warn || console.warn)(...a);

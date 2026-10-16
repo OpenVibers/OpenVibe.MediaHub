@@ -48,6 +48,8 @@ function createPicsRoutes(ctx) {
     const base = cfg.url;
     const host = (() => { try { return new URL(base).hostname; } catch { return 'openvibe.pics'; } })();
     const r = asyncRouter();
+    const describeOn = Boolean(ctx.picsDescribe && ctx.picsDescribe.enabled);
+    const tagsOf = (row) => pics.tagsOf(row);
     const variants = createPicVariants({ media, maxBytes: Number(process.env.MEDIAHUB_PICS_VARIANT_CACHE_BYTES) || 64 * 1024 * 1024 });
 
     const hasSessionCookie = (req) => Boolean(req.cookies && (req.cookies[ACCESS_COOKIE] || req.cookies[REFRESH_COOKIE]));
@@ -178,7 +180,7 @@ function createPicsRoutes(ctx) {
     // ── Pages: forms are urlencoded, uploads multipart ──────
     r.use(express.urlencoded({ extended: false, limit: '64kb' }));
 
-    const thumb = (row) => html`<a class="ovp-tile${row.state !== 'active' ? ' is-hidden' : ''}" href="/i/${row.slug}"><img src="/i/${row.slug}/thumb.webp" alt="${row.title || 'Picture'}" loading="lazy" decoding="async" width="${Math.min(Number(row.width), 640)}" height="${Math.round(Math.min(Number(row.width), 640) * Number(row.height) / Math.max(1, Number(row.width)))}">${row.state !== 'active' ? html`<span class="ovp-flag">hidden</span>` : ''}</a>`;
+    const thumb = (row) => html`<a class="ovp-tile${row.state !== 'active' ? ' is-hidden' : ''}" href="/i/${row.slug}"><img src="/i/${row.slug}/thumb.webp" alt="${pics.altOf(row)}" loading="lazy" decoding="async" width="${Math.min(Number(row.width), 640)}" height="${Math.round(Math.min(Number(row.width), 640) * Number(row.height) / Math.max(1, Number(row.width)))}">${row.state !== 'active' ? html`<span class="ovp-flag">hidden</span>` : ''}</a>`;
     const grid = (rows, empty) => (rows.length ? html`<div class="ovp-grid">${rows.map(thumb)}</div>` : html`<p class="muted">${empty}</p>`);
 
     function uploadForm(req, { compact = false } = {}) {
@@ -214,6 +216,8 @@ ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><
 <div class="ovp-feature"><h3>Unlisted by default</h3><p>Only people with the link see a picture. Nothing is listed, ranked or indexed.</p></div>
 <div class="ovp-feature"><h3>Clean files</h3><p>Every picture is re-encoded, and its GPS position, camera serial and other hidden details are removed before anyone sees it.</p></div>
 <div class="ovp-feature"><h3>Albums</h3><p>Put pictures together and share the album with one link.</p></div>
+<div class="ovp-feature"><h3>Any size, any format</h3><p>Every picture also comes at 320 to 2560 pixels wide, as WebP, AVIF, JPEG or PNG, each with a link of its own.</p></div>
+<div class="ovp-feature"><h3>Alt text</h3><p>Say what a picture shows for people who cannot see it, or let AI draft it when you ask. It goes into every embed snippet.</p></div>
 </section>`,
         });
     });
@@ -252,7 +256,7 @@ ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><
         return html`<div class="ovp-copy"><label for="${id}">${label}</label><div class="ovp-copy-row"><input id="${id}" type="text" readonly value="${value}" spellcheck="false"><button class="ovp-btn" type="button" data-copy="${id}">Copy</button></div></div>`;
     }
 
-    async function picturePage(req, res, row, { deleteKey = null, fresh = false, message = null } = {}) {
+    async function picturePage(req, res, row, { deleteKey = null, fresh = false, message = null, tone = 'ok' } = {}, status = 200) {
         const who = whoOf(req);
         const owner = pics.isOwner(row, who);
         const L = pics.links(row);
@@ -266,14 +270,15 @@ ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><
             image: hidden ? undefined : L.direct, ogType: 'article',
             scripts: ['js/pics.js'],
             private: deleteKey ? true : undefined,
-            body: html`${message ? notice(message, 'ok') : ''}${fresh || req.query.new ? notice('Uploaded. Copy a link below to share it.', 'ok') : ''}
+            body: html`${message ? notice(message, tone) : ''}${fresh || req.query.new ? notice('Uploaded. Copy a link below to share it.', 'ok') : ''}
 ${deleteKey ? html`<div class="notice warn" role="status"><b>Keep this delete link.</b> It is the only way to delete this picture, and it is shown only now:<br><code class="ovp-key">${base}/i/${row.slug}/delete?key=${deleteKey}</code></div>` : ''}
 ${hidden ? notice(row.state === 'hidden' ? 'This picture is hidden while staff look at reports about it. Only you and staff can see it.' : 'This picture was taken down.', 'warn') : ''}
 <article class="ovp-picture">
 <h1 class="ovp-title">${title}</h1>
-<figure class="ovp-figure"><a href="/i/${row.slug}.${row.ext}"><img src="/i/${row.slug}.${row.ext}" alt="${title}" width="${row.width}" height="${row.height}" decoding="async"></a></figure>
+<figure class="ovp-figure"><a href="/i/${row.slug}.${row.ext}"><img src="/i/${row.slug}.${row.ext}" alt="${pics.altOf(row)}" width="${row.width}" height="${row.height}" decoding="async"></a></figure>
 <p class="ovp-meta">${Number(row.width)} × ${Number(row.height)} · ${KIND[row.ext] || row.ext}${row.animated ? ' (animated)' : ''} · ${formatBytes(row.bytes)} · uploaded ${time(row.created_at)}</p>
 ${row.description ? html`<p class="ovp-desc">${row.description}</p>` : ''}
+${row.ai_caption && row.alt_source === 'ai' ? html`<p class="ovp-ai"><span class="ovp-ai-label">Described by AI</span> ${row.ai_caption}</p>` : ''}
 </article>
 <section class="ovp-share" aria-labelledby="h-share"><h2 id="h-share">Share and embed</h2>
 ${copyRow('Link to this page', L.page, 'c-page')}${copyRow('Direct link (for <img> and forums)', L.direct, 'c-direct')}${copyRow('Markdown', L.markdown, 'c-md')}${copyRow('BBCode (forums)', L.bbcode, 'c-bb')}${copyRow('HTML', L.html, 'c-html')}
@@ -287,7 +292,11 @@ ${owner ? html`<section class="ovp-section ovp-owner" aria-labelledby="h-yours">
 <form class="ovp-form" method="post" action="/i/${row.slug}/edit">
 <label for="e-title">Title</label><input id="e-title" name="title" type="text" maxlength="120" value="${row.title}">
 <label for="e-desc">Description</label><textarea id="e-desc" name="description" rows="3" maxlength="2000">${row.description}</textarea>
+<label for="e-alt">Alt text</label><input id="e-alt" name="alt" type="text" maxlength="160" value="${row.alt || ''}" aria-describedby="e-alt-help">
+<p class="muted" id="e-alt-help">What the picture shows, in one sentence, for people who cannot see it. Screen readers say it, and the embed snippets above carry it.${row.alt_source === 'ai' ? ' This one was written by AI: check it says what you want.' : ''}</p>
 <p><button class="ovp-btn ovp-btn--primary" type="submit">Save</button></p></form>
+${describeOn && !hidden ? html`<form class="ovp-form ovp-inline" method="post" action="/i/${row.slug}/describe"><button class="ovp-btn" type="submit">${row.ai_described_at ? 'Write it again with AI' : 'Write alt text with AI'}</button> <span class="muted">Sends this picture to OpenVibe.AI, which may use an outside model provider, to draft alt text, a caption and tags. Nothing of the picture is kept there.</span></form>` : ''}
+${tagsOf(row).length ? html`<p class="muted">AI tags: ${tagsOf(row).join(', ')}</p>` : ''}
 <form class="ovp-form ovp-inline" method="post" action="/i/${row.slug}/album">
 <label for="e-album">Add to an album</label>
 <select id="e-album" name="album">${albums.map((a) => html`<option value="${a.slug}">${a.title}</option>`)}<option value="">A new album…</option></select>
@@ -304,7 +313,7 @@ ${pics.REASONS.map((r) => html`<label class="ovp-radio"><input type="radio" name
 <label for="r-note">Anything staff should know (optional)</label><textarea id="r-note" name="note" rows="2" maxlength="500"></textarea>
 <p><button class="ovp-btn" type="submit">Send the report</button> <span class="muted">Copyright owners can also send a notice through <a href="/dmca">the DMCA page</a>.</span></p>
 </form></details>` : ''}`,
-        });
+        }, status);
     }
 
     r.get('/i/:slug', async (req, res) => {
@@ -323,8 +332,17 @@ ${pics.REASONS.map((r) => html`<label class="ovp-radio"><input type="radio" name
         if (!sameSite(req, res, `/i/${req.params.slug}`)) return undefined;
         const row = await ownPicture(req, res);
         if (!row) return undefined;
-        await pics.edit(row, { title: req.body.title, description: req.body.description });
+        await pics.edit(row, { title: req.body.title, description: req.body.description, alt: req.body.alt });
         return res.redirect(303, `/i/${row.slug}`);
+    });
+
+    r.post('/i/:slug/describe', mustSignIn('Sign in to change your picture.'), budgeted('pics.image.describe'), async (req, res) => {
+        if (!sameSite(req, res, `/i/${req.params.slug}`)) return undefined;
+        const row = await ownPicture(req, res);
+        if (!row) return undefined;
+        const out = await ctx.picsDescribe.describe(row);
+        if (!out.ok) return picturePage(req, res, row, { message: out.detail, tone: 'warn' }, out.status);
+        return picturePage(req, res, out.row, { message: 'AI wrote the alt text below. Check it, change it if you like, and save.' });
     });
 
     r.post('/i/:slug/album', mustSignIn('Sign in to use albums.'), budgeted('pics.image.write'), async (req, res) => {
@@ -505,7 +523,7 @@ ${row.state === 'hidden' ? html`<button class="ovp-btn" name="action" value="res
     r.get('/llms.txt', (_req, res) => res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(seo.llmsTxt({
         name: SITE_NAME,
         summary: 'Picture hosting on the OpenVibe network: upload a picture, get a link to share or embed, albums, no ads.',
-        details: 'Pictures are unlisted (reachable only by their link). Each one is re-encoded with its metadata removed. API: POST /api/v1/images with the picture as the body (an OpenVibe sign-in token as a Bearer).',
+        details: 'Pictures are unlisted (reachable only by their link). Each one is re-encoded with its metadata removed, and can be had resized and converted at /i/<slug>/w/<320|640|1280|1920|2560>.<webp|avif|jpg|png>. Alt text: the uploader writes it or asks OpenVibe.AI for a draft (POST /api/v1/images/<slug>/describe). API: POST /api/v1/images with the picture as the body (an OpenVibe sign-in token as a Bearer).',
         sections: [{ title: 'Start here', links: [{ title: SITE_NAME, url: `${base}/` }, { title: 'Terms', url: `${base}/terms` }, { title: 'DMCA', url: `${base}/dmca` }] }],
     })));
     r.get('/updates', (req, res) => page(req, res, {

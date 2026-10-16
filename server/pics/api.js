@@ -8,7 +8,9 @@
  *   POST   /images                       person    upload: the picture is the body (Content-Type image/*);
  *                                                  X-Title and X-Filename headers (URI-encoded) are optional
  *   GET    /images/:slug                 anyone    a picture's metadata and links (hidden: uploader and staff only)
- *   PATCH  /images/:slug                 uploader  { title, description }
+ *   PATCH  /images/:slug                 uploader  { title, description, alt }
+ *   POST   /images/:slug/describe        uploader  OpenVibe.AI drafts its alt text, a caption and tags (the picture
+ *                                                  goes to OpenVibe.AI; only on this call)
  *   DELETE /images/:slug                 uploader  (signed out: the X-Delete-Key header from the upload)
  *   POST   /images/:slug/reports         anyone    { reason, note }
  *   GET    /me/images?before=            person    your pictures, newest first
@@ -96,7 +98,15 @@ function createPicsApi(ctx) {
         const row = await loadOwn(req, res);
         if (!row) return undefined;
         const b = req.body || {};
-        return res.json(pics.toWire(await pics.edit(row, { title: b.title, description: b.description }), { owner: true }));
+        return res.json(pics.toWire(await pics.edit(row, { title: b.title, description: b.description, alt: b.alt }), { owner: true }));
+    });
+
+    r.post('/images/:slug/describe', person, limits.budget('pics.image.describe'), async (req, res) => {
+        const row = await loadOwn(req, res);
+        if (!row) return undefined;
+        const out = await ctx.picsDescribe.describe(row);
+        if (!out.ok) return problem(req, res, out.status, out.code, out.detail);
+        return res.json(pics.toWire(out.row, { owner: true }));
     });
 
     r.delete('/images/:slug', anyone, limits.budget('pics.image.write'), async (req, res) => {

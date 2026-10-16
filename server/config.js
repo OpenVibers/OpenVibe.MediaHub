@@ -113,6 +113,10 @@ function load(env = process.env) {
             anonymousPerDay: size(env.MEDIAHUB_PICS_ANONYMOUS_PER_DAY, 20),
             // A signed-out upload is deleted after this many days without a view.
             anonymousIdleDays: Math.max(1, size(env.MEDIAHUB_PICS_ANONYMOUS_IDLE_DAYS, 30)),
+            // Alt text drafted by OpenVibe.AI when the uploader asks (server/pics/describe.js): off with
+            // MEDIAHUB_PICS_AI=off or without OV_AI_INTERNAL_URL; at most this many drafts a day for the whole site.
+            ai: env.MEDIAHUB_PICS_AI !== 'off',
+            aiPerDay: size(env.MEDIAHUB_PICS_AI_PER_DAY, 300),
         },
 
         // What one person may keep and do here. Media's own quotas are per tenant (this whole service is one
