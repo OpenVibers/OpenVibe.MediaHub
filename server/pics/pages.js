@@ -35,6 +35,7 @@ const { ACCESS_COOKIE, REFRESH_COOKIE } = require('../auth/sso');
 const { send, assetVersion, SITE_NAME } = require('./layout');
 const store = require('./store');
 const { createPicsApi } = require('./api');
+const { createPicVariants } = require('./variants');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 const FILE_CACHE = 'public, max-age=600, s-maxage=600';
@@ -47,6 +48,7 @@ function createPicsRoutes(ctx) {
     const base = cfg.url;
     const host = (() => { try { return new URL(base).hostname; } catch { return 'openvibe.pics'; } })();
     const r = asyncRouter();
+    const variants = createPicVariants({ media, maxBytes: Number(process.env.MEDIAHUB_PICS_VARIANT_CACHE_BYTES) || 64 * 1024 * 1024 });
 
     const hasSessionCookie = (req) => Boolean(req.cookies && (req.cookies[ACCESS_COOKIE] || req.cookies[REFRESH_COOKIE]));
     const page = (req, res, o, status = 200) => send(res, status, {
@@ -144,6 +146,27 @@ function createPicsRoutes(ctx) {
         if (!row || status !== 200 || row.ext !== req.params[1]) return res.status(status === 410 ? 410 : 404).set('Cache-Control', 'public, max-age=60').type('text/plain').send(status === 410 ? 'Taken down' : 'Not found');
         if (req.get('if-none-match') === `"${row.sha256.slice(0, 32)}"` && row.state === 'active') return res.status(304).set('Cache-Control', FILE_CACHE).end();
         return serveObject(req, res, row, row.object_id, row.mime_type);
+    });
+
+    // Resize and convert (server/pics/variants.js): an active picture at a ladder width, as WebP, AVIF, JPEG or PNG.
+    r.get(/^\/i\/([2-9a-km-zA-HJ-NP-Z]{8})\/w\/(\d{3,4})\.(webp|avif|jpg|png)$/, budgeted('pics.image.variant'), async (req, res) => {
+        req.params.slug = req.params[0];
+        const { row, status } = await picture(req, res);
+        if (!row || status !== 200 || row.state !== 'active') return res.status(status === 410 ? 410 : 404).set('Cache-Control', 'public, max-age=60').type('text/plain').send('Not found');
+        const v = await variants.get(row, Number(req.params[1]), req.params[2]);
+        if (v.status !== 200) return res.status(v.status).set('Cache-Control', 'public, max-age=60').type('text/plain').send(v.status === 400 ? 'That size or format is not offered for this picture.' : 'Not available.');
+        res.status(200).set({
+            'Content-Type': v.type,
+            'X-Content-Type-Options': 'nosniff',
+            'Content-Security-Policy': "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox",
+            'Cross-Origin-Resource-Policy': 'cross-origin',
+            'Access-Control-Allow-Origin': '*',
+            'X-Robots-Tag': 'noindex',
+            'Cache-Control': FILE_CACHE,
+            'Content-Disposition': `inline; filename="${row.slug}-${req.params[1]}.${req.params[2]}"`,
+            'Content-Length': String(v.buffer.length),
+        });
+        return res.end(req.method === 'HEAD' ? undefined : v.buffer);
     });
 
     r.get('/i/:slug/thumb.webp', async (req, res) => {
@@ -255,6 +278,11 @@ ${row.description ? html`<p class="ovp-desc">${row.description}</p>` : ''}
 <section class="ovp-share" aria-labelledby="h-share"><h2 id="h-share">Share and embed</h2>
 ${copyRow('Link to this page', L.page, 'c-page')}${copyRow('Direct link (for <img> and forums)', L.direct, 'c-direct')}${copyRow('Markdown', L.markdown, 'c-md')}${copyRow('BBCode (forums)', L.bbcode, 'c-bb')}${copyRow('HTML', L.html, 'c-html')}
 </section>
+${!hidden && variants.widthsFor(row).length ? html`<section class="ovp-section ovp-sizes" aria-labelledby="h-sizes"><h2 id="h-sizes">Resize and convert</h2>
+<p class="muted">The same picture at another width or in another format, each a link of its own${row.animated ? ' (WebP keeps the animation; the others take its first frame)' : ''}.</p>
+<table class="ovp-size-table"><thead><tr><th scope="col">Format</th>${variants.widthsFor(row).map((w) => html`<th scope="col">${w} px</th>`)}</tr></thead><tbody>
+${[['webp', 'WebP'], ['avif', 'AVIF'], ['jpg', 'JPEG'], ['png', 'PNG']].map(([fmt, label]) => html`<tr><th scope="row">${label}</th>${variants.widthsFor(row).map((w) => html`<td><a href="/i/${row.slug}/w/${w}.${fmt}" rel="nofollow">${w}</a></td>`)}</tr>`)}
+</tbody></table></section>` : ''}
 ${owner ? html`<section class="ovp-section ovp-owner" aria-labelledby="h-yours"><h2 id="h-yours">Yours</h2>
 <form class="ovp-form" method="post" action="/i/${row.slug}/edit">
 <label for="e-title">Title</label><input id="e-title" name="title" type="text" maxlength="120" value="${row.title}">
