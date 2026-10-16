@@ -104,7 +104,7 @@ function startLive() {
         const p = url.pathname;
         if (p === '/api/content/feed') {
             const type = url.searchParams.get('type');
-            if (type === 'vods') return json(200, { items: [vodFeedItem], next: null });
+            if (type === 'vods') return json(200, { items: [vodFeedItem, { ...vodFeedItem, key: 'vod:109', id: 109, title: 'A two-second blip', duration_seconds: 2 }], next: null });
             if (type === 'clips') return json(200, { items: [clipFeedItem], next: null });
             return json(200, { items: [], next: null });
         }
@@ -237,6 +237,7 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('/v/101'));
         assert.ok(r.text.includes('/c/201'));
         assert.ok(!r.text.includes('/v/102'), 'the unlisted VOD is not in a list');
+        assert.ok(!r.text.includes('/v/109'), 'a recording under 15 seconds gets no tile on the front page');
         // openvibe.media thumbnails are asked for in sizes: a 480 px WebP by default, 320/480/640 in the srcset.
         assert.ok(r.text.includes('src="https://openvibe.media/t/101.jpg?w=480&amp;fmt=webp"'), 'a WebP thumbnail near the card width');
         assert.ok(r.text.includes('https://openvibe.media/t/101.jpg?w=320&amp;fmt=webp 320w, https://openvibe.media/t/101.jpg?w=480&amp;fmt=webp 480w, https://openvibe.media/t/101.jpg?w=640&amp;fmt=webp 640w'), 'the srcset ladder');
