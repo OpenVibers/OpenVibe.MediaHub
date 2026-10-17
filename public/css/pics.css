@@ -88,7 +88,7 @@
 .ovp-desc { max-width: 70ch; white-space: pre-line; overflow-wrap: anywhere; }
 .ovp-ai { max-width: 70ch; margin: 8px 0 0; color: var(--ovp-dim); overflow-wrap: anywhere; }
 .ovp-ai-label { display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--ovp-pink) 45%, var(--ovp-line-strong)); color: var(--ovp-accent-text); font-size: .74rem; font-weight: 700; vertical-align: 1px; }
-.ovp-share { margin-top: 1.6rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 16px; }
+.ovp-share { margin-top: 1.6rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 10px 16px; }
 .ovp-share h2 { grid-column: 1 / -1; margin-bottom: 0; }
 .ovp-copy { display: grid; gap: 4px; min-width: 0; }
 .ovp-copy label { font-size: .8rem; font-weight: 700; color: var(--ovp-dim); }
