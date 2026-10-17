@@ -1241,6 +1241,8 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
     r.get(legal.PATHS, legal.handler({ id: 'media-hub', service: 'media-hub', host: videoHostname, name: 'OpenVibe.Video', profile: 'ugc' }));
 
     // ── Video host 404 and errors ───────────────────────────
+    // An unknown /api path is a JSON problem like on every other OpenVibe host (it was this page's HTML 404).
+    r.use('/api', (req, res) => require('openvibe-contracts').http.sendProblem(res, 404, 'route.not_found', { detail: 'No such API route', ctx: req.ov }));
     r.use((req, res) => notFound(req, res));
 
     // eslint-disable-next-line no-unused-vars

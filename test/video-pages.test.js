@@ -320,6 +320,12 @@ function countOccurrences(haystack, needle) {
         assert.match(r.text, /<img src="[^"]*\/avatar\/streamer" alt="" loading="lazy">/, 'the person\'s picture over the letter');
     });
 
+    await check('an unknown /api path on the video host is a JSON 404, not a page', async () => {
+        const r = await getVideo('/api/nope');
+        assert.strictEqual(r.status, 404);
+        assert.match(String(r.headers['content-type']), /json/);
+    });
+
     await check('a name nobody has, with nothing to show, is a 404 (not an empty channel page)', async () => {
         const r = await getVideo('/@nobody_here_x9');
         assert.strictEqual(r.status, 404);
