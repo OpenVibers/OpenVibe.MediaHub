@@ -12,6 +12,10 @@
  */
 const TIMEOUT_MS = 5000;
 const CACHE_TTL_MS = 60_000;
+// Live waits on OpenVibe.Media for recordings, and Media can stall for seconds while it remuxes a live stream's DVR
+// (production, 10-16: 23 "Live did not answer" in 12 h, at random times). A page then shows the last answer, up to
+// this old, instead of "OpenVibe.Live did not answer".
+const STALE_MAX_MS = 30 * 60_000;
 const CACHE_MAX = 500;
 const USERNAME_RE = /^[A-Za-z0-9_]{1,32}$/;
 
@@ -49,8 +53,24 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
             cache.set(key, entry);   // touch: this entry is now the most recent
             return entry.value;
         }
-        cache.delete(key);
+        // Expired entries stay (until STALE_MAX_MS) as the answer for when Live does not answer.
         return undefined;
+    }
+
+    /** The last good answer for `key`, if not older than STALE_MAX_MS: shown instead of an error page. */
+    function stale(key) {
+        const entry = cache.get(key);
+        if (!entry || Date.now() - entry.at >= STALE_MAX_MS) return undefined;
+        return entry.value;
+    }
+    function unavailable(url, why) {
+        const old = stale(url);
+        if (old !== undefined) {
+            log.warn('[OpenVibe.Video] Live did not answer; serving its last answer', why);
+            return old;
+        }
+        log.warn('[OpenVibe.Video] Live did not answer', why);
+        throw new LiveUnavailableError('OpenVibe.Live did not answer; try again in a minute.');
     }
 
     function remember(key, value) {
@@ -75,18 +95,17 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
                 signal: AbortSignal.timeout(TIMEOUT_MS),
             });
         } catch (err) {
-            log.warn('[OpenVibe.Video] Live did not answer', err && err.name);
-            throw new LiveUnavailableError('OpenVibe.Live did not answer; try again in a minute.');
+            return unavailable(url, err && err.name);
         }
 
         if (res.status === 404) return null;
-        if (!res.ok) throw new LiveUnavailableError('OpenVibe.Live did not answer; try again in a minute.');
+        if (!res.ok) return unavailable(url, `HTTP ${res.status}`);
 
         let body;
         try {
             body = await res.json();
         } catch {
-            throw new LiveUnavailableError('OpenVibe.Live did not answer; try again in a minute.');
+            return unavailable(url, 'not JSON');
         }
         return remember(url, body);
     }
