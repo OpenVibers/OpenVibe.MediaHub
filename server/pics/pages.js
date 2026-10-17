@@ -205,6 +205,11 @@ function createPicsRoutes(ctx) {
         return page(req, res, {
             index: true,
             description: 'Upload a picture and get a link to share or embed anywhere. Albums, no ads, open source, with location and camera details removed from every picture.',
+            // What the site is, for search engines (as the Download home says it).
+            jsonLd: [
+                seo.jsonLd.website({ name: SITE_NAME, url: base, description: 'Upload a picture and get a link to share or embed anywhere. Albums, no ads, open source, with location and camera details removed from every picture.' }),
+                seo.jsonLd.webPage({ name: SITE_NAME, url: `${base}/`, description: 'Upload a picture and get a link to share or embed anywhere. Albums, no ads, open source, with location and camera details removed from every picture.', siteUrl: base }),
+            ],
             scripts: canUpload ? ['js/pics.js'] : [],
             body: html`<header class="ovp-hero"><p class="ovp-eyebrow">${SITE_NAME}</p>
 <h1>Share pictures. <span class="ovp-accent">Fast, open, yours.</span></h1>
