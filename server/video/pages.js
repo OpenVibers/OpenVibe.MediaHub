@@ -797,7 +797,7 @@ ${savedNotice(req)}${ownOnly ? notice('Private: only you (and OpenVibe staff) ca
 <div class="ovv-player-wrap"><video class="ovv-player" controls preload="metadata" playsinline src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video></div>
 <h1 class="ovv-title">${vod.title || 'Stream recording'}</h1>
 <div class="ovv-byline">
-${channelName ? html`<a class="ovv-avatar" href="${localChannel || liveChannel}" aria-hidden="true" tabindex="-1">${String(channelName).slice(0, 1).toUpperCase()}</a>` : ''}
+${channelName ? html`<a class="ovv-avatar" href="${localChannel || liveChannel}" aria-hidden="true" tabindex="-1">${String(channelName).slice(0, 1).toUpperCase()}${live.isUsername(String(vod.username || '')) ? html`<img src="${config.networkUrl}/avatar/${vod.username}" alt="" loading="lazy">` : ''}</a>` : ''}
 <div class="ovv-byline-text">${channelName ? (localChannel ? html`<a class="ovv-channel-name" href="${localChannel}">@${channelName}</a>` : html`<span class="ovv-channel-name">@${channelName}</span>`) : ''}
 ${metaParts.length ? html`<span class="ovv-meta">${metaParts.map((p, i) => (i === 0 ? p : [html` · `, p]))}</span>` : ''}</div>
 <div class="ovv-byline-actions">${saveForm}${channelName ? html`<a class="ovv-btn" href="${liveChannel}"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Channel on OpenVibe.Live</a>` : ''}${threadUrl ? html`<a class="ovv-btn" href="${threadUrl}"><i class="fa-regular fa-comments" aria-hidden="true"></i> Discuss on OpenVibe.Community</a>` : ''}</div>
