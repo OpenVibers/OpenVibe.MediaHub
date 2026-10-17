@@ -242,6 +242,8 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('Latest recordings'));
         assert.ok(r.text.includes('Latest clips'));
         assert.ok(r.text.includes('/v/101'));
+        const ld = [...r.text.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap((m) => [].concat(JSON.parse(m[1])));
+        assert.ok(ld.some((n) => n['@type'] === 'WebSite' && n.name === 'OpenVibe.Video'), 'the home says what the site is (JSON-LD)');
         assert.ok(r.text.includes('/c/201'));
         assert.ok(!r.text.includes('/v/102'), 'the unlisted VOD is not in a list');
         assert.ok(!r.text.includes('/v/109'), 'a recording under 15 seconds gets no tile on the front page');

@@ -695,6 +695,11 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
         return page(req, res, {
             index: true,
             description: 'Videos people upload, and stream recordings and clips from OpenVibe.Live with AI chapters and captions.',
+            // What the site is, for search engines (as the Download home says it).
+            jsonLd: [
+                seo.jsonLd.website({ name: 'OpenVibe.Video', url: base, description: 'Videos people upload, and stream recordings and clips from OpenVibe.Live with AI chapters and captions.' }),
+                seo.jsonLd.webPage({ name: 'OpenVibe.Video', url: `${base}/`, description: 'Videos people upload, and stream recordings and clips from OpenVibe.Live with AI chapters and captions.', siteUrl: base }),
+            ],
             body: html`<header class="ovv-hero"><p class="ovv-eyebrow"><i class="fa-solid fa-circle-play" aria-hidden="true"></i> OpenVibe.Video</p>
 <h1>Watch, upload, stream.</h1>
 <p class="ovv-lede">Upload a video or record your camera or screen right here, and OpenVibe.AI adds captions, chapters and a summary you can use as the description. The recordings and clips of streams on OpenVibe.Live are here too. Everything you post plays on your channel at openvibe.video/@you.</p>
