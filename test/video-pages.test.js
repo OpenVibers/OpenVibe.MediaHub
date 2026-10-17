@@ -250,6 +250,7 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('<video'), 'a video element');
         assert.ok(r.text.includes('src="https://openvibe.media/v/101"'), 'the playback url');
         assert.match(r.text, /class="ovv-avatar"[^>]*>S<img src="[^"]*\/avatar\/streamer" alt="" loading="lazy">/, 'the streamer\'s picture over the letter');
+        assert.match(r.text, /<title>[^<]*\(@streamer, Oct 12, 2026\)[^<]*<\/title>/, 'the title names the channel and the day (streamers reuse stream titles)');
         assert.ok(r.text.includes('preload="metadata"'));
         assert.ok(r.text.includes('playsinline'));
         assert.ok(r.text.includes('data-ovv-video'));

@@ -146,6 +146,13 @@ function videoLd({ base, path, item, title, description, chapterList, partOf }) 
     };
 }
 
+// A watch page's title: streamers reuse stream titles ("Fortnite!" titled twelve different recordings' pages on
+// 2026-10-17), so the channel and the day make each page's title its own in search results and browser tabs.
+function watchTitle(title, who, iso) {
+    const parts = [/^[A-Za-z0-9_]{1,32}$/.test(String(who || '')) ? `@${who}` : null, dateLabel(iso) || null].filter(Boolean);
+    return parts.length ? `${title} (${parts.join(', ')})` : title;
+}
+
 function dateLabel(iso) {
     if (!iso) return '';
     const d = new Date(iso);
@@ -784,7 +791,7 @@ ${uploaded.length ? html`<section class="ovv-section" aria-labelledby="h-uploads
             index: !unlisted && !ownOnly,
             noindex: unlisted || ownOnly,
             ...(ownOnly ? { cache: cache.htmlHeaders({ private: true }) } : {}),
-            title: vod.title || 'Stream recording',
+            title: watchTitle(vod.title || 'Stream recording', vod.username, vod.created_at),
             description: vod.description || vod.ai_overview || '',
             ...(ownOnly || vod.is_recording ? {} : {
                 jsonLd: videoLd({ base, path: `/v/${id}`, item: vod, title: vod.title || 'Stream recording', description: vod.description || vod.ai_overview, chapterList: mems }),
@@ -861,7 +868,7 @@ ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 i
             index: !unlisted && !ownOnly && !aiClip,
             noindex: unlisted || ownOnly || aiClip,
             ...(ownOnly ? { cache: cache.htmlHeaders({ private: true }) } : {}),
-            title: clip.title || 'Clip',
+            title: watchTitle(clip.title || 'Clip', clip.source_streamer_username, clip.created_at),
             description: clip.ai_overview || '',
             ...(ownOnly || aiClip ? {} : {
                 jsonLd: videoLd({ base, path: `/c/${id}`, item: clip, title: clip.title || 'Clip', description: clip.ai_overview || attribution, partOf: clip.vod_id ? `/v/${clip.vod_id}` : null }),
