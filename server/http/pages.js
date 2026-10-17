@@ -42,7 +42,7 @@ const rules = require('../drive/rules');
 const { isStaff } = require('../drive/staff');
 const { boundaryOf, readFormData } = require('./form-upload');
 
-const SITE_NAME = 'OpenVibe.MediaHub';
+const SITE_NAME = 'OpenVibe.Download';   // these pages serve openvibe.download (MediaHub is the repository, not a name people see)
 const TAGLINE = 'Your files, shared on your terms.';
 const ABUSE_EMAIL = 'abuse@openvibe.network';
 const DMCA_EMAIL = 'dmca@openvibe.network';
