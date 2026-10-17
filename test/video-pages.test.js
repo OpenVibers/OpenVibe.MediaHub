@@ -221,6 +221,13 @@ function countOccurrences(haystack, needle) {
         live.setChatDown(false);
     });
 
+    await check('the player shows the item\'s picture until it plays (a 1280 px WebP of a Media thumbnail)', async () => {
+        const vod = await getVideo('/v/101');
+        assert.ok(/<video class="ovv-player"[^>]* poster="https:\/\/openvibe\.media\/t\/101\.jpg\?w=1280&amp;fmt=webp"/.test(vod.text), vod.text.match(/<video[^>]*>/)?.[0]);
+        const clip = await getVideo('/c/201');
+        assert.ok(clip.status !== 200 || !/<video class="ovv-player"[^>]* poster=/.test(clip.text), 'no thumbnail, no poster');
+    });
+
     await check('the video host answers /release.json too (the shared release check reads its own origin)', async () => {
         const r = await getVideo('/release.json');
         assert.strictEqual(r.status, 200);
