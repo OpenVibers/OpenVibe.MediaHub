@@ -24,26 +24,35 @@ function createIdentity({ config, fetchImpl = globalThis.fetch, log = console })
         fetchImpl,
     }) : null;
 
-    /** One username → its subject, or null when Network does not know it (or cannot be asked). */
-    async function resolveUsername(username) {
-        if (!tokens) return null;
+    /**
+     * One username → { status: 'found', id } | { status: 'unknown' } (Network answered 404) | { status: 'error' } (not
+     * configured, or Network could not be asked). Only 'unknown' says nobody has the name.
+     */
+    async function lookup(username) {
+        if (!tokens) return { status: 'error' };
         try {
             const res = await fetchImpl(
                 `${config.networkInternalUrl}/internal/identity/resolve?username=${encodeURIComponent(username)}`,
                 { headers: { Accept: 'application/json', ...(await tokens.authHeaders()) }, signal: AbortSignal.timeout(5000) });
             if (res.status === 401 && tokens.invalidate) tokens.invalidate();
-            if (res.status === 404) return null;
+            if (res.status === 404) return { status: 'unknown' };
             if (!res.ok) {
                 log.warn(`[MediaHub] identity.resolve answered ${res.status} for @${username.slice(0, 40)}`);
-                return null;
+                return { status: 'error' };
             }
             const data = await res.json().catch(() => null);
             const id = data && data.subject && data.subject.id;
-            return typeof id === 'string' && id.startsWith('usr_') ? id : null;
+            return typeof id === 'string' && id.startsWith('usr_') ? { status: 'found', id } : { status: 'error' };
         } catch (err) {
             log.warn('[MediaHub] identity.resolve failed:', (err && err.message) || '');
-            return null;
+            return { status: 'error' };
         }
+    }
+
+    /** One username → its subject, or null when Network does not know it (or cannot be asked). */
+    async function resolveUsername(username) {
+        const r = await lookup(username);
+        return r.status === 'found' ? r.id : null;
     }
 
     /**
@@ -65,7 +74,7 @@ function createIdentity({ config, fetchImpl = globalThis.fetch, log = console })
         return { subjects: [...new Set(subjects)], names: [...new Set(names)], unresolved };
     }
 
-    return { configured, resolveUsername, resolveUsernames };
+    return { configured, lookup, resolveUsername, resolveUsernames };
 }
 
 module.exports = { createIdentity };

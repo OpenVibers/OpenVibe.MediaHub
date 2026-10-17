@@ -316,6 +316,13 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('/v/101'));
         assert.ok(r.text.includes('Clips'));
         assert.ok(r.text.includes('/c/201'));
+        assert.match(r.text, /<img src="[^"]*\/avatar\/streamer" alt="" loading="lazy">/, 'the person\'s picture over the letter');
+    });
+
+    await check('a name nobody has, with nothing to show, is a 404 (not an empty channel page)', async () => {
+        const r = await getVideo('/@nobody_here_x9');
+        assert.strictEqual(r.status, 404);
+        assert.ok(!r.text.includes('No recordings yet'));
     });
 
     await check('captions.vtt is exact, escaping and collapsing cue text', async () => {

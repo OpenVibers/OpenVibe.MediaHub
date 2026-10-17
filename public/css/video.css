@@ -58,6 +58,10 @@
 .ovv-byline { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; padding-bottom: 16px; border-bottom: 1px solid var(--ovv-line); }
 .ovv-avatar { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-light, #60a5fa), var(--accent-strong, #2563eb)); color: #fff !important; font-weight: 800; text-decoration: none; }
 .ovv-avatar--big { width: 64px; height: 64px; font-size: 1.6rem; }
+/* The person's picture (Network's /avatar/:username, a lettered one when they have none) over the letter, which
+   still shows if the picture cannot load. */
+.ovv-avatar { position: relative; overflow: hidden; }
+.ovv-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .ovv-byline-text { display: grid; gap: 2px; min-width: 0; flex: 1 1 200px; }
 .ovv-channel-name { font-weight: 700; color: var(--text-primary, #e6edf7) !important; text-decoration: none; overflow-wrap: anywhere; }
 a.ovv-channel-name:hover { text-decoration: underline; }

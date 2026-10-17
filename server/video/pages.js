@@ -386,17 +386,20 @@ function createVideoRoutes(ctx) {
     // A channel page lists that person's public playlists, which are stored by subject: the username is resolved
     // through Network (identity.subject.resolve) and remembered for ten minutes (an unknown name for one), at most
     // 1,000, so a crawled channel page is not a Network call per visit.
-    const subjects = new Map();   // username (lowercase) → { at, ttl, subject }
-    async function subjectOf(username) {
+    // `unknown` is true only when Network answered that nobody has the name (not when it could not be asked).
+    const subjects = new Map();   // username (lowercase) → { at, ttl, subject, unknown }
+    async function identityOf(username) {
         const key = username.toLowerCase();
         const hit = subjects.get(key);
-        if (hit && Date.now() - hit.at < hit.ttl) return hit.subject;
-        const subject = ctx.identity && ctx.identity.resolveUsername ? await ctx.identity.resolveUsername(username) : null;
+        if (hit && Date.now() - hit.at < hit.ttl) return hit;
+        const r = ctx.identity && ctx.identity.lookup ? await ctx.identity.lookup(username) : { status: 'error' };
+        const entry = { at: Date.now(), ttl: r.status === 'found' ? 600_000 : 60_000, subject: r.status === 'found' ? r.id : null, unknown: r.status === 'unknown' };
         subjects.delete(key);
-        subjects.set(key, { at: Date.now(), ttl: subject ? 600_000 : 60_000, subject });
+        subjects.set(key, entry);
         if (subjects.size > 1000) subjects.delete(subjects.keys().next().value);
-        return subject;
+        return entry;
     }
+    async function subjectOf(username) { return (await identityOf(username)).subject; }
     const live = createLiveClient({ config, fetchImpl: ctx.fetchImpl || globalThis.fetch, log });
     const chat = createChatClient({ config, fetchImpl: ctx.fetchImpl || globalThis.fetch, log });
     const r = asyncRouter();
@@ -1017,12 +1020,17 @@ ${manageable ? ownerPanel('clip', id, clip) : ''}
         const prevLink = pageNum > 1 ? `?page=${pageNum - 1}` : null;
         const nextLink = hasMore ? `?page=${pageNum + 1}` : null;
         const uploaded = pageNum === 1 ? await ctx.videoUploads.channel(username) : [];
+        // A name nobody has, with nothing to show, is a 404 (it was a 200 "No recordings yet" page linking to a Live
+        // channel that does not exist, 2026-10-17). Only when Network says so: if it cannot be asked, the page stays.
+        if (!vods.length && !clips.length && !uploaded.length && !lists.length && (await identityOf(username).catch(() => ({}))).unknown) {
+            return notFound(req, res);
+        }
 
         return page(req, res, {
             index: true,
             title: `@${username}`,
             description: `Videos, recordings and clips from @${username} on OpenVibe.Video.`,
-            body: html`${req.query.deleted === '1' ? notice('Deleted on OpenVibe.Live.', 'ok') : ''}<header class="ovv-channel-head"><span class="ovv-avatar ovv-avatar--big" aria-hidden="true">${username.slice(0, 1).toUpperCase()}</span><div><h1>@${username}</h1><p class="ovv-meta">Recordings and clips from this channel's streams on OpenVibe.Live.</p></div><a class="ovv-btn" href="${livePublic}/@${username}"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Channel on OpenVibe.Live</a></header>
+            body: html`${req.query.deleted === '1' ? notice('Deleted on OpenVibe.Live.', 'ok') : ''}<header class="ovv-channel-head"><span class="ovv-avatar ovv-avatar--big" aria-hidden="true">${username.slice(0, 1).toUpperCase()}<img src="${config.networkUrl}/avatar/${username}" alt="" loading="lazy"></span><div><h1>@${username}</h1><p class="ovv-meta">Recordings and clips from this channel's streams on OpenVibe.Live.</p></div><a class="ovv-btn" href="${livePublic}/@${username}"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Channel on OpenVibe.Live</a></header>
 ${uploaded.length ? html`<section class="ovv-section" aria-labelledby="h-uploads"><h2 id="h-uploads">Videos</h2>${grid(uploaded.map(uploadCard))}</section>` : ''}
 <section class="ovv-section" aria-labelledby="h-vods"><h2 id="h-vods">Recordings</h2>${grid(vods.map(vodCard), 'No recordings yet.')}${prevLink || nextLink ? html`<nav class="ovv-pagination" aria-label="Pages">${prevLink ? html`<a href="${prevLink}">← Newer</a>` : ''}${nextLink ? html`<a href="${nextLink}">Older →</a>` : ''}</nav>` : ''}</section>
 ${clips.length ? html`<section class="ovv-section" aria-labelledby="h-clips"><h2 id="h-clips">Clips</h2>${grid(clips.map(clipCard), 'No clips yet.')}</section>` : ''}
