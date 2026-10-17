@@ -755,27 +755,34 @@ ${uploaded.length ? html`<section class="ovv-section" aria-labelledby="h-uploads
         const clips = Array.isArray(data.clips) ? data.clips.filter((c) => c && c.visibility !== 'private') : [];
 
         const segs = transcriptSegments(vod);
+        // Chapters, comments, chat replay, the playlist form and up next do not depend on each other: asked together
+        // (one after another, five services' answers in turn, the page's p95 was 581 ms on 2026-10-17).
+        const fail = Symbol('failed');
+        const [m, cm, replay, saveForm, up] = await Promise.all([
+            Promise.resolve().then(() => live.vodMemories(id)).catch(() => fail),
+            Promise.resolve().then(() => live.comments('vod', id)).catch(() => fail),
+            Promise.resolve().then(() => chat.chatReplay(vod.stream_id)).catch(() => fail),
+            playlistForm(req, 'vod', id),
+            upNext(req, 'vod', id),
+        ]);
         let mems = [];
-        try {
-            const m = await live.vodMemories(id);
-            mems = chapters(moments(m && m.memories), vod.duration_seconds);
-        } catch { mems = []; }
+        try { if (m !== fail) mems = chapters(moments(m && m.memories), vod.duration_seconds); } catch { mems = []; }
         let threadUrl = null;
         let commentRows = [];
         let commentsOk = false;
-        try {
-            const cm = await live.comments('vod', id);
-            threadUrl = httpsUrl(cm && cm.thread && cm.thread.url);
-            const list = Array.isArray(cm && cm.comments) ? cm.comments : [];
-            commentRows = list.filter((c) => c && !c.is_deleted && !c.deleted).slice(0, 20);
-            commentsOk = true;
-        } catch { threadUrl = null; }
+        if (cm !== fail) {
+            try {
+                threadUrl = httpsUrl(cm && cm.thread && cm.thread.url);
+                const list = Array.isArray(cm && cm.comments) ? cm.comments : [];
+                commentRows = list.filter((c) => c && !c.is_deleted && !c.deleted).slice(0, 20);
+                commentsOk = true;
+            } catch { threadUrl = null; }
+        }
 
         let chatRows = null;
-        try {
-            const replay = await chat.chatReplay(vod.stream_id);
-            chatRows = chatMessageRows(vod, replay && Array.isArray(replay.messages) ? replay.messages : []);
-        } catch { chatRows = null; }
+        if (replay !== fail) {
+            try { chatRows = chatMessageRows(vod, replay && Array.isArray(replay.messages) ? replay.messages : []); } catch { chatRows = null; }
+        }
 
         const unlisted = vod.visibility === 'unlisted';
         const channelName = vod.display_name || vod.username || null;
@@ -787,8 +794,6 @@ ${uploaded.length ? html`<section class="ovv-section" aria-labelledby="h-uploads
         if (vod.stream_category) metaParts.push(vod.stream_category);
         if (vod.view_count != null) metaParts.push(`${Number(vod.view_count) || 0} views`);
 
-        const saveForm = await playlistForm(req, 'vod', id);
-        const up = await upNext(req, 'vod', id);
         const nextAttr = up.nextUrl ? html` data-ovv-next="${up.nextUrl}"` : '';
         const viewAttr = html` data-ovv-view="${livePublic}/api/views/vod/${id}"`;
         const hlsAttr = hlsAttrs(vod);
@@ -847,11 +852,14 @@ ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 i
         const clip = data.clip;
         const manageable = mayManage(req, 'clip', clip);
 
+        // The comment thread, the playlist form and up next are asked together.
+        const [cm, saveForm, up] = await Promise.all([
+            Promise.resolve().then(() => live.comments('clip', id)).catch(() => null),
+            playlistForm(req, 'clip', id),
+            upNext(req, 'clip', id),
+        ]);
         let threadUrl = null;
-        try {
-            const cm = await live.comments('clip', id);
-            threadUrl = httpsUrl(cm && cm.thread && cm.thread.url);
-        } catch { threadUrl = null; }
+        try { threadUrl = httpsUrl(cm && cm.thread && cm.thread.url); } catch { threadUrl = null; }
 
         const unlisted = clip.visibility === 'unlisted';
         // AI clips stay out of search, as on Live: noindex and no structured data.
@@ -864,8 +872,6 @@ ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 i
         const madeBy = clip.display_name || clip.username || 'an OpenVibe member';
         const attribution = clip.auto_generated ? `AI clip from ${sourceName}'s stream` : `Made by ${madeBy}`;
 
-        const saveForm = await playlistForm(req, 'clip', id);
-        const up = await upNext(req, 'clip', id);
         const nextAttr = up.nextUrl ? html` data-ovv-next="${up.nextUrl}"` : '';
         const viewAttr = html` data-ovv-view="${livePublic}/api/views/clip/${id}"`;
         const hlsAttr = hlsAttrs(clip);
