@@ -47,5 +47,5 @@
   "sdk": "openvibe-sdk v0.50.1",
   "shared": "openvibe-shared v4.5.0",
   "deployment": "openvibe-ovh: unit openvibe-media-hub.service on 127.0.0.1:4990 (git checkout /opt/openvibe.download, env /etc/openvibe/media-hub.env, database ov_media_hub), deployed with `sudo ovhost deploy media-hub`; public at https://openvibe.download since 2026-10-08 and https://openvibe.video since 2026-10-12.",
-  "updated": "2026-10-17"
+  "updated": "2026-10-20"
 }
