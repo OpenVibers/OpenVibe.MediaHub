@@ -36,7 +36,9 @@ const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 const HOME_LIMIT = 10;
 const MIN_HOME_SECONDS = 15;
 const SITEMAP_LIMIT = 30;     // Live's feed page size (its MAX_LIMIT)
-const SITEMAP_PAGES = 5;      // per kind: up to 150 recordings and 150 clips
+const SITEMAP_PAGES = 50;     // per kind: up to 1,500 recordings and 1,500 clips (785 and 156 public on 2026-10-20)
+const SITEMAP_TTL_MS = 10 * 60 * 1000;
+const THIN_SECONDS = 120;
 const CHANNEL_CLIPS_LIMIT = 12;
 const PER_PAGE = 24;
 
@@ -75,6 +77,58 @@ function posterAttr(url) {
  */
 function fileOf(item) {
     return httpsUrl(item.file_url) || httpsUrl(item.playback_url);
+}
+
+/**
+ * The file as a crawler should fetch it. openvibe.media's /v/<id> and /c/<id> answer search engines' bots with a page
+ * (link previews), Googlebot-Video included, so structured data and the video sitemap ask with ?raw=1: always the bytes.
+ */
+function crawlFile(url) {
+    return /^https:\/\/openvibe\.media\/[vc]\/\d+$/.test(url || '') ? `${url}?raw=1` : url;
+}
+
+/**
+ * A recording search engines should leave out: under two minutes with nothing written about it (no description, no AI
+ * overview, under three transcript lines). On 2026-10-20, 118 of 785 public recordings were under a minute, mostly test
+ * streams titled "<name>'s Channel": hundreds of near-empty pages that only dilute the site. The page still plays.
+ */
+function thinRecording(vod, transcriptLines = 0) {
+    return !vod.description && !vod.ai_overview && transcriptLines < 3 && (Number(vod.duration_seconds) || 0) < THIN_SECONDS;
+}
+
+/** 31 → "31 seconds", 754 → "13 minutes", 7500 → "2 hours 5 minutes". */
+function durationWords(s) {
+    const n = Math.max(0, Math.round(Number(s) || 0));
+    const plural = (v, unit) => `${v} ${unit}${v === 1 ? '' : 's'}`;
+    if (n < 60) return plural(n, 'second');
+    if (n < 3600) return plural(Math.round(n / 60), 'minute');
+    const h = Math.floor(n / 3600);
+    const m = Math.round((n % 3600) / 60);
+    return m ? `${plural(h, 'hour')} ${plural(m, 'minute')}` : plural(h, 'hour');
+}
+
+/**
+ * A watch page's meta description when nobody wrote one, so no two pages share the site's tagline: what it is, whose,
+ * how long, when, and (for a recording with a transcript) its first words, at most ~160 characters.
+ */
+function factualDescription(kind, item, firstWords = '') {
+    const at = (u) => (/^[A-Za-z0-9_]{1,32}$/.test(String(u || '')) ? `@${u}` : null);
+    const facts = [item.duration_seconds ? durationWords(item.duration_seconds) : null, dateLabel(item.created_at) || null, kind === 'vod' ? item.stream_category || null : null].filter(Boolean).join(', ');
+    let lead;
+    if (kind === 'vod') lead = `Stream recording${at(item.username) ? ` by ${at(item.username)}` : ''} on OpenVibe.Live`;
+    else {
+        const streamer = at(item.source_streamer_username);
+        const maker = at(item.username);
+        lead = `Clip${streamer ? ` of ${streamer}'s stream` : ''} on OpenVibe.Live${maker && maker !== streamer ? `, made by ${maker}` : ''}`;
+    }
+    const head = `${lead}${facts ? `: ${facts}` : ''}.`;
+    const words = String(firstWords || '').replace(/\s+/g, ' ').trim();
+    if (words && head.length < 120) {
+        const room = 156 - head.length - 12;
+        const quote = words.length > room ? `${words.slice(0, room).replace(/\s+\S*$/, '')}…` : words;
+        if (quote.length > 12) return `${head} It opens: “${quote}”`;
+    }
+    return kind === 'vod' ? `${head} Watch with AI captions and chapters on OpenVibe.Video.` : `${head} Watch it on OpenVibe.Video.`;
 }
 
 /** The player's HLS source: Media's timeline playlist, for a finished item that has one, on the playback file's origin. */
@@ -142,7 +196,7 @@ function videoLd({ base, path, item, title, description, chapterList, partOf }) 
         ...seo.jsonLd.video({
             name: title, url: pageUrl, description: String(description || title).slice(0, 500),
             thumbnailUrl: thumb ? [thumb] : undefined, uploadDate: isoTime(item.created_at),
-            duration: isoDuration(item.duration_seconds), contentUrl: fileOf(item) || undefined, embedUrl: pageUrl,
+            duration: isoDuration(item.duration_seconds), contentUrl: crawlFile(fileOf(item)) || undefined, embedUrl: pageUrl,
         }),
         ...(item.view_count != null ? { interactionStatistic: { '@type': 'InteractionCounter', interactionType: 'https://schema.org/WatchAction', userInteractionCount: Number(item.view_count) || 0 } } : {}),
         ...(channel ? { author: { '@type': 'Person', name: channel, ...(item.username ? { url: `${base}/@${item.username}` } : {}) } } : {}),
@@ -803,14 +857,16 @@ ${uploaded.length ? html`<section class="ovv-section" aria-labelledby="h-uploads
         const viewAttr = html` data-ovv-view="${livePublic}/api/views/vod/${id}"`;
         const hlsAttr = hlsAttrs(vod);
 
+        const thin = thinRecording(vod, segs.length);
+        const about = vod.description || vod.ai_overview || factualDescription('vod', vod, segs.slice(0, 6).map((s) => s.text).join(' '));
         return page(req, res, {
-            index: !unlisted && !ownOnly,
-            noindex: unlisted || ownOnly,
+            index: !unlisted && !ownOnly && !thin,
+            noindex: unlisted || ownOnly || thin,
             ...(ownOnly ? { cache: cache.htmlHeaders({ private: true }) } : {}),
             title: watchTitle(vod.title || 'Stream recording', vod.username, vod.created_at),
-            description: vod.description || vod.ai_overview || '',
+            description: about,
             ...(ownOnly || vod.is_recording ? {} : {
-                jsonLd: videoLd({ base, path: `/v/${id}`, item: vod, title: vod.title || 'Stream recording', description: vod.description || vod.ai_overview, chapterList: mems }),
+                jsonLd: videoLd({ base, path: `/v/${id}`, item: vod, title: vod.title || 'Stream recording', description: about, chapterList: mems }),
                 image: httpsUrl(vod.thumbnail_url) || undefined, ogType: 'video.other',
             }),
             scripts: ['js/video.js'],
@@ -886,9 +942,9 @@ ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 i
             noindex: unlisted || ownOnly || aiClip,
             ...(ownOnly ? { cache: cache.htmlHeaders({ private: true }) } : {}),
             title: watchTitle(clip.title || 'Clip', clip.source_streamer_username, clip.created_at),
-            description: clip.ai_overview || '',
+            description: clip.ai_overview || factualDescription('clip', clip),
             ...(ownOnly || aiClip ? {} : {
-                jsonLd: videoLd({ base, path: `/c/${id}`, item: clip, title: clip.title || 'Clip', description: clip.ai_overview || attribution, partOf: clip.vod_id ? `/v/${clip.vod_id}` : null }),
+                jsonLd: videoLd({ base, path: `/c/${id}`, item: clip, title: clip.title || 'Clip', description: clip.ai_overview || factualDescription('clip', clip) || attribution, partOf: clip.vod_id ? `/v/${clip.vod_id}` : null }),
                 image: httpsUrl(clip.thumbnail_url) || undefined, ogType: 'video.other',
             }),
             scripts: ['js/video.js'],
@@ -1207,11 +1263,37 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
         return items;
     }
 
+    /**
+     * A feed item's <video:video> (openvibe-shared seo.sitemapXml): the thumbnail, title, a description (the item's own
+     * text or the facts), the file (Media's bytes) and who made it. Without a thumbnail there is none.
+     */
+    function sitemapVideo(it) {
+        const thumb = httpsUrl(it.thumbnail_url);
+        if (!thumb) return null;
+        const kind = it.kind === 'clip' ? 'clip' : 'vod';
+        const who = it.channel && it.channel.username;
+        const item = { duration_seconds: it.duration_seconds, created_at: it.created_at, username: kind === 'vod' ? who : (it.by && it.by.username) || who, source_streamer_username: who };
+        const file = kind === 'clip' ? httpsUrl(it.preview_url) : `https://openvibe.media/v/${Number(it.id)}`;
+        return {
+            thumbnail_loc: thumb, title: it.title || (kind === 'clip' ? 'Clip' : 'Stream recording'),
+            description: it.excerpt || factualDescription(kind, item),
+            content_loc: crawlFile(file) || undefined, duration: it.duration_seconds, view_count: it.views,
+            publication_date: isoTime(it.created_at),
+            ...(who && /^[A-Za-z0-9_]{1,32}$/.test(who) ? { uploader: who, uploader_info: `${base}/@${who}` } : {}),
+        };
+    }
+
+    let sitemapCache = null;   // { at, xml }: Live's feed is walked page by page, so the answer is kept ten minutes
     r.get('/sitemap.xml', async (req, res) => {
+        if (sitemapCache && Date.now() - sitemapCache.at < SITEMAP_TTL_MS) {
+            return res.type('application/xml').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(sitemapCache.xml);
+        }
         const [vods, clips, uploaded] = await Promise.all([feedItems('vods'), feedItems('clips'), ctx.videoUploads.latest(500)]);
         const day = (iso) => { const d = new Date(String(iso || '')); return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10); };
         const newest = (list) => list.map(day).filter(Boolean).sort().pop() || null;
-        const items = [...vods, ...clips].filter((it) => it && Number.isSafeInteger(Number(it.id)));
+        // A short recording with nothing written about it is noindex on its page (thinRecording), so it is left out here.
+        const listed = vods.filter((it) => it && (it.excerpt || (Number(it.duration_seconds) || 0) >= THIN_SECONDS));
+        const items = [...listed, ...clips].filter((it) => it && Number.isSafeInteger(Number(it.id)));
         const channels = new Map();   // username → its newest item's day
         for (const it of items) {
             const u = it.channel && it.channel.username;
@@ -1228,11 +1310,15 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
         const urls = [
             { loc: `${base}/`, lastmod: newest(items.map((it) => it.created_at)) },
             { loc: `${base}/updates` },
-            ...items.map((it) => ({ loc: `${base}${it.kind === 'clip' ? '/c/' : '/v/'}${Number(it.id)}`, lastmod: day(it.created_at) })),
+            ...items.map((it) => {
+                const video = sitemapVideo(it);
+                return { loc: `${base}${it.kind === 'clip' ? '/c/' : '/v/'}${Number(it.id)}`, lastmod: day(it.created_at), ...(video ? { videos: [video] } : {}) };
+            }),
             ...uploaded.map((x) => ({ loc: `${base}/u/${x.id}`, lastmod: day(x.updated_at) })),
             ...[...channels].map(([u, d]) => ({ loc: `${base}/@${u}`, lastmod: d })),
-        ].map((u) => (u.lastmod ? u : { loc: u.loc }));
-        return res.type('application/xml').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(seo.sitemapXml(urls));
+        ].map((u) => (u.lastmod ? u : { ...u, lastmod: undefined }));
+        sitemapCache = { at: Date.now(), xml: seo.sitemapXml(urls) };
+        return res.type('application/xml').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(sitemapCache.xml);
     });
 
     r.get('/robots.txt', (_req, res) => {

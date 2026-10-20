@@ -88,6 +88,8 @@ function startLive() {
         ai_overview: '', ai_transcript_json: null,
         stream_id: 1002, stream_started_at: '2026-10-12 09:30:00', stream_ended_at: '2026-10-12 09:35:00',
     };
+    // Twenty seconds with nothing written about it: a test stream, left out of search.
+    const thinVod = { ...secondVod, id: 106, title: "Streamer's Channel", duration_seconds: 20, stream_category: null };
     // Live's answer since T4 step 5: playback_url is the playlist, file_url the file.
     const hlsFirstVod = { ...secondVod, id: 105, title: 'Playlist first', playback_url: 'https://openvibe.media/o/med_105/master.m3u8',
         hls_url: 'https://openvibe.media/o/med_105/master.m3u8', file_url: 'https://openvibe.media/v/105' };
@@ -104,7 +106,7 @@ function startLive() {
         const p = url.pathname;
         if (p === '/api/content/feed') {
             const type = url.searchParams.get('type');
-            if (type === 'vods') return json(200, { items: [vodFeedItem, { ...vodFeedItem, key: 'vod:109', id: 109, title: 'A two-second blip', duration_seconds: 2 }], next: null });
+            if (type === 'vods') return json(200, { items: [vodFeedItem, { ...vodFeedItem, key: 'vod:109', id: 109, title: 'A two-second blip', duration_seconds: 2 }, { ...vodFeedItem, key: 'vod:110', id: 110, title: "Streamer's Channel", duration_seconds: 10, excerpt: null }], next: null });
             if (type === 'clips') return json(200, { items: [clipFeedItem], next: null });
             return json(200, { items: [], next: null });
         }
@@ -130,6 +132,7 @@ function startLive() {
             if (vodDetail[1] === '101') return json(200, { vod: publicVod, clips: [clipListItem] });
             if (vodDetail[1] === '102') return json(200, { vod: unlistedVod, clips: [] });
             if (vodDetail[1] === '104') return json(200, { vod: secondVod, clips: [] });
+            if (vodDetail[1] === '106') return json(200, { vod: thinVod, clips: [] });
             if (vodDetail[1] === '105') return json(200, { vod: hlsFirstVod, clips: [] });
             return json(404, { error: 'not found' });
         }
@@ -271,7 +274,7 @@ function countOccurrences(haystack, needle) {
         assert.strictEqual(ld.uploadDate, '2026-10-12T10:00:00.000Z');
         assert.strictEqual(ld.duration, 'PT45S');
         assert.deepStrictEqual(ld.thumbnailUrl, ['https://openvibe.media/t/101.jpg']);
-        assert.strictEqual(ld.contentUrl, 'https://openvibe.media/v/101');
+        assert.strictEqual(ld.contentUrl, 'https://openvibe.media/v/101?raw=1', 'Media answers bots a page without ?raw=1');
         assert.deepStrictEqual(ld.author, { '@type': 'Person', name: 'Streamer', url: 'https://openvibe.video/@streamer' });
         assert.ok(Array.isArray(ld.hasPart) && ld.hasPart.length >= 1 && ld.hasPart.every((c) => c['@type'] === 'Clip' && Number.isInteger(c.startOffset) && c.url.startsWith('https://openvibe.video/v/101?t=')), 'chapters as key moments');
         assert.match(r.text, /<meta property="og:image" content="https:\/\/openvibe\.media\/t\/101\.jpg"/, 'the thumbnail is the share image');
@@ -381,6 +384,36 @@ function countOccurrences(haystack, needle) {
         assert.ok(!r.text.includes('/v/102'));
     });
 
+    await check('a recording nobody wrote about gets a description of its own, not the site tagline', async () => {
+        const r = await getVideo('/v/104');
+        assert.strictEqual(r.status, 200);
+        const want = 'Stream recording by @streamer on OpenVibe.Live: 5 minutes, Oct 12, 2026. Watch with AI captions and chapters on OpenVibe.Video.';
+        assert.ok(r.text.includes(`<meta name="description" content="${want}">`), r.text.slice(0, 1500));
+        assert.ok(!r.text.includes('content="noindex'), 'five minutes is indexable');
+        const clip = await getVideo('/c/201');
+        assert.ok(clip.text.includes('<meta name="description" content="A clip overview">'), 'written text still wins');
+    });
+
+    await check('a short recording with nothing written about it is noindex and out of the sitemap', async () => {
+        const r = await getVideo('/v/106');
+        assert.strictEqual(r.status, 200, 'it still plays');
+        assert.ok(r.text.includes('<meta name="robots" content="noindex">'));
+        assert.ok(r.text.includes('content="Stream recording by @streamer on OpenVibe.Live: 20 seconds, Oct 12, 2026.'));
+        const map = (await getVideo('/sitemap.xml')).text;
+        assert.ok(!map.includes('/v/110<'), 'the 10-second feed item with no text is left out');
+        assert.ok(map.includes('/v/109<'), 'a short one with a description stays');
+    });
+
+    await check('the sitemap carries a video entry for each listed recording and clip', async () => {
+        const map = (await getVideo('/sitemap.xml')).text;
+        assert.ok(map.includes('xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"'));
+        assert.ok(map.includes('<loc>https://openvibe.video/v/101</loc><lastmod>2026-10-12</lastmod><video:video><video:thumbnail_loc>https://openvibe.media/t/101.jpg</video:thumbnail_loc>'
+            + '<video:title>A public recording</video:title><video:description>A public stream</video:description>'
+            + '<video:content_loc>https://openvibe.media/v/101?raw=1</video:content_loc><video:duration>45</video:duration><video:view_count>100</video:view_count>'
+            + '<video:publication_date>2026-10-12T10:00:00.000Z</video:publication_date><video:uploader info="https://openvibe.video/@streamer">streamer</video:uploader></video:video></url>'), map);
+        assert.ok(map.includes('<loc>https://openvibe.video/c/201</loc><lastmod>2026-10-12</lastmod></url>'), 'a clip without a thumbnail has no video entry');
+    });
+
     await check('robots.txt and llms.txt answer on the video host', async () => {
         const robots = await getVideo('/robots.txt');
         assert.strictEqual(robots.status, 200);
@@ -413,7 +446,7 @@ function countOccurrences(haystack, needle) {
         assert.strictEqual(r.status, 200);
         assert.ok(r.text.includes('src="https://openvibe.media/v/105"'), 'the file is the <video> source');
         assert.ok(r.text.includes('data-ovv-hls="https://openvibe.media/o/med_105/master.m3u8"'));
-        assert.ok(r.text.includes('"contentUrl":"https://openvibe.media/v/105"'), 'contentUrl is the file');
+        assert.ok(r.text.includes('"contentUrl":"https://openvibe.media/v/105?raw=1"'), 'contentUrl is the file');
     });
 
     await check('the VOD page lists the chat replay with offsets, escaping and no private fields', async () => {
