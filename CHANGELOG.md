@@ -4,6 +4,12 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
 
 ## Unreleased
 
+- openvibe.video's search basics (2026-10-20). A watch page nobody wrote about gets a description of its own (who,
+  how long, when, its first words) instead of the site tagline. A recording under two minutes with nothing written
+  about it is noindex and out of the sitemap: 118 of 785 were under a minute, mostly test streams. The sitemap lists
+  every recording and clip (it stopped at 150 of each) with a video entry each (openvibe-shared 4.5.0) and is kept
+  ten minutes. Structured data and the sitemap name Media's file with `?raw=1`, since Media answers crawlers a page
+  otherwise.
 - MediaHub reaches OpenVibe.Media with its Network service token (audience `openvibe.media`, grants
   `media.object.upload` and `media.object.read` on namespace `media-hub`). `MEDIAHUB_MEDIA_APP_KEY` is gone
   (compatibility register C-71).
