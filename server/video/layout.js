@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const appIcon = require('openvibe-shared/app-icon');
+const ovServe = require('openvibe-shared/serve');
 const shell = require('openvibe-shared/shell');
 const cache = require('openvibe-shared/cache-policy');
 const { html, raw, esc, render } = require('../render/html');
@@ -33,6 +34,7 @@ function assetVersion(rel) {
 const asset = (rel) => `/${rel}?v=${assetVersion(rel)}`;
 
 /** o: title, description, body (html), config, path, index, noindex, viewer, private, crumbs [{label, href}], scripts [rel],
+ *     player (true: the network's video player, openvibe-shared player.js/css, on video[data-ov-player]),
  *     jsonLd (structured data for the page), image (its share image, an https URL), ogType */
 function renderPage(o) {
     // The front page's title says what the site is (search results show it; at most 60 characters).
@@ -49,7 +51,7 @@ ${appIcon.headTags({ site: 'media-hub' })}
 <link rel="stylesheet" href="${asset('css/app.css')}">
 <link rel="stylesheet" href="${asset('css/video.css')}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-${(o.scripts || []).map((rel) => `<script src="${asset(rel)}" defer></script>`).join('\n')}`;
+${o.player ? `<link rel="stylesheet" href="${ovServe.url('player.css')}">\n<script src="${ovServe.url('player.js')}" defer></script>\n` : ''}${(o.scripts || []).map((rel) => `<script src="${asset(rel)}" defer></script>`).join('\n')}`;
     const account = signedIn
         ? html`Signed in as <strong>${viewer.displayName || viewer.username || 'you'}</strong> · <a href="/auth/logout?next=${encodeURIComponent(pathNow)}">Sign out</a>`
         : html`<a href="/auth/login?next=${encodeURIComponent(pathNow)}">Sign in with OpenVibe</a>`;

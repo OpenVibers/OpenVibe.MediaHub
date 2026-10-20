@@ -266,6 +266,9 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('preload="metadata"'));
         assert.ok(r.text.includes('playsinline'));
         assert.ok(r.text.includes('data-ovv-video'));
+        // The network's player (openvibe-shared player.js/css): marked, and both files load on the page.
+        assert.ok(/<video class="ovv-player" data-ov-player controls /.test(r.text), 'the video takes the network player');
+        assert.ok(/<link rel="stylesheet" href="\/shared\/player\.css\?v=[0-9a-f]+">/.test(r.text) && /<script src="\/shared\/player\.js\?v=[0-9a-f]+" defer><\/script>/.test(r.text), 'player.css and player.js load');
         assert.ok(r.text.includes('data-ovv-view="https://openvibe.live/api/views/vod/101"'), 'playback counts a view on Live');
         const ld = [...r.text.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])).find((x) => x['@type'] === 'VideoObject');
         assert.ok(ld, 'a VideoObject');
