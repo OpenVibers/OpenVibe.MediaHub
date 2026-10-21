@@ -27,10 +27,9 @@
     "Per-caller and per-address limits; readiness (database required); metrics on loopback"
   ],
   "notYet": [
-    "Uploads on openvibe.pics (images, albums, embeds): parked until scanning (hash lists, malware) and abuse intake shared with Media holds exist",
-    "OpenVibe.Video uploads and public playlists of a channel",
-    "Public (signed-out) share links: deliberately not offered while there is no scanning",
-    "Previews and thumbnails of files"
+    "Signed-out uploads on openvibe.pics (MEDIAHUB_PICS_ANONYMOUS) and openvibe.download (MEDIAHUB_DOWNLOAD_ANONYMOUS): built and off until the owner registers the DMCA designated agent and the CSAM hash-matching account (plan T10)",
+    "Scanning of uploads (hash lists, malware) and abuse intake shared with OpenVibe.Media's holds",
+    "App, agent and service tokens on the drive, Pics and video upload routes: only the two playlist capabilities are registered; every other /api/v1 route needs a signed-in person"
   ],
   "capabilitiesRegistered": true,
   "serviceManifestRegistered": true,
@@ -46,6 +45,6 @@
   "contracts": "openvibe-contracts v0.209.0",
   "sdk": "openvibe-sdk v0.60.0",
   "shared": "openvibe-shared v4.7.0",
-  "deployment": "openvibe-ovh: unit openvibe-media-hub.service on 127.0.0.1:4990 (git checkout /opt/openvibe.download, env /etc/openvibe/media-hub.env, database ov_media_hub), deployed with `sudo ovhost deploy media-hub`; public at https://openvibe.download since 2026-10-08 and https://openvibe.video since 2026-10-12.",
+  "deployment": "openvibe-ovh: unit openvibe-media-hub.service on 127.0.0.1:4990 (git checkout /opt/openvibe.download, env /etc/openvibe/media-hub.env, database ov_media_hub), deployed with `sudo ovhost deploy media-hub`; public at https://openvibe.download since 2026-10-08, https://openvibe.video since 2026-10-12 and https://openvibe.pics since 2026-10-15.",
   "updated": "2026-10-21"
 }
