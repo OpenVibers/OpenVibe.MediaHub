@@ -513,8 +513,8 @@ Reporting a vulnerability: [SECURITY.md](SECURITY.md).
 - The form reader streams files to disk. A text field over 64 KB, a second file, or a body cut off before its last
   boundary is refused.
 - Session tokens are httpOnly cookies. Secrets live only in the env file, and no secret or request body is logged.
-- Next, before Pics or Video take uploads: scanning (hash lists, malware), a DMCA agent, and abuse intake shared
-  with OpenVibe.Media's holds.
+- Next, before Pics or Download take signed-out uploads: scanning (hash lists, malware), a DMCA agent, and abuse intake
+  shared with OpenVibe.Media's holds. Signed-in uploads are open on all three sites.
 
 ---
 
