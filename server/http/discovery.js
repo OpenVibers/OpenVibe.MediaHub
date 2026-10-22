@@ -14,12 +14,12 @@ const cache = require('openvibe-shared/cache-policy');
 const { asyncRouter } = require('./router');
 
 const SITE_NAME = 'OpenVibe.Download';
-const DESCRIPTION = 'OpenVibe.Download — Your files, shared on your terms.';
+const DESCRIPTION = 'A private drive on your OpenVibe account: upload files, share them with links you can take back, and back up a folder from your computer.';
 // /s/ (with the slash) rather than /s, or the rule would also swallow /safety, which is a public page.
 const DISALLOW = ['/auth/', '/api/', '/files', '/s/', '/staff'];
 
 const PAGE_TEXT = {
-    '/': ['OpenVibe.Download home', 'OpenVibe.Download: Your files, shared on your terms. A private drive for a signed-in OpenVibe account, with share links that expire, can be revoked and need the downloader to be signed in too.'],
+    '/': ['OpenVibe.Download home', 'OpenVibe.Download: Your files, shared on your terms. A private drive for a signed-in OpenVibe account, with share links that expire and can be revoked (for named people, anyone signed in, or a public download page), folder backups with the openvibe-download command, and an API.'],
     '/safety': ['Safety rules', 'What OpenVibe.Download allows and does not, who can upload and download, how reports work, and who to write to about abuse or copyright.'],
     '/updates': ['What shipped on OpenVibe.Download', 'This site\'s update log, from the network changelog feed.'],
 };
@@ -32,12 +32,21 @@ function siteUpdated() {
     try { return dayOf(JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'STATUS.json'), 'utf8')).updated); } catch { return null; }
 }
 
+/** The home's meta description, with the free storage this deployment really gives (config.quotas). At most 160 characters. */
+function homeDescription(config) {
+    const gb = (b) => `${Math.round(Number(b) / (1024 ** 3))} GB`;
+    const q = config.quotas || {};
+    if (!q.bytes || !q.maxFileBytes) return DESCRIPTION;
+    return `A private drive with ${gb(q.bytes)} free: upload files up to ${gb(q.maxFileBytes)}, share them with links you can take back, and back up a folder from your computer.`.slice(0, 160);
+}
+
 function homeJsonLd(config) {
     const site = String(config.baseUrl).replace(/\/+$/, '');
+    const description = homeDescription(config);
     return [
-        seo.jsonLd.website({ name: SITE_NAME, url: site, description: DESCRIPTION }),
-        seo.jsonLd.softwareApp({ name: SITE_NAME, url: site, description: DESCRIPTION, category: 'BusinessApplication', keywords: 'openvibe' }),
-        seo.jsonLd.webPage({ name: SITE_NAME, url: `${site}/`, description: DESCRIPTION, siteUrl: site }),
+        seo.jsonLd.website({ name: SITE_NAME, url: site, description }),
+        seo.jsonLd.softwareApp({ name: SITE_NAME, url: site, description, category: 'BusinessApplication', keywords: 'file storage, file sharing, backup, cloud drive, openvibe' }),
+        seo.jsonLd.webPage({ name: SITE_NAME, url: `${site}/`, description, siteUrl: site }),
     ];
 }
 
@@ -67,8 +76,8 @@ function createDiscoveryRoutes(ctx) {
     r.get('/llms.txt', (_req, res) => {
         res.type('text/plain').set('Cache-Control', TEXT).send(seo.llmsTxt({
             name: SITE_NAME,
-            summary: 'OpenVibe.Download: Your files, shared on your terms.',
-            details: 'Every page is server-rendered and readable without JavaScript.',
+            summary: 'OpenVibe.Download: a private drive on your OpenVibe account, with share links you control and folder backups.',
+            details: 'Upload files to your own drive, share a file or folder with named OpenVibe accounts, anyone signed in, or a public download page (links expire and can be revoked), and keep a folder on your computer backed up with the openvibe-download command (a sync key from /sync). Every page is server-rendered and readable without JavaScript.',
             sections: [
                 { title: 'Start here', links: [
                     { title: 'OpenVibe.Download', url: abs('/'), note: 'Your files, shared on your terms.' },
@@ -108,4 +117,4 @@ function createDiscoveryRoutes(ctx) {
     return r;
 }
 
-module.exports = { createDiscoveryRoutes, homeJsonLd, publicPages, DESCRIPTION, SITE_NAME };
+module.exports = { createDiscoveryRoutes, homeJsonLd, homeDescription, publicPages, DESCRIPTION, SITE_NAME };

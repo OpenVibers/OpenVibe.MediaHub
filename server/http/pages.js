@@ -33,8 +33,9 @@ const ovServe = require('openvibe-shared/serve');
 const frame = require('openvibe-shared/frame');
 const showcase = require('openvibe-shared/showcase');
 const cache = require('openvibe-shared/cache-policy');
+const seo = require('openvibe-shared/seo');
 const { asyncRouter } = require('./router');
-const { createDiscoveryRoutes, homeJsonLd } = require('./discovery');
+const { createDiscoveryRoutes, homeJsonLd, homeDescription } = require('./discovery');
 const { sameOrigin } = require('./principal');
 const { html, raw, table, notice, time, badge } = require('../render/html');
 const { send } = require('../render/layout');
@@ -145,21 +146,39 @@ ${notice(p && p.detail ? p.detail : 'You are over the limit for this.', 'warn')}
             }, 401));
 
     // ── Home ─────────────────────────────────────────────────
+    // What the drive is, what a free account gets (the limits this service enforces, from config), how a backup runs
+    // (the real command), questions, and where to go next on the network. No numbers here are made up: every one comes
+    // from config or rules, so the page cannot promise more than the service does.
+    const gb = (b) => rules.formatBytes(b).replace(/\.0 /, ' ');   // "2 GB", not "2.0 GB"
+    const homeFaq = () => [
+        { q: 'Is OpenVibe.Download free?', a: `Yes. A free OpenVibe account gets ${gb(config.quotas.bytes)} of storage, files up to ${gb(config.quotas.maxFileBytes)} each and ${config.quotas.uploadsPerDay} uploads a day. There are no ads.` },
+        { q: 'Who can open a file I share?', a: `Only the people you choose: named OpenVibe accounts, anyone signed in, or anyone with the link on a public download page. Every link expires in an hour to ${rules.EXPIRY_MAX_HOURS / 24} days, and you can revoke it at any time.` },
+        { q: 'How do backups work?', a: 'Make a sync key on the Backups page and run the openvibe-download command on your computer, once or on a schedule. It sends only new or changed files into a folder of your drive, and it never deletes anything there unless you ask it to.' },
+        drops.enabled()
+            ? { q: 'Can I upload without an account?', a: `Yes. A file up to ${gb(drops.config.maxBytes)} gets a public download page and a delete key, and is deleted ${drops.config.idleDays} days after its last download.` }
+            : { q: 'Can I upload without an account?', a: 'No. Uploading needs a signed-in OpenVibe account, so every file has an owner who can share it, take it back and delete it.' },
+        { q: 'Where are my files kept?', a: 'In OpenVibe.Media, the network\'s own media service. Deleting a file here asks Media to delete it too, and deleting your OpenVibe account deletes your files.' },
+        { q: 'What is not allowed?', a: 'Illegal content, malware, and anything shared to harm someone. Every share page has a Report form, and staff act on reports. The safety rules spell it all out.' },
+    ];
     r.get('/', (req, res) => {
         const hero = showcase.hero({
             // One sentence in the heading (it read "OpenVibe.Download Your files, …"), the tagline not said twice.
             eyebrow: `${SITE_NAME} · a private drive`,
             title: 'Your files,',
             accent: 'shared on your terms.',
-            lede: `A private drive for your files, ${rules.formatBytes(config.quotas.bytes)} free, with share links you control: for named people, for anyone signed in, or a public download page anyone with the link can use.${drops.enabled() ? ` No account? Upload a file up to ${rules.formatBytes(drops.config.maxBytes)} below and get a public link.` : ' Uploading needs a signed-in OpenVibe account.'}`,
+            lede: `A private drive with ${gb(config.quotas.bytes)} free. Share any file with a link you control: for named people, for anyone signed in, or a public download page. Back up a folder from your computer with one command.${drops.enabled() ? ` No account? Upload a file up to ${gb(drops.config.maxBytes)} below and get a public link.` : ''}`,
             actions: signedIn(req)
-                ? [{ label: 'Your files', href: '/files', primary: true }, { label: 'The safety rules', href: '/safety' }]
-                : [{ label: 'Sign in with OpenVibe', href: '/auth/login?next=%2Ffiles', primary: true }, { label: 'The safety rules', href: '/safety' }],
-            note: 'The bytes live in OpenVibe.Media. This service holds the names, the folders and the share links.',
+                ? [{ label: 'Your files', href: '/files', primary: true }, { label: 'Back up a folder', href: '/sync' }]
+                : [{ label: 'Sign in with OpenVibe', href: '/auth/login?next=%2Ffiles', primary: true }, { label: 'How backups work', href: '#sc-back-up-a-folder-from-your-computer' }],
+            note: 'Open source, no ads. The bytes live in OpenVibe.Media; this service holds the names, the folders and the share links.',
         });
+        const faq = homeFaq();
         page(req, res, {
             index: true, cache: signedIn(req) ? null : PUBLIC_CACHE,
-            jsonLd: homeJsonLd(config),
+            // At most 60 characters (search results cut the rest); the layout adds no suffix to a title this long.
+            title: `${SITE_NAME}: a free ${gb(config.quotas.bytes)} drive with share links`,
+            description: homeDescription(config),
+            jsonLd: [...homeJsonLd(config), seo.jsonLd.faq(faq)],
             styles: [showcase.STYLESHEET],
             scripts: drops.enabled() && !signedIn(req) ? ['js/drop.js'] : [],
             body: html`${raw(hero)}
@@ -168,12 +187,12 @@ ${raw(showcase.features({
                 title: 'What you get',
                 lede: 'A drive, not a locker: everything here is yours, and everything you hand out can be taken back.',
                 items: [
-                    { icon: 'ov:upload', title: 'Your own drive', text: `Folders and files, private to you: ${rules.formatBytes(config.quotas.bytes)} stored, up to ${rules.formatBytes(config.quotas.maxFileBytes)} in one file.` },
+                    { icon: 'ov:upload', title: 'Your own drive', text: `Folders and files, private to you: ${gb(config.quotas.bytes)} stored, up to ${gb(config.quotas.maxFileBytes)} in one file.` },
                     { icon: 'ov:link', title: 'Share links', text: `One link per file or folder, expiring in an hour to ${rules.EXPIRY_MAX_HOURS / 24} days, revocable at any moment, with its downloads counted.` },
-                    { icon: 'ov:account', title: 'You choose who opens it', text: 'Named OpenVibe accounts, anyone signed in, or a public download page for anyone with the link. Uploading always needs a signed-in person.' },
+                    { icon: 'ov:account', title: 'You choose who opens it', text: 'Named OpenVibe accounts, anyone signed in, or a public download page for anyone with the link.' },
                     { icon: 'ov:shield', title: 'Reports that act', text: REPORT_NOTE },
-                    { icon: 'ov:tools', title: 'Backups and an API', text: 'Keep a folder on your computer backed up with the openvibe-download command, and do everything else over /api/v1.' },
-                    { icon: 'ov:db', title: 'Bytes in OpenVibe.Media', text: 'Files are objects in the network\'s own media service; deleting one here asks Media to delete it too.' },
+                    { icon: 'ov:drive', title: 'Backups', text: 'Keep a folder on your computer copied into your drive with the openvibe-download command. It sends only what is new or changed.' },
+                    { icon: 'ov:plug', title: 'An API', text: 'Everything the pages do, over /api/v1 with your OpenVibe sign-in: upload, list, share and revoke.' },
                 ],
             }))}
 ${raw(showcase.steps({
@@ -181,9 +200,38 @@ ${raw(showcase.steps({
                 lede: 'Four steps, and the last one is the point.',
                 items: [
                     { title: 'Sign in', text: 'OpenVibe.Network signs you in. Your session stays in an httpOnly cookie on this site.' },
-                    { title: 'Upload', text: 'One request for a file under the single-request limit; a big file goes up in parts with a progress meter. Both need a signed-in person.' },
+                    { title: 'Upload', text: `Drop a file on Your files. A big one goes up in parts with a progress meter, up to ${gb(config.quotas.maxFileBytes)}.` },
                     { title: 'Share', text: `Make a link that expires in an hour to ${rules.EXPIRY_MAX_HOURS / 24} days, public or for signed-in people, and optionally name the OpenVibe usernames allowed to open it.` },
                     { title: 'Take it back', text: 'Revoke a link and it stops working at once. Delete a file and its shares go with it, and Media is asked to drop the bytes.' },
+                ],
+            }))}
+${raw(showcase.code({
+                title: 'Back up a folder from your computer',
+                lede: `Make a sync key on the Backups page, then run this on your computer (Node.js 20 or newer). It copies only new and changed files, up to ${config.quotas.syncUploadsPerDay.toLocaleString('en-US')} a day, and the Backups page explains its options.`,
+                samples: [{ label: 'Terminal', lang: 'sh', code: `export OPENVIBE_DOWNLOAD_KEY=<your sync key>\n${SYNC_COMMAND} sync ~/Documents --to Backups/laptop` }],
+            }))}
+${raw(showcase.limits({
+                title: 'What a free account gets',
+                lede: 'The limits this drive enforces for every account, the same on the pages and the API.',
+                columns: ['Free account'],
+                rows: [
+                    { label: 'Storage', values: [gb(config.quotas.bytes)] },
+                    { label: 'Largest file', values: [gb(config.quotas.maxFileBytes)] },
+                    { label: 'Uploads a day', values: [String(config.quotas.uploadsPerDay)] },
+                    { label: 'Backup uploads a day', values: [config.quotas.syncUploadsPerDay.toLocaleString('en-US')] },
+                    { label: 'Share links at a time', values: [String(config.quotas.maxShares)] },
+                    { label: 'A share link lasts', values: [`${rules.EXPIRY_MIN_HOURS} hour${rules.EXPIRY_MIN_HOURS === 1 ? '' : 's'} to ${rules.EXPIRY_MAX_HOURS / 24} days`] },
+                    ...(drops.enabled() ? [{ label: 'Without an account', values: [`${gb(drops.config.maxBytes)} a file, ${drops.config.perDay} a day`] }] : []),
+                ],
+            }))}
+<section class="sc-sec" aria-labelledby="h-faq"><h2 id="h-faq">Questions</h2><div class="faq">${faq.map((f) => html`<details><summary>${f.q}</summary><p>${f.a}</p></details>`)}</div></section>
+${raw(showcase.nextSteps({
+                title: 'More on OpenVibe',
+                items: [
+                    { to: 'video', what: 'Upload a video', text: 'With AI captions and chapters, on your own channel.', href: `${config.video.url}/`, from: 'download' },
+                    { to: 'pics', what: 'Share a picture', text: 'A link to share or embed anywhere, no ads.', href: `${config.pics.url}/`, from: 'download' },
+                    { to: 'live', what: 'Go live from your browser', text: 'No OBS and no follower minimum.', href: 'https://openvibe.live/', from: 'download' },
+                    { to: 'chat', what: 'Talk it over', text: 'Rooms, servers and voice channels.', href: 'https://openvibe.chat/', from: 'download' },
                 ],
             }))}
 ${raw(showcase.cta({ title: 'Before you upload', text: 'Read the rules: what is not allowed, how reports work, and who to write to.', actions: [{ label: 'The safety rules', href: '/safety' }, { label: 'What shipped', href: '/updates' }] }))}`,
@@ -892,7 +940,7 @@ ${notice(drops.enabled() ? 'This is a drive with share links, and uploads withou
 <li><b>Uploads come from a signed-in OpenVibe account</b>, or a sync key its owner made on <a href="/sync">/sync</a> for their own backups${drops.enabled() ? html`, or without an account: up to ${rules.formatBytes(drops.config.maxBytes)}, ${drops.config.perDay} a day per address, with a public page, a delete key shown once, and deleted ${drops.config.idleDays} days after the last download` : ''}. No app or service token can post a file here.</li>
 <li><b>Every file is private to the person who uploaded it.</b> Nobody else sees it in a list, and nobody else can download it.</li>
 <li><b>A share link is for signed-in people unless its owner makes it public.</b> A signed-in link needs the person opening it to be signed in; a public link opens for anyone who has it. Every share page says who shared it and has a Report form.</li>
-<li><b>A share can be limited to named OpenVibe usernames</b>, expire in an hour to seven days, and be revoked at any moment — after which it stops working at once.</li>
+<li><b>A share can be limited to named OpenVibe usernames</b>, expire in an hour to ${rules.EXPIRY_MAX_HOURS / 24} days, and be revoked at any moment — after which it stops working at once.</li>
 <li><b>Downloads never happen in a page.</b> A file is always sent as an attachment with a no-sniff header, and a type that is not on a short safe list is sent as an opaque blob. Uploaded HTML and SVG are never rendered.</li>
 </ul></section>
 <section class="sc-sec" aria-labelledby="h-reports"><h2 id="h-reports">How reports work</h2>

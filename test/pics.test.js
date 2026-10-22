@@ -76,6 +76,24 @@ function multipart(fields, file) {
             assert.strictEqual((await t.get('/robots.txt', { headers: PICS })).text.includes('Disallow: /i/'), true, 'pictures are not crawled');
         });
 
+        await check('the home: how it works, the links, the API, the limits from config, questions that match its FAQPage', async () => {
+            const home = (await t.get('/', { headers: PICS })).text;
+            assert.strictEqual((home.match(/<h1[\s>]/g) || []).length, 1, 'one h1');
+            assert.match(home, /<title>OpenVibe\.Pics: share pictures with a link, no ads<\/title>/);
+            const sections = ['How it works', 'The links a picture gets', 'Upload from your own app', 'What a free account gets', 'Questions', 'More on OpenVibe'];
+            assert.deepStrictEqual(sections.filter((h) => !home.includes(`>${h}</h2>`)), [], 'every section is there');
+            assert.ok(home.includes('<td>20 MB</td>') && home.includes('<td>200</td>') && home.includes('<td>5 GB</td>'), 'the limits are the configured ones');
+            assert.ok(home.includes('/api/v1/images \\\n  -H "Authorization: Bearer $OPENVIBE_TOKEN" \\\n'), 'the curl sample keeps its line breaks');
+            const ld = [...home.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap((m) => [].concat(JSON.parse(m[1])));
+            const faq = ld.find((x) => x['@type'] === 'FAQPage');
+            const shown = [...home.matchAll(/<summary>([^<]*)<\/summary>/g)].map((m) => m[1].replace(/&#39;/g, "'"));
+            assert.deepStrictEqual(faq.mainEntity.map((q) => q.name), shown, 'every question in the FAQPage is on the page');
+            const map = (await t.get('/sitemap.xml', { headers: PICS })).text;
+            assert.ok(map.includes('<loc>https://openvibe.pics/</loc>') && map.includes('<loc>https://openvibe.pics/dmca</loc>'), 'the sitemap lists the home and the rules');
+            assert.ok(!map.includes('/i/'), 'and never a picture');
+            assert.ok((await t.get('/robots.txt', { headers: PICS })).text.includes('Sitemap: https://openvibe.pics/sitemap.xml'), 'robots.txt names it');
+        });
+
         await check('signed out, uploads are refused until MEDIAHUB_PICS_ANONYMOUS is on', async () => {
             const r = await t.get('/api/v1/images', { method: 'POST', body: jpegWithSecrets, headers: { ...SAME, 'content-type': 'image/jpeg' } });
             assert.strictEqual(r.status, 401);
