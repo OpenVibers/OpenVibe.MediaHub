@@ -25,6 +25,9 @@ const TAGLINE = 'Your files, shared on your terms.';
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 // The product's own navigation: one entry per public page it serves.
 const NAV = [
+    { label: 'Your files', href: '/files' },
+    { label: 'Backups', href: '/sync' },
+    { label: 'Safety', href: '/safety' },
     { label: 'What shipped', href: '/updates' },
 ];
 

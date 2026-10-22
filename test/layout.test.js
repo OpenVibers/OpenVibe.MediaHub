@@ -38,11 +38,18 @@ const BOOST = /<script src="\/shared\/boost\.js\?v=[0-9a-f]{12}" data-main="#mai
         assert.strictEqual(r.status, 200);
         const head = r.text.slice(0, r.text.indexOf('</head>'));
         assert.strictEqual((r.text.match(/<title>/g) || []).length, 1, 'exactly one <title>');
-        assert.ok(head.includes('<title>OpenVibe.Download: Your files, shared on your terms.</title>'), 'home title');
+        assert.ok(head.includes('<title>OpenVibe.Download: a free 25 GB drive with share links</title>'), `home title: ${(/<title>([^<]*)/.exec(head) || [])[1]}`);
+        assert.match(head, /<meta name="description" content="A private drive with 25 GB free: upload files up to 2 GB, share them with links you can take back, and back up a folder from your computer\.">/, 'a description that says what it does, with the real numbers');
         assert.ok(head.includes('<link rel="canonical" href="https://openvibe.download/">'), 'canonical');
         assert.ok(head.includes('<meta name="robots" content="index, follow">'), 'robots');
         const ld = [...head.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])['@type']);
-        assert.deepStrictEqual(ld, ['WebSite', 'WebApplication', 'WebPage'], 'the home JSON-LD');
+        assert.deepStrictEqual(ld, ['WebSite', 'WebApplication', 'WebPage', 'FAQPage'], 'the home JSON-LD');
+        // FAQPage only for questions shown on the page: every question in it is a <summary> in the body.
+        const faq = [...head.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])).find((x) => x['@type'] === 'FAQPage');
+        const shown = [...r.text.matchAll(/<summary>([^<]*)<\/summary>/g)].map((m) => m[1].replace(/&#39;/g, "'"));
+        assert.deepStrictEqual(faq.mainEntity.map((q) => q.name), shown, 'the questions on the page');
+        assert.ok(r.text.includes('openvibe-download sync ~/Documents --to Backups/laptop'), 'the backup command, as the Backups page gives it');
+        assert.ok(!r.text.includes('2.0 GB'), 'sizes as people write them');
         // openvibe-shared/app-icon slugs the site id to lower-case letters (media-hub → mediahub) in data-ov-icon.
         for (const tag of ['<meta property="og:title"', 'data-ov-icon="mediahub"', '/css/app.css?v=', '/shared/theme-loader.js', '/shared/navbar.js', '/shared/footer.js', '<meta name="referrer"']) {
             assert.ok(head.includes(tag), `head has ${tag}`);
@@ -62,7 +69,7 @@ const BOOST = /<script src="\/shared\/boost\.js\?v=[0-9a-f]{12}" data-main="#mai
         assert.strictEqual(r.status, 200, r.text.slice(0, 300));
         assert.match(r.headers.get('content-type'), /^text\/html/);
         assert.ok(r.text.includes('OpenVibe.Download'), 'the site name is on the page');
-        assert.ok(r.text.includes('Your files, shared on your terms.'), 'the tagline is on the page');
+        assert.ok(r.text.includes('A private drive with 25 GB free.'), 'the lede says what a free account gets');
         const h1 = (/<h1[^>]*>([\s\S]*?)<\/h1>/.exec(r.text) || [])[1] || '';
         assert.strictEqual(h1.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(), 'Your files, shared on your terms.', 'the heading is one sentence');
         assert.ok(r.text.includes('/shared/showcase.css'), 'the showcase stylesheet');

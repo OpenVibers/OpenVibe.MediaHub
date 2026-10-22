@@ -146,3 +146,25 @@
 .ovp-size-table thead th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint, #7386a3); font-weight: 700; }
 .ovp-size-table tbody th { font-weight: 700; }
 .ovp-size-table a { display: inline-block; min-width: 44px; padding: 4px 0; }
+
+/* Home: how it works, the links, the API, the limits, the rest of the network */
+.ovp-section-lede { margin: -.25rem 0 .9rem; max-width: 70ch; color: var(--ovp-dim); }
+.ovp-steps { list-style: none; counter-reset: ovp-step; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
+.ovp-steps li { counter-increment: ovp-step; padding: 16px 18px; border-radius: 14px; border: 1px solid var(--ovp-line); background: var(--ovp-card); }
+.ovp-steps li::before { content: counter(ovp-step); display: inline-grid; place-items: center; width: 28px; height: 28px; margin-bottom: .5rem; border-radius: 50%; background: var(--ovp-pink); color: var(--ovp-on-pink); font-weight: 800; font-size: .9rem; }
+.ovp-steps h3 { margin: 0 0 6px; font-size: 1rem; }
+.ovp-steps p { margin: 0; color: var(--ovp-dim); font-size: .92rem; }
+.ovp-links { display: grid; gap: 8px; margin: 0; }
+.ovp-links > div { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 4px 14px; align-items: baseline; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--ovp-line); background: var(--ovp-card); }
+.ovp-links dt { font-weight: 700; font-size: .9rem; }
+.ovp-links dd { margin: 0; min-width: 0; }
+.ovp-links code, .ovp-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; overflow-wrap: anywhere; }
+.ovp-code { margin: 0; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--ovp-line); background: var(--bg-secondary, #0f1729); overflow-x: auto; white-space: pre; overflow-wrap: normal; }
+.ovp-table-wrap { overflow-x: auto; max-width: 640px; }
+.ovp-limits { min-width: 0; width: 100%; }
+.ovp-limits th, .ovp-limits td { text-align: left; padding: 8px 12px; white-space: normal; }
+.ovp-more { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); }
+.ovp-more a { display: grid; gap: 2px; height: 100%; box-sizing: border-box; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--ovp-line); background: var(--ovp-card); color: inherit !important; text-decoration: none; }
+.ovp-more a:hover, .ovp-more a:focus-visible { border-color: var(--ovp-pink); }
+.ovp-more span { font-size: .88rem; color: var(--ovp-dim); }
+@media (max-width: 640px) { .ovp-links > div { grid-template-columns: minmax(0, 1fr); } }
