@@ -105,7 +105,7 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-meta { font-size: .88rem; color: var(--ovv-dim); }
 .ovv-byline-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .ovv-recording { display: flex; gap: 8px; align-items: baseline; margin: 16px 0 0; padding: 10px 14px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--live-red, #ef4444) 50%, transparent); background: color-mix(in srgb, var(--live-red, #ef4444) 10%, transparent); }
-.ovv-recording i { color: var(--live-red, #ef4444); font-size: .6rem; }
+.ovv-recording i { color: var(--live-red-text, var(--live-red, #ef4444)); font-size: .6rem; }
 .ovv-panel { margin-top: 18px; padding: 16px 18px; border: 1px solid var(--ovv-line); border-radius: 14px; background: var(--ovv-card); }
 .ovv-side .ovv-panel { margin-top: 0; }
 .ovv-panel > p { margin: 0; line-height: 1.6; }
@@ -192,7 +192,7 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-playlist-actions input[type=text], .ovv-playlist-actions select { font: inherit; min-height: 38px; padding: 7px 10px; border-radius: 9px; border: 1px solid var(--ovv-line-strong); background: var(--bg-input, var(--bg-secondary, #0f1729)); color: inherit; }
 .ovv-save[open] .ovv-save-form select, .ovv-save[open] .ovv-save-form input[type=text] { flex: 1 1 160px; min-width: 0; }
 .ovv-inline { display: inline-flex; align-items: center; gap: 6px; }
-.ovv-btn--danger { border-color: color-mix(in srgb, var(--danger, #ef4444) 55%, transparent); color: var(--danger, #ef4444) !important; background: transparent; }
+.ovv-btn--danger { border-color: color-mix(in srgb, var(--danger, #ef4444) 55%, transparent); color: var(--danger-text, var(--danger, #ef4444)) !important; background: transparent; }
 .ovv-btn--danger:hover, .ovv-btn--danger:focus-visible { background: color-mix(in srgb, var(--danger, #ef4444) 12%, transparent); border-color: var(--danger, #ef4444); }
 
 /* Up next (a playlist playing): the side column's first card */
@@ -239,7 +239,7 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-owner-form .ovv-fine { margin: -4px 0 0; }
 .ovv-owner-form .ovv-btn { justify-self: start; }
 .ovv-danger { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--ovv-line); }
-.ovv-danger > summary { cursor: pointer; font-size: .88rem; font-weight: 700; color: var(--danger, #f87171); }
+.ovv-danger > summary { cursor: pointer; font-size: .88rem; font-weight: 700; color: var(--danger-text, var(--danger, #f87171)); }
 .ovv-danger > summary:focus-visible { outline: 2px solid var(--ovv-accent); outline-offset: 2px; border-radius: 4px; }
 .ovv-owner-delete { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
 .ovv-watch--clip .ovv-owner { max-width: 640px; }
