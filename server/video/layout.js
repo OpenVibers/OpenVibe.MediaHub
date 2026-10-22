@@ -93,7 +93,7 @@ ${render(o.body)}
 }
 
 // The site's own places in the navbar: the videos, and your playlists (signed in; the page asks you to sign in).
-const NAV_LINKS = [{ label: 'Videos', href: '/' }, { label: 'Upload', href: '/upload' }, { label: 'Record', href: '/record' }, { label: 'Your videos', href: '/me/videos' }, { label: 'Playlists', href: '/playlists' }];
+const NAV_LINKS = [{ label: 'Videos', href: '/' }, { label: 'Search', href: '/search' }, { label: 'Upload', href: '/upload' }, { label: 'Record', href: '/record' }, { label: 'Your videos', href: '/me/videos' }, { label: 'Playlists', href: '/playlists' }];
 
 // A signed-out copy is never reused without asking: Cloudflare drops `Vary` (it keeps only Accept-Encoding), so a
 // browser keyed the guest copy by its URL alone and, for five minutes after a quiet sign-in, showed the signed-out page

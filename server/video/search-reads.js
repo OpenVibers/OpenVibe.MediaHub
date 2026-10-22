@@ -29,6 +29,14 @@ const CATEGORIES = {
 };
 const isCategory = (v) => Object.prototype.hasOwnProperty.call(CATEGORIES, String(v || ''));
 const USERNAME_RE = /^[A-Za-z0-9_]{1,32}$/;
+// What /search looks through: Live's recordings and clips (owner live) and Video's own uploads (owner media-hub), each a
+// Search type with its own id shape.
+const KINDS = {
+    vod: { owner: 'live', type: 'vod', id: /^[1-9]\d{0,15}$/ },
+    clip: { owner: 'live', type: 'clip', id: /^[1-9]\d{0,15}$/ },
+    video: { owner: 'media-hub', type: 'video', id: /^vup_[0-9A-HJKMNP-TV-Z]{26}$/ },
+};
+const CURSOR_RE = /^[A-Za-z0-9_-]{1,512}$/;
 
 function createSearchReads({ config, fetchImpl = globalThis.fetch, log = console } = {}) {
     const base = String((config.search && config.search.url) || '').replace(/\/+$/, '');
@@ -61,8 +69,43 @@ function createSearchReads({ config, fetchImpl = globalThis.fetch, log = console
         .map((x) => ({ value: String((x && x.value) || ''), count: Number(x && x.count) || 0 }))
         .filter((x) => x.value && x.count > 0);
 
+    /** Search results of one kind → the items a card needs (ids checked against the kind's shape). */
+    const itemsOf = (results, kind) => (Array.isArray(results) ? results : [])
+        .filter((x) => x && x.type === KINDS[kind].type && KINDS[kind].id.test(String(x.id)))
+        .map((x) => ({
+            kind,
+            id: kind === 'video' ? String(x.id) : Number(x.id),
+            title: String(x.title || '').slice(0, 300),
+            channel: x.facets && USERNAME_RE.test(String(x.facets.channel || '')) ? String(x.facets.channel) : null,
+            duration_seconds: x.facets && Number.isFinite(Number(x.facets.duration_seconds)) ? Number(x.facets.duration_seconds) : null,
+            published_at: x.published_at || null,
+        }));
+
     return {
         enabled: Boolean(base),
+        KINDS,
+        /**
+         * Words across one kind: Live's recordings (optionally of one category), its clips, or Video's uploads, best
+         * match first. → { items, next, categories: [{ slug, label, icon, count }] (recordings only) } or null (no
+         * words, an unknown kind, or Search unreadable).
+         */
+        async search(q, { kind = 'vod', category = null, cursor = null, limit = PAGE } = {}) {
+            const text = String(q || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+            const k = KINDS[kind];
+            if (!text || !k) return null;
+            const qs = new URLSearchParams({ q: text, owner: k.owner, type: k.type, limit: String(Math.min(Math.max(1, limit), PAGE)) });
+            if (kind === 'vod') {
+                qs.set('facets', 'category');
+                if (isCategory(category)) qs.set('facet.category', category);
+            }
+            if (cursor && CURSOR_RE.test(String(cursor))) qs.set('cursor', String(cursor));
+            const body = await getJson(qs);
+            if (!body || !Array.isArray(body.results)) return null;
+            const categories = kind === 'vod' && body.facets ? facetList(body.facets.category).filter((x) => isCategory(x.value))
+                .map((x) => ({ slug: x.value, ...CATEGORIES[x.value], count: x.count })) : [];
+            const next = typeof body.next_cursor === 'string' && CURSOR_RE.test(body.next_cursor) ? body.next_cursor : null;
+            return { items: itemsOf(body.results, kind), next, categories };
+        },
         /** { categories: [{ slug, label, icon, blurb, count }], channels: [{ username, count }] } or null. */
         async shelves() {
             const body = await getJson(new URLSearchParams({ q: '', owner: 'live', type: 'vod', facets: 'category,channel', limit: '1' }));
@@ -95,4 +138,4 @@ function createSearchReads({ config, fetchImpl = globalThis.fetch, log = console
     };
 }
 
-module.exports = { createSearchReads, CATEGORIES, isCategory };
+module.exports = { createSearchReads, CATEGORIES, isCategory, KINDS };

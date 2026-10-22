@@ -114,6 +114,17 @@ function startLive() {
         }
         // OpenVibe.Search (the same stub answers for it): the facets, and one category's recordings.
         if (p === '/api/v1/search') {
+            // Words (/search): "robot" finds a recording (with a next page and the category facet) and a clip; "<script>" nothing.
+            if (url.searchParams.get('q')) {
+                if (url.searchParams.get('q') !== 'robot') return json(200, { results: [], next_cursor: null, ...(url.searchParams.get('facets') ? { facets: { category: [] } } : {}) });
+                const type = url.searchParams.get('type');
+                if (type === 'vod') {
+                    return json(200, { results: [{ owner: 'live', type: 'vod', id: '101', title: 'A public recording', facets: { channel: 'streamer', category: 'gaming', duration_seconds: 45 } }],
+                        next_cursor: url.searchParams.get('cursor') ? null : 'page2', facets: { category: [{ value: 'gaming', count: 1 }, { value: 'nope', count: 2 }] } });
+                }
+                if (type === 'clip') return json(200, { results: [{ owner: 'live', type: 'clip', id: '201', title: 'A clip', facets: { channel: 'clipper' } }, { owner: 'live', type: 'clip', id: 'javascript:x', title: 'bad' }], next_cursor: null });
+                return json(200, { results: [{ owner: 'media-hub', type: 'video', id: 'vup_01HZZZZZZZZZZZZZZZZZZZZZZZ', title: 'Gone upload' }], next_cursor: null });
+            }
             if (url.searchParams.get('facet.category') === 'gaming') {
                 return json(200, { results: [{ owner: 'live', type: 'vod', id: '101', title: 'A public recording', facets: { channel: 'streamer', category: 'gaming', duration_seconds: 45 }, published_at: '2026-10-12T10:00:00.000Z' }], next_cursor: null });
             }
@@ -434,9 +445,29 @@ function countOccurrences(haystack, needle) {
         assert.ok(!map.includes('/category/music'), 'a category with one is not');
     });
 
-    await check('the navbar names the site\'s places: Videos, Upload, Record, Your videos and Playlists, the current one active', async () => {
+    await check('/search finds recordings, clips and uploads through Search, filters recordings by category, and pages one kind', async () => {
+        const empty = await getVideo('/search');
+        assert.strictEqual(empty.status, 200);
+        assert.ok(empty.text.includes('<h1>Search videos</h1>') && empty.text.includes('href="/category/gaming"'), 'a search box and the categories');
+        assert.doesNotMatch(empty.text, /<meta name="robots" content="noindex/);
+        const r = await getVideo('/search?q=robot');
+        assert.strictEqual(r.status, 200);
+        assert.match(r.text, /<meta name="robots" content="noindex/, 'results are not indexed');
+        assert.ok(r.text.includes('href="/v/101"') && r.text.includes('https://openvibe.media/t/101.jpg'), 'the recording, with the thumbnail Live has');
+        assert.ok(r.text.includes('href="/c/201"') && !r.text.includes('javascript:x'), 'the clip; a malformed id is dropped');
+        assert.ok(!r.text.includes('Gone upload'), 'an upload Search still lists but Video does not have publicly is left out');
+        assert.ok(r.text.includes('href="/search?q=robot&amp;type=vod"') && r.text.includes('More stream recordings'), 'more of one kind');
+        assert.ok(r.text.includes('href="/search?q=robot&amp;type=vod&amp;category=gaming"') && !r.text.includes('category=nope'), 'known categories only');
+        const one = await getVideo('/search?q=robot&type=vod&category=gaming');
+        assert.match(one.text, /href="\/search\?q=robot&amp;type=vod&amp;category=gaming" aria-current="true"/);
+        assert.ok(one.text.includes('after=page2') && one.text.includes('More results'), 'the next page');
+        const none = await getVideo('/search?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E');
+        assert.ok(none.text.includes('Nothing matched') && !none.text.includes('<script>alert(1)'), 'nothing found, and the words are escaped');
+    });
+
+    await check('the navbar names the site\'s places: Videos, Search, Upload, Record, Your videos and Playlists, the current one active', async () => {
         const home = (await getVideo('/')).text;
-        assert.match(home, /"links":\[\{"label":"Videos","href":"\/","active":true\},\{"label":"Upload","href":"\/upload","active":false\},\{"label":"Record","href":"\/record","active":false\},\{"label":"Your videos","href":"\/me\/videos","active":false\},\{"label":"Playlists","href":"\/playlists","active":false\}\]/);
+        assert.match(home, /"links":\[\{"label":"Videos","href":"\/","active":true\},\{"label":"Search","href":"\/search","active":false\},\{"label":"Upload","href":"\/upload","active":false\},\{"label":"Record","href":"\/record","active":false\},\{"label":"Your videos","href":"\/me\/videos","active":false\},\{"label":"Playlists","href":"\/playlists","active":false\}\]/);
         assert.ok(home.includes('href="/playlists"'), 'the no-JS nav links Playlists too');
     });
 
