@@ -27,8 +27,45 @@
 .ovv-lede { margin: 0; max-width: 62ch; font-size: 1.05rem; color: var(--ovv-dim); }
 .ovv-hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 1.1rem 0 0; }
 
+/* Home: the numbers under the header (real counts from Live and Search; a count that is unknown is left out) */
+.ovv-stats { display: flex; flex-wrap: wrap; gap: 10px; margin: 1.4rem 0 0; padding: 0; }
+.ovv-stats > div { display: flex; flex-direction: column-reverse; min-width: 0; padding: 10px 16px; border: 1px solid var(--ovv-line); border-radius: 12px; background: var(--ovv-card); }
+.ovv-stats dt { margin: 0; font-size: .8rem; color: var(--ovv-dim); }
+.ovv-stats dd { margin: 0; font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2; }
+
 /* Sections and card grids */
 .ovv-section { margin-top: 2.2rem; }
+.ovv-section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin: 0 0 .75rem; }
+.ovv-section-head h2 { margin: 0; }
+.ovv-section-head a { font-size: .9rem; font-weight: 700; }
+.ovv-section h2 { display: flex; align-items: center; gap: 8px; }
+.ovv-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--live-red, #ef4444); box-shadow: 0 0 0 4px color-mix(in srgb, var(--live-red, #ef4444) 25%, transparent); flex: none; }
+.ovv-tag.ovv-tag--live { background: color-mix(in srgb, var(--live-red, #ef4444) 70%, #000); text-transform: uppercase; letter-spacing: .4px; }
+
+/* Category tiles and channels: a link list that wraps into as many columns as fit */
+.ovv-shelf, .ovv-people, .ovv-more { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); }
+.ovv-shelf-tile { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 12px; align-items: center; padding: 14px 16px; border: 1px solid var(--ovv-line); border-radius: 12px; background: var(--ovv-card); color: inherit !important; text-decoration: none; }
+.ovv-shelf-tile > i { grid-row: 1 / span 2; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: color-mix(in srgb, var(--ovv-accent) 16%, transparent); color: var(--accent-light, var(--ovv-accent)); font-size: 1.1rem; }
+.ovv-shelf-name { font-weight: 700; overflow-wrap: anywhere; }
+.ovv-shelf-count, .ovv-person-count { font-size: .84rem; color: var(--ovv-dim); }
+.ovv-shelf-tile:hover, .ovv-shelf-tile:focus-visible, .ovv-person:hover, .ovv-person:focus-visible, .ovv-more a:hover, .ovv-more a:focus-visible { border-color: var(--ovv-accent); background: var(--bg-hover, #1c2a44); }
+.ovv-person { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--ovv-line); border-radius: 12px; background: var(--ovv-card); color: inherit !important; text-decoration: none; min-width: 0; }
+.ovv-person-text { display: grid; min-width: 0; }
+.ovv-person-name { font-weight: 700; overflow-wrap: anywhere; }
+
+/* How it works, questions, and the rest of the network */
+.ovv-steps { list-style: none; counter-reset: ovv-step; margin: 0; padding: 0; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }
+.ovv-steps li { counter-increment: ovv-step; padding: 16px 18px; border: 1px solid var(--ovv-line); border-radius: 14px; background: var(--ovv-card); }
+.ovv-steps li::before { content: counter(ovv-step); display: inline-grid; place-items: center; width: 28px; height: 28px; margin-bottom: .5rem; border-radius: 50%; background: var(--accent-strong, #2563eb); color: var(--on-accent-strong, #fff); font-weight: 800; font-size: .9rem; }
+.ovv-steps h3 { margin: 0 0 .35rem; font-size: 1rem; }
+.ovv-steps p { margin: 0; color: var(--ovv-dim); line-height: 1.55; }
+.ovv-faq { display: grid; gap: 8px; max-width: 860px; }
+.ovv-faq details { border: 1px solid var(--ovv-line); border-radius: 12px; background: var(--ovv-card); }
+.ovv-faq summary { cursor: pointer; padding: 12px 16px; font-weight: 700; }
+.ovv-faq details[open] summary { border-bottom: 1px solid var(--ovv-line); }
+.ovv-faq p { margin: 0; padding: 12px 16px 14px; color: var(--ovv-dim); line-height: 1.6; }
+.ovv-more a { display: grid; gap: 2px; height: 100%; box-sizing: border-box; padding: 14px 16px; border: 1px solid var(--ovv-line); border-radius: 12px; background: var(--ovv-card); color: inherit !important; text-decoration: none; }
+.ovv-more span { font-size: .88rem; color: var(--ovv-dim); }
 .ovv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 22px 16px; }
 .ovv-card { display: flex; flex-direction: column; gap: .55rem; min-width: 0; }
 .ovv-card-media { position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: var(--ovv-card); border: 1px solid var(--ovv-line); }
@@ -128,6 +165,11 @@ a.ovv-channel-name:hover { text-decoration: underline; }
   .ovv-card-title { font-size: .9rem; }
   .ovv-player-wrap { border-radius: 10px; margin: 0 -4px; }
   .ovv-btn { white-space: normal; }
+  /* Categories and channels two by two, each a small upright card */
+  .ovv-shelf, .ovv-people { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .ovv-shelf-tile { grid-template-columns: minmax(0, 1fr); row-gap: 2px; padding: 12px; }
+  .ovv-shelf-tile > i { grid-row: auto; margin-bottom: 6px; }
+  .ovv-person { flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; }
 }
 
 /* Playlists */

@@ -120,7 +120,8 @@ async function createApp(opts = {}) {
                 scriptSrc: ["'self'", "'unsafe-inline'", 'https://openvibe.network', 'https://static.cloudflareinsights.com'],
                 styleSrc: ["'self'", "'unsafe-inline'", 'https://openvibe.network', 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com'],
                 fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com', 'https://cdnjs.cloudflare.com'],
-                imgSrc: ["'self'", 'data:', 'https://openvibe.network', 'https://openvibe.media'],
+                // The Video home's live-now cards show OpenVibe.Live's own stream thumbnails (its /api/thumbnails).
+                imgSrc: ["'self'", 'data:', 'https://openvibe.network', 'https://openvibe.media', liveOrigin],
                 // The video player loads its media file from OpenVibe.Media (https://openvibe.media/v|/c), which may
                 // redirect to its shield host (edge.openvibe.media, for B2 copies) or a presigned R2/B2 URL, exactly
                 // as on OpenVibe.Live. Over HLS it plays through Media Source Extensions (blob:) and fetches the
