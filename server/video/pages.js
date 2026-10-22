@@ -839,6 +839,7 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
 <h1>Watch streams again, and share your own videos</h1>
 <p class="ovv-lede">Recordings and clips of streams on OpenVibe.Live land here when the stream ends. Upload a video or record your camera or screen in the browser, and OpenVibe.AI adds captions, chapters and a summary. Everything you post plays on your channel at openvibe.video/@you.</p>
 <p class="ovv-hero-actions"><a class="ovv-btn ovv-btn--primary" href="/upload"><i class="fa-solid fa-upload" aria-hidden="true"></i> Upload a video</a> <a class="ovv-btn" href="/record"><i class="fa-solid fa-video" aria-hidden="true"></i> Record in the browser</a> <a class="ovv-btn" href="${livePublic}/docs/go-live-in-your-browser"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Go live from your browser</a></p>
+${searchForm()}
 ${stats.length ? html`<dl class="ovv-stats">${stats.map((s) => html`<div><dt>${s.label}</dt><dd>${s.value}</dd></div>`)}</dl>` : ''}</header>
 ${onAirCards.length ? html`<section class="ovv-section" aria-labelledby="h-live"><div class="ovv-section-head"><h2 id="h-live"><span class="ovv-dot" aria-hidden="true"></span> Live now on OpenVibe.Live</h2><a href="${livePublic}/">Everyone live</a></div>${grid(onAirCards)}</section>` : ''}
 ${uploaded.length ? html`<section class="ovv-section" aria-labelledby="h-uploads"><h2 id="h-uploads">Latest uploads</h2>${grid(uploaded.map(uploadCard))}</section>` : ''}
@@ -904,6 +905,61 @@ ${channels.length ? html`<section class="ovv-section" aria-labelledby="h-channel
 <section class="ovv-section" aria-label="${title}">${grid(items.map((it) => feedCard(it)), 'Nothing in this category yet.')}</section>
 ${pageOf.next ? html`<p class="ovv-pagination"><a class="ovv-btn" href="/category/${slug}?after=${encodeURIComponent(pageOf.next)}" rel="next">Older recordings</a></p>` : ''}
 ${others.length ? html`<section class="ovv-section" aria-labelledby="h-other"><h2 id="h-other">Other categories</h2><ul class="ovv-shelf" role="list">${others.map((c) => html`<li><a class="ovv-shelf-tile" href="/category/${c.slug}"><i class="fa-solid ${c.icon}" aria-hidden="true"></i><span class="ovv-shelf-name">${c.label}</span><span class="ovv-shelf-count">${n(c.count)} ${c.count === 1 ? 'recording' : 'recordings'}</span></a></li>`)}</ul></section>` : ''}`,
+        });
+    });
+
+    // ── Search: words across Live's recordings and clips and Video's uploads (OpenVibe.Search), best match first ──
+    // Without ?type the three kinds show their best eight each; ?type=vod|clip|video pages one kind (24 at a time, Search's
+    // cursor), and recordings filter by category. Results are noindex; the empty search page is not.
+    const SEARCH_KINDS = [['vod', 'Stream recordings'], ['clip', 'Clips'], ['video', 'Uploads']];
+    const searchForm = (q = '') => html`<form class="ovv-search" method="get" action="/search" role="search"><label class="sr-only" for="ovv-q">Search videos</label><input id="ovv-q" name="q" type="search" value="${q}" maxlength="200" placeholder="Search recordings, clips and uploads" required><button class="ovv-btn ovv-btn--primary" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> Search</button></form>`;
+    async function searchCards(kind, items) {
+        if (kind === 'video') {
+            const rows = await Promise.all(items.map((x) => settle(ctx.videoUploads.byId(x.id))));
+            return rows.filter((x) => x && x.visibility === 'public' && x.status === 'ready' && x.state === 'active').map((x) => uploadCard(x));
+        }
+        const known = await catalogIndex();
+        return items.map((x) => feedCard(known.get(`${kind}:${x.id}`) || { id: x.id, kind, title: x.title, thumbnail_url: null, duration_seconds: x.duration_seconds, created_at: x.published_at, channel: { username: x.channel } }));
+    }
+    r.get('/search', async (req, res) => {
+        const q = typeof req.query.q === 'string' ? req.query.q.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
+        const kind = typeof req.query.type === 'string' && shelves.KINDS[req.query.type] ? req.query.type : null;
+        const category = kind === 'vod' && isCategory(req.query.category) ? String(req.query.category) : null;
+        const cursor = kind && typeof req.query.after === 'string' ? req.query.after : null;
+        const link = (o) => `/search?${new URLSearchParams(Object.entries({ q, ...o }).filter(([, v]) => v))}`;
+        if (!q) {
+            const shelf = await settle(shelves.shelves());
+            const categories = (shelf && shelf.categories) || [];
+            return page(req, res, {
+                index: true, title: 'Search OpenVibe.Video', description: 'Search stream recordings and clips from OpenVibe.Live and videos people uploaded to OpenVibe.Video.',
+                crumbs: [{ label: 'Home', href: '/' }, { label: 'Search' }],
+                body: html`<h1>Search videos</h1>${searchForm()}
+${categories.length ? html`<section class="ovv-section" aria-labelledby="h-cats"><h2 id="h-cats">Or browse by category</h2><ul class="ovv-shelf" role="list">${categories.map((c) => html`<li><a class="ovv-shelf-tile" href="/category/${c.slug}"><i class="fa-solid ${c.icon}" aria-hidden="true"></i><span class="ovv-shelf-name">${c.label}</span><span class="ovv-shelf-count">${n(c.count)} ${c.count === 1 ? 'recording' : 'recordings'}</span></a></li>`)}</ul></section>` : ''}`,
+            });
+        }
+        const kinds = kind ? [kind] : SEARCH_KINDS.map(([k]) => k);
+        const answers = await Promise.all(kinds.map((k) => settle(shelves.search(q, { kind: k, category: k === 'vod' ? category : null, cursor, limit: kind ? 24 : 8 }))));
+        if (answers.every((a) => !a)) {
+            return page(req, res, {
+                title: `Search: ${q}`, noindex: true, cache: cache.htmlHeaders({ private: true }), crumbs: [{ label: 'Home', href: '/' }, { label: 'Search' }],
+                body: html`<h1>Search videos</h1>${searchForm(q)}<p class="muted">Search cannot be read right now. Try again in a minute, or browse the <a href="/">latest recordings</a>.</p>`,
+            }, 503);
+        }
+        const sections = await Promise.all(kinds.map(async (k, i) => {
+            const a = answers[i];
+            const label = SEARCH_KINDS.find(([x]) => x === k)[1];
+            const cards = a ? await searchCards(k, a.items) : [];
+            return { kind: k, label, cards, next: a && a.next, categories: (a && a.categories) || [] };
+        }));
+        const found = sections.some((x) => x.cards.length);
+        const vod = sections.find((x) => x.kind === 'vod');
+        const chips = vod && (vod.categories.length || category) ? html`<nav class="ovv-chips" aria-label="Recordings by category"><a href="${link({ type: 'vod' })}"${!category ? raw(' aria-current="true"') : ''}>All categories</a>${vod.categories.map((c) => html`<a href="${link({ type: 'vod', category: c.slug })}"${c.slug === category ? raw(' aria-current="true"') : ''}>${c.label} <span>${n(c.count)}</span></a>`)}</nav>` : '';
+        const tabs = html`<nav class="ovv-chips" aria-label="What to search"><a href="${link({})}"${!kind ? raw(' aria-current="true"') : ''}>Everything</a>${SEARCH_KINDS.map(([k, label]) => html`<a href="${link({ type: k })}"${k === kind ? raw(' aria-current="true"') : ''}>${label}</a>`)}</nav>`;
+        return page(req, res, {
+            title: `Search: ${q}`, noindex: true, crumbs: [{ label: 'Home', href: '/' }, { label: 'Search', href: '/search' }, { label: q }],
+            body: html`<h1>Results for “${q}”</h1>${searchForm(q)}${tabs}
+${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv-section" aria-labelledby="h-${x.kind}"><div class="ovv-section-head"><h2 id="h-${x.kind}">${x.label}</h2>${!kind && x.next ? html`<a href="${link({ type: x.kind })}">More ${x.label.toLowerCase()}</a>` : ''}</div>${x.kind === 'vod' ? chips : ''}${grid(x.cards, 'Nothing matched.')}${kind && x.next ? html`<p class="ovv-pagination"><a class="ovv-btn" href="${link({ type: kind, category, after: x.next })}" rel="next">More results</a></p>` : ''}</section>` : ''))
+        : html`<p class="muted">Nothing matched “${q}”${category ? ' in that category' : ''}. Try fewer or other words, or <a href="/#categories">browse by category</a>.</p>`}`,
         });
     });
 
