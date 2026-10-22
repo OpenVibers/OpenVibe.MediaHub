@@ -523,5 +523,5 @@ Part of the [OpenVibe network](https://openvibe.network). Built in the open by [
 <!-- versions:start -->
 - openvibe-contracts: v0.209.0
 - openvibe-sdk: v0.61.0
-- openvibe-shared: v4.7.0
+- openvibe-shared: v4.8.0
 <!-- versions:end -->
