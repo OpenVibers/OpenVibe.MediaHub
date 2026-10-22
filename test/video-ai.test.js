@@ -119,6 +119,14 @@ const OUTPUT = {
         assert.deepStrictEqual([row.title, row.visibility], ['Coast', 'private'], 'a description-only change keeps the title and visibility');
     });
 
+    await check('an overview that describes a person is read and shown without it (openvibe-sdk/no-looks)', async () => {
+        await t.ctx.s.db.query('UPDATE video_upload_ai SET overview = $1 WHERE upload_id = $2', ['A man in a red hoodie walks along the coast at sunset.', id]);
+        assert.strictEqual((await t.ctx.videoAi.forUpload({ id })).overview, 'A person walks along the coast at sunset.', 'a row stored before the rule reads clean');
+        const view = await vreq(t.base, `/u/${id}`, { cookie: kimCookie });
+        assert.ok(view.text.includes('A person walks along the coast at sunset.') && !view.text.includes('red hoodie'), 'the page shows the clean overview');
+        await t.ctx.s.db.query('UPDATE video_upload_ai SET overview = $1 WHERE upload_id = $2', [OUTPUT.overview.text, id]);
+    });
+
     await check('a failure waits and retries with a new key; four attempts at most', async () => {
         await t.ctx.s.db.query("UPDATE video_upload_ai SET status = 'queued', attempts = 0, next_at = NULL WHERE upload_id = $1", [id]);
         mode = 'fail';
