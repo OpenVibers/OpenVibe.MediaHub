@@ -64,7 +64,9 @@ function createPageRoutes(ctx) {
     // The pages' forms are web forms (no JavaScript): urlencoded text, and one multipart file upload whose body the
     // upload route reads itself. The JSON parser is deliberately absent here.
     r.use(express.urlencoded({ extended: false, limit: '64kb' }));
-    const PUBLIC_CACHE = cache.htmlHeaders({ maxAge: 300 });
+    // Revalidated on every view, as Video's and Pics' guest pages are (server/video/layout.js GUEST_HTML): Cloudflare drops
+    // `Vary`, so a guest copy kept in the browser would hide a sign-in.
+    const PUBLIC_CACHE = 'public, max-age=0, must-revalidate';
     const page = (req, res, o, status = 200) => send(res, status, { viewer: req.viewer, config, path: req.originalUrl, ...o });
     const signedIn = (req) => Boolean(req.viewer && req.viewer.kind === 'user' && req.viewer.subject);
     const staffViewer = (req) => isStaff(req.viewer);

@@ -234,7 +234,7 @@ const videoEnv = (live) => ({
         const signedIn = await vreq(t.base, '/v/101', { cookie: kimCookie });
         assert.strictEqual(signedIn.headers['cache-control'], 'private, no-store');
         const signedOut = await vreq(t.base, '/v/101');
-        assert.match(signedOut.headers['cache-control'], /public, max-age=300/);
+        assert.strictEqual(signedOut.headers['cache-control'], 'public, max-age=0, must-revalidate', 'a guest copy is revalidated, never reused after a sign-in');
         const lists = await vreq(t.base, '/playlists', { cookie: kimCookie });
         assert.strictEqual(lists.headers['cache-control'], 'private, no-store');
     });

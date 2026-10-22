@@ -91,9 +91,13 @@ ${render(o.body)}
 // The site's own places in the navbar: upload, your pictures and your albums (those two ask you to sign in).
 const NAV_LINKS = [{ label: 'Upload', href: '/' }, { label: 'Your pictures', href: '/mine' }, { label: 'Albums', href: '/albums' }];
 
-/** Send a Pics page. Signed-out pages are public; a session cookie makes a page private, no-store. */
+// A signed-out copy is never reused without asking: Cloudflare drops `Vary` (it keeps only Accept-Encoding), so a
+// browser keyed the guest copy by its URL alone and, for five minutes after a quiet sign-in, showed the signed-out page
+// (no owner tools, "Sign in to save"; 2026-10-22). Cloudflare does not cache these pages (DYNAMIC), so nothing is lost.
+const GUEST_HTML = 'public, max-age=0, must-revalidate';
+/** Send a Pics page. Signed-out pages are public but always revalidated; a session cookie makes a page private, no-store. */
 function send(res, status, o) {
-    if (!res.get('Cache-Control')) res.set('Cache-Control', o.cache || cache.htmlHeaders({ private: o.private, maxAge: 300 }));
+    if (!res.get('Cache-Control')) res.set('Cache-Control', o.cache || (o.private ? cache.htmlHeaders({ private: true }) : GUEST_HTML));
     res.set('Vary', 'Host');
     res.status(status).type('html').send(renderPage(o));
 }
