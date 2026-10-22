@@ -51,6 +51,26 @@ const { signJwt } = require('./helpers/mocks');
         assert.strictEqual(JSON.parse(me.text).user.username, staff.username);
     });
 
+    await check('/auth/me carries the avatar and colour from the token, so the navbar shows the person\'s picture', async () => {
+        const token = (extra) => signJwt({ iss: s.network.url, sub: staff.id, subject_id: staff.subject, username: staff.username, display_name: staff.username, role: 'user', aud: ['openvibe.network'], iat: now(), exp: now() + 300, ...extra }, s.network.privatePem);
+        const me = JSON.parse((await s.get('/auth/me', { cookie: `media-hub_at=${token({ avatar_url: 'https://openvibe.media/o/med_01JABCDEFGHJKMNPQRSTVWXYZ0', profile_color: '#0af' })}` })).text).user;
+        assert.deepStrictEqual([me.avatar_url, me.profile_color], ['https://openvibe.media/o/med_01JABCDEFGHJKMNPQRSTVWXYZ0', '#0af']);
+        const odd = JSON.parse((await s.get('/auth/me', { cookie: `media-hub_at=${token({ avatar_url: 'javascript:alert(1)', profile_color: 'red;x' })}` })).text).user;
+        assert.deepStrictEqual([odd.avatar_url, odd.profile_color], [null, null], 'only an https image and a hex colour pass');
+    });
+
+    await check('a quiet sign-in from a video page comes back to that page, not the home page', async () => {
+        const r = await s.get(`/auth/login?silent=1&next=${encodeURIComponent('https://openvibe.video/v/5902')}`);
+        assert.strictEqual(r.status, 302);
+        const flow = decodeURIComponent((String(r.headers.get('set-cookie') || '').match(/media-hub_oauth=([^;]+)/) || [])[1] || '');
+        assert.strictEqual(JSON.parse(flow).next, '/v/5902');
+    });
+
+    await check('signing out clears what the browser kept of the site', async () => {
+        const out = await s.get('/auth/logout', { as: staff, headers: { 'sec-fetch-site': 'same-origin' } });
+        assert.strictEqual(out.headers.get('clear-site-data'), '"cache"');
+    });
+
     await check('another site cannot sign a person out; this site can', async () => {
         const cross = await s.get('/auth/logout', { as: staff, headers: { 'sec-fetch-site': 'cross-site' } });
         assert.strictEqual(cross.status, 200, 'a confirm page, not a sign-out');
