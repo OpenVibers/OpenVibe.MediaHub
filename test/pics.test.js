@@ -79,7 +79,7 @@ function multipart(fields, file) {
         await check('the home: how it works, the links, the API, the limits from config, questions that match its FAQPage', async () => {
             const home = (await t.get('/', { headers: PICS })).text;
             assert.strictEqual((home.match(/<h1[\s>]/g) || []).length, 1, 'one h1');
-            assert.match(home, /<title>OpenVibe\.Pics: share pictures with a link, no ads<\/title>/);
+            assert.match(home, /<title>OpenVibe\.Pics: share and embed pictures with a link<\/title>/);
             const sections = ['How it works', 'The links a picture gets', 'Upload from your own app', 'What a free account gets', 'Questions', 'More on OpenVibe'];
             assert.deepStrictEqual(sections.filter((h) => !home.includes(`>${h}</h2>`)), [], 'every section is there');
             assert.ok(home.includes('<td>20 MB</td>') && home.includes('<td>200</td>') && home.includes('<td>5 GB</td>'), 'the limits are the configured ones');
