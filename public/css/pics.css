@@ -22,7 +22,7 @@
 .ovp-btn:hover, .ovp-btn:focus-visible { border-color: var(--ovp-pink); }
 .ovp-btn--primary { background: var(--ovp-pink); border-color: var(--ovp-pink); color: var(--ovp-on-pink) !important; }
 .ovp-btn--primary:hover, .ovp-btn--primary:focus-visible { background: var(--ovp-pink-soft); border-color: var(--ovp-pink-soft); }
-.ovp-btn--danger { background: transparent; border-color: color-mix(in srgb, var(--error, #ef4444) 55%, transparent); color: var(--error, #ef4444) !important; }
+.ovp-btn--danger { background: transparent; border-color: color-mix(in srgb, var(--error, #ef4444) 55%, transparent); color: var(--error-text, var(--error, #ef4444)) !important; }
 .ovp-btn--danger:hover, .ovp-btn--danger:focus-visible { background: color-mix(in srgb, var(--error, #ef4444) 12%, transparent); border-color: var(--error, #ef4444); }
 
 /* Home */
@@ -55,7 +55,7 @@
 .ovp-result img, .ovp-result .ovp-result-ph { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; background: var(--bg-tertiary, #16223a); }
 .ovp-result-main { min-width: 0; display: grid; gap: 6px; }
 .ovp-result-name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ovp-result-error { color: var(--error, #ef4444); font-size: .9rem; }
+.ovp-result-error { color: var(--error-text, var(--error, #ef4444)); font-size: .9rem; }
 .ovp-progress { height: 6px; border-radius: 999px; background: var(--bg-tertiary, #16223a); overflow: hidden; }
 .ovp-progress span { display: block; height: 100%; width: 0; background: var(--ovp-pink); transition: width .15s linear; }
 .ovp-result .ovp-copy-row input { font-size: .82rem; }
