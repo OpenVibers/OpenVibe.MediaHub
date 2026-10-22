@@ -173,11 +173,29 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
         /** A clip of a recording, cut by Media: { vod_id, start_time, end_time, title } → { clip } (Live's rules and limits). */
         createClip: (token, fields, viewerIp) => asPerson(token, 'POST', '/api/vods/clips', fields, { viewerIp }),
         forget,
-        feed({ type, limit, cursor = null }) {
+        feed({ type, limit, cursor = null, sort = null, window = null }) {
             const qs = new URLSearchParams({ type, limit: String(limit) });
             // Live's feed pages by an opaque cursor (its `next`); only a plain token is passed on.
             if (cursor && /^[A-Za-z0-9_-]{1,200}$/.test(String(cursor))) qs.set('cursor', String(cursor));
+            // Most watched: Live's Top order (views) over a window of a week, a month or all time.
+            if (sort === 'top') {
+                qs.set('sort', 'top');
+                if (['week', 'month', 'all'].includes(window)) qs.set('window', window);
+            }
             return getJson(`/api/content/feed?${qs.toString()}`);
+        },
+        /** Who is live on OpenVibe.Live right now: { streams: [...] } (public fields only), null when Live has none. */
+        liveNow() {
+            return getJson('/api/streams');
+        },
+        /** How many public recordings and clips Live holds: { vods, clips }, each a number or null when unknown. */
+        async totals() {
+            const [v, c] = await Promise.all([
+                getJson('/api/vods?limit=1').catch(() => null),
+                getJson('/api/clips?limit=1').catch(() => null),
+            ]);
+            const n = (x) => (x && Number.isSafeInteger(Number(x.total)) && Number(x.total) > 0 ? Number(x.total) : null);
+            return { vods: n(v), clips: n(c) };
         },
         vodsByUser(username, { limit, offset = 0 }) {
             const qs = new URLSearchParams({ username, limit: String(limit), offset: String(offset) });

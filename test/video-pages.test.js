@@ -104,19 +104,45 @@ function startLive() {
         if (state.down) return json(503, { error: 'Live is down' });
 
         const p = url.pathname;
+        // Who is live (Live's /api/streams): one stream to show, one marked adult (left out), one with a foreign thumbnail.
+        if (p === '/api/streams') {
+            return json(200, { streams: [
+                { id: 1, username: 'onair', display_name: 'On Air', title: 'Building a robot live', category: 'robot', is_nsfw: 0, viewer_count: 3, total_viewer_count: 7, started_at: '2026-10-22 13:00:00', thumbnail_url: '/api/thumbnails/stream-1-123.jpg' },
+                { id: 2, username: 'adult', display_name: 'Adult', title: 'ADULT_STREAM_XYZ', category: 'irl', is_nsfw: 1, viewer_count: 50, thumbnail_url: null },
+                { id: 3, username: 'elsewhere', display_name: 'Elsewhere', title: 'Foreign thumbnail', category: 'gaming', is_nsfw: 0, viewer_count: 1, thumbnail_url: 'https://evil.example/x.jpg' },
+            ] });
+        }
+        // OpenVibe.Search (the same stub answers for it): the facets, and one category's recordings.
+        if (p === '/api/v1/search') {
+            if (url.searchParams.get('facet.category') === 'gaming') {
+                return json(200, { results: [{ owner: 'live', type: 'vod', id: '101', title: 'A public recording', facets: { channel: 'streamer', category: 'gaming', duration_seconds: 45 }, published_at: '2026-10-12T10:00:00.000Z' }], next_cursor: null });
+            }
+            if (url.searchParams.get('facet.category')) return json(200, { results: [], next_cursor: null });
+            return json(200, { results: [], next_cursor: null, facets: {
+                category: [{ value: 'gaming', count: 5 }, { value: 'not-a-category', count: 3 }, { value: 'music', count: 1 }],
+                channel: [{ value: 'streamer', count: 3 }, { value: 'bad name!', count: 9 }, { value: 'once', count: 1 }],
+            } });
+        }
         if (p === '/api/content/feed') {
             const type = url.searchParams.get('type');
+            // Live's Top order: the most watched of the month, with their view counts.
+            if (url.searchParams.get('sort') === 'top') {
+                if (type === 'vods') return json(200, { items: [{ ...vodFeedItem, views: 100 }], next: null });
+                if (type === 'clips') return json(200, { items: [{ ...clipFeedItem, views: 250 }], next: null });
+            }
             if (type === 'vods') return json(200, { items: [vodFeedItem, { ...vodFeedItem, key: 'vod:109', id: 109, title: 'A two-second blip', duration_seconds: 2 }, { ...vodFeedItem, key: 'vod:110', id: 110, title: "Streamer's Channel", duration_seconds: 10, excerpt: null }], next: null });
             if (type === 'clips') return json(200, { items: [clipFeedItem], next: null });
             return json(200, { items: [], next: null });
         }
         if (p === '/api/vods') {
             const username = url.searchParams.get('username');
+            if (!username) return json(200, { vods: [vodListItem], total: 812, hasMore: true });
             if (username === 'streamer') return json(200, { vods: [vodListItem], total: 1, hasMore: false });
             return json(200, { vods: [], total: 0, hasMore: false });
         }
         if (p === '/api/clips') {
             const username = url.searchParams.get('username');
+            if (!username) return json(200, { clips: [clipListItem], total: 399, hasMore: true });
             if (username === 'streamer') return json(200, { clips: [clipListItem], total: 1, hasMore: false });
             return json(200, { clips: [], total: 0, hasMore: false });
         }
@@ -202,6 +228,8 @@ function countOccurrences(haystack, needle) {
             MEDIAHUB_LIVE_URL: live.url,
             MEDIAHUB_LIVE_PUBLIC_URL: 'https://openvibe.live',
             MEDIAHUB_CHAT_URL: live.url,
+            MEDIAHUB_SEARCH_URL: live.url,
+            MEDIAHUB_VIDEO_SEARCH: 'off',
         },
     });
     const getVideo = (p) => request(t.base, p, 'openvibe.video');
@@ -242,7 +270,7 @@ function countOccurrences(haystack, needle) {
         const r = await getVideo('/');
         assert.strictEqual(r.status, 200);
         assert.ok(r.text.includes('OpenVibe.Video'));
-        assert.ok(r.text.includes('Latest recordings'));
+        assert.ok(r.text.includes('Latest stream recordings'));
         assert.ok(r.text.includes('Latest clips'));
         assert.ok(r.text.includes('/v/101'));
         const ld = [...r.text.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap((m) => [].concat(JSON.parse(m[1])));
@@ -359,6 +387,51 @@ function countOccurrences(haystack, needle) {
         const r = await getVideo('/v/101/chapters.vtt');
         assert.strictEqual(r.status, 200);
         assert.strictEqual(r.text, 'WEBVTT\n\n00:00:10.000 --> 00:00:30.000\nIntro &amp; setup\n\n00:00:30.000 --> 00:00:45.000\nThe &lt;main&gt; part\n');
+    });
+
+    await check('the video home: live now, most watched, real counts, categories, channels, how it works and questions', async () => {
+        const r = await getVideo('/');
+        assert.strictEqual(r.status, 200);
+        assert.strictEqual((r.text.match(/<h1[\s>]/g) || []).length, 1, 'one h1');
+        // Live now: the stream links its Live channel, with Live's own thumbnail; the adult one and a foreign picture are not shown.
+        assert.ok(r.text.includes('Live now on OpenVibe.Live') && r.text.includes('href="https://openvibe.live/@onair"'), 'the live stream links its channel on Live');
+        assert.ok(r.text.includes('src="https://openvibe.live/api/thumbnails/stream-1-123.jpg"'), "Live's own stream thumbnail");
+        assert.ok(r.text.includes('7 watching') && r.text.includes('Robots'), 'viewers and the category');
+        assert.ok(!r.text.includes('ADULT_STREAM_XYZ'), 'a stream marked adult is left out');
+        assert.ok(!r.text.includes('evil.example'), 'a thumbnail from anywhere else is dropped');
+        // Most watched: clips and recordings together, by views, with the count.
+        const top = r.text.slice(r.text.indexOf('id="h-top"'), r.text.indexOf('id="h-vods"'));
+        assert.ok(top.indexOf('/c/201') !== -1 && top.indexOf('/c/201') < top.indexOf('/v/101'), 'the clip with more views comes first');
+        assert.ok(top.includes('250 views') && top.includes('100 views'), 'view counts');
+        // The numbers are Live's and Search's own.
+        assert.ok(/<dd>812<\/dd>/.test(r.text) && /<dd>399<\/dd>/.test(r.text), 'recordings and clips counted by Live');
+        assert.ok(r.text.includes('Watch 812 stream recordings and 399 clips'), 'the description carries the counts');
+        // Categories and channels from Search's facets: only known categories, only real usernames with two or more.
+        assert.ok(r.text.includes('href="/category/gaming"') && r.text.includes('5 recordings'), 'a category with its count');
+        assert.ok(r.text.includes('href="/category/music"') && r.text.includes('1 recording<'), 'one recording, singular');
+        assert.ok(!r.text.includes('not-a-category'), 'an unknown category is not shown');
+        assert.ok(r.text.includes('href="/@streamer"') && r.text.includes('3 recordings'), 'a channel with its count');
+        assert.ok(!r.text.includes('bad name!') && !r.text.includes('href="/@once"'), 'a bad name and a one-recording channel are left out');
+        const ld = [...r.text.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap((m) => [].concat(JSON.parse(m[1])));
+        const faq = ld.find((x) => x['@type'] === 'FAQPage');
+        assert.ok(faq && faq.mainEntity.length >= 5, 'FAQPage structured data');
+        const shown = [...r.text.matchAll(/<summary>([^<]*)<\/summary>/g)].map((m) => m[1].replace(/&#39;/g, "'"));
+        assert.deepStrictEqual(faq.mainEntity.map((q) => q.name), shown, 'every question in the structured data is on the page');
+        assert.ok(ld.some((x) => x['@type'] === 'ItemList' && x.itemListElement.some((it) => it.url === 'https://openvibe.video/v/101')), 'the latest recordings as an ItemList');
+        assert.ok(r.text.includes('up to 2 GB') && !r.text.includes('2.0 GB'), 'the upload limit, as people write it');
+    });
+
+    await check('a category page lists its recordings from Search, with the thumbnails Live has', async () => {
+        const r = await getVideo('/category/gaming');
+        assert.strictEqual(r.status, 200);
+        assert.ok(r.text.includes('<h1>Gaming</h1>'));
+        assert.ok(r.text.includes('href="/v/101"') && r.text.includes('https://openvibe.media/t/101.jpg'), 'the recording, with its thumbnail');
+        assert.match(r.text, /<meta name="robots" content="noindex/, 'one recording is too thin to index');
+        assert.ok(r.text.includes('href="/category/music"'), 'the other categories');
+        assert.strictEqual((await getVideo('/category/not-a-category')).status, 404);
+        const map = (await getVideo('/sitemap.xml')).text;
+        assert.match(map, /<loc>https:\/\/openvibe\.video\/category\/gaming<\/loc>/, 'a category with four or more recordings is in the sitemap');
+        assert.ok(!map.includes('/category/music'), 'a category with one is not');
     });
 
     await check('the navbar names the site\'s places: Videos, Upload, Record, Your videos and Playlists, the current one active', async () => {
