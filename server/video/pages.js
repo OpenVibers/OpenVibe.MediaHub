@@ -780,7 +780,7 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
     }
     const n = (v) => Number(v).toLocaleString('en-US');
     const HOME_FAQ = (vu) => [
-        { q: 'Is OpenVibe.Video free?', a: `Yes. Watching needs no account, and uploading needs a free OpenVibe account. Each person can upload ${vu.perDay} videos a day and keep up to ${formatBytes(vu.quotaBytes)}. There are no ads.` },
+        { q: 'Is OpenVibe.Video free?', a: `Yes. Watching needs no account, and uploading needs a free OpenVibe account. Each person can upload ${vu.perDay} videos a day and keep up to ${formatBytes(vu.quotaBytes)}.` },
         { q: 'Which files can I upload?', a: `MP4 (MOV and M4V too), WebM and MKV, up to ${formatBytes(vu.maxBytes)} each. You can also record your camera or screen right in the browser.` },
         { q: 'How do streams from OpenVibe.Live get here?', a: 'When a stream on OpenVibe.Live is recorded, the recording appears here after the stream ends, on the streamer\'s channel at openvibe.video/@name, together with the clips people cut from it.' },
         { q: 'Where do the captions and chapters come from?', a: 'OpenVibe.AI turns the speech into captions, splits the video into chapters and writes a short summary. On your own uploads you can use the summary as the description.' },
@@ -853,7 +853,7 @@ ${channels.length ? html`<section class="ovv-section" aria-labelledby="h-channel
 <section class="ovv-section" aria-labelledby="h-faq"><h2 id="h-faq">Questions</h2><div class="ovv-faq">${faq.map((f) => html`<details><summary>${f.q}</summary><p>${f.a}</p></details>`)}</div></section>
 <section class="ovv-section" aria-labelledby="h-more"><h2 id="h-more">More on OpenVibe</h2><ul class="ovv-more" role="list">
 <li><a href="${livePublic}/"><strong>OpenVibe.Live</strong><span>Go live from your browser, no OBS needed.</span></a></li>
-<li><a href="${config.pics.url}/"><strong>OpenVibe.Pics</strong><span>Share pictures with a link, no ads.</span></a></li>
+<li><a href="${config.pics.url}/"><strong>OpenVibe.Pics</strong><span>Share and embed pictures with a link.</span></a></li>
 <li><a href="${config.baseUrl}/"><strong>OpenVibe.Download</strong><span>Your files and backups, shared on your terms.</span></a></li>
 <li><a href="https://openvibe.community/"><strong>OpenVibe.Community</strong><span>Forums and pastes for talking it over.</span></a></li>
 </ul></section>`,

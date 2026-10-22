@@ -205,7 +205,7 @@ function createPicsRoutes(ctx) {
     const FORMAT_NAMES = 'JPEG, PNG, GIF, WebP or AVIF';
     const sizeText = (b) => formatBytes(b).replace(/\.0 /, ' ');
     const homeFaq = () => [
-        { q: 'Is OpenVibe.Pics free?', a: `Yes, and there are no ads. A free OpenVibe account can upload ${cfg.imagesPerDay} pictures a day, each up to ${sizeText(cfg.maxImageBytes)}, and keep up to ${sizeText(cfg.quotaBytes)}.` },
+        { q: 'Is OpenVibe.Pics free?', a: `Yes. A free OpenVibe account can upload ${cfg.imagesPerDay} pictures a day, each up to ${sizeText(cfg.maxImageBytes)}, and keep up to ${sizeText(cfg.quotaBytes)}.` },
         { q: 'Who can see my pictures?', a: 'Only people you give the link to. Pictures are never listed, ranked or shown to search engines, and you can delete one at any time.' },
         { q: 'What is removed from my pictures?', a: 'Everything hidden in the file: the GPS position, the camera\'s serial number and the rest of its metadata. Every picture is decoded and saved again before anyone sees it.' },
         { q: 'Which files can I upload?', a: `${FORMAT_NAMES}, animated GIF and WebP included. SVG and other formats are refused, so nothing is ever served as it was uploaded.` },
@@ -215,11 +215,11 @@ function createPicsRoutes(ctx) {
     r.get('/', async (req, res) => {
         const mine = signedIn(req) ? (await store.imagesOf(s, whoOf(req).requester, { limit: 12 })).rows : [];
         const canUpload = signedIn(req) || cfg.anonymous;
-        const description = 'Upload a picture and get a link to share or embed anywhere. Albums, any size or format, no ads, with location and camera details removed.';
+        const description = 'Upload a picture and get a link to share or embed anywhere: albums, any size or format, and location and camera details removed from every picture.';
         const faq = homeFaq();
         return page(req, res, {
             index: true,
-            title: `${SITE_NAME}: share pictures with a link, no ads`,
+            title: `${SITE_NAME}: share and embed pictures with a link`,
             description,
             jsonLd: [
                 seo.jsonLd.website({ name: SITE_NAME, url: base, description }),
@@ -230,7 +230,7 @@ function createPicsRoutes(ctx) {
             scripts: canUpload ? ['js/pics.js'] : [],
             body: html`<header class="ovp-hero"><p class="ovp-eyebrow">${SITE_NAME}</p>
 <h1>Share pictures. <span class="ovp-accent">Fast, open, yours.</span></h1>
-<p class="ovp-lede">Drop a picture, get a link to share or embed anywhere: on a forum, in a chat, on your site. No ads, no feed, and nothing about you hidden in the file.</p></header>
+<p class="ovp-lede">Drop a picture, get a link to share or embed anywhere: on a forum, in a chat, on your site. No feed to scroll, and nothing about you hidden in the file.</p></header>
 ${canUpload ? uploadForm(req) : html`<section class="ovp-drop ovp-drop--signin"><div class="ovp-drop-inner"><p class="ovp-drop-title">Sign in to upload</p><p class="ovp-drop-hint">Your OpenVibe account keeps your pictures and albums together, so you can delete them whenever you like.</p><p>${signInLink('/')}</p></div></section>`}
 ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><div class="ovp-section-head"><h2 id="h-latest">Your latest pictures</h2><a href="/mine">All of them</a></div>${grid(mine, 'Nothing yet: your uploads show up here.')}</section>` : ''}
 <section class="ovp-section" aria-labelledby="h-how"><h2 id="h-how">How it works</h2><ol class="ovp-steps">
@@ -579,7 +579,7 @@ ${row.state === 'hidden' ? html`<button class="ovp-btn" name="action" value="res
         .send(seo.sitemapXml(['/', '/updates', ...legal.PATHS].map((p) => ({ loc: `${base}${p}` })))));
     r.get('/llms.txt', (_req, res) => res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(seo.llmsTxt({
         name: SITE_NAME,
-        summary: 'Picture hosting on the OpenVibe network: upload a picture, get a link to share or embed, albums, no ads.',
+        summary: 'Picture hosting on the OpenVibe network: upload a picture, get a link to share or embed, albums, any size or format.',
         details: 'Pictures are unlisted (reachable only by their link). Each one is re-encoded with its metadata removed, and can be had resized and converted at /i/<slug>/w/<320|640|1280|1920|2560>.<webp|avif|jpg|png>. Alt text: the uploader writes it or asks OpenVibe.AI for a draft (POST /api/v1/images/<slug>/describe). API: POST /api/v1/images with the picture as the body (an OpenVibe sign-in token as a Bearer).',
         sections: [{ title: 'Start here', links: [{ title: SITE_NAME, url: `${base}/` }, { title: 'Terms', url: `${base}/terms` }, { title: 'DMCA', url: `${base}/dmca` }] }],
     })));

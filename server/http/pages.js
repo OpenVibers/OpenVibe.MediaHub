@@ -151,7 +151,7 @@ ${notice(p && p.detail ? p.detail : 'You are over the limit for this.', 'warn')}
     // from config or rules, so the page cannot promise more than the service does.
     const gb = (b) => rules.formatBytes(b).replace(/\.0 /, ' ');   // "2 GB", not "2.0 GB"
     const homeFaq = () => [
-        { q: 'Is OpenVibe.Download free?', a: `Yes. A free OpenVibe account gets ${gb(config.quotas.bytes)} of storage, files up to ${gb(config.quotas.maxFileBytes)} each and ${config.quotas.uploadsPerDay} uploads a day. There are no ads.` },
+        { q: 'Is OpenVibe.Download free?', a: `Yes. A free OpenVibe account gets ${gb(config.quotas.bytes)} of storage, files up to ${gb(config.quotas.maxFileBytes)} each and ${config.quotas.uploadsPerDay} uploads a day.` },
         { q: 'Who can open a file I share?', a: `Only the people you choose: named OpenVibe accounts, anyone signed in, or anyone with the link on a public download page. Every link expires in an hour to ${rules.EXPIRY_MAX_HOURS / 24} days, and you can revoke it at any time.` },
         { q: 'How do backups work?', a: 'Make a sync key on the Backups page and run the openvibe-download command on your computer, once or on a schedule. It sends only new or changed files into a folder of your drive, and it never deletes anything there unless you ask it to.' },
         drops.enabled()
@@ -170,7 +170,7 @@ ${notice(p && p.detail ? p.detail : 'You are over the limit for this.', 'warn')}
             actions: signedIn(req)
                 ? [{ label: 'Your files', href: '/files', primary: true }, { label: 'Back up a folder', href: '/sync' }]
                 : [{ label: 'Sign in with OpenVibe', href: '/auth/login?next=%2Ffiles', primary: true }, { label: 'How backups work', href: '#sc-back-up-a-folder-from-your-computer' }],
-            note: 'Open source, no ads. The bytes live in OpenVibe.Media; this service holds the names, the folders and the share links.',
+            note: 'Open source. The bytes live in OpenVibe.Media; this service holds the names, the folders and the share links.',
         });
         const faq = homeFaq();
         page(req, res, {
@@ -229,7 +229,7 @@ ${raw(showcase.nextSteps({
                 title: 'More on OpenVibe',
                 items: [
                     { to: 'video', what: 'Upload a video', text: 'With AI captions and chapters, on your own channel.', href: `${config.video.url}/`, from: 'download' },
-                    { to: 'pics', what: 'Share a picture', text: 'A link to share or embed anywhere, no ads.', href: `${config.pics.url}/`, from: 'download' },
+                    { to: 'pics', what: 'Share a picture', text: 'A link to share or embed anywhere.', href: `${config.pics.url}/`, from: 'download' },
                     { to: 'live', what: 'Go live from your browser', text: 'No OBS and no follower minimum.', href: 'https://openvibe.live/', from: 'download' },
                     { to: 'chat', what: 'Talk it over', text: 'Rooms, servers and voice channels.', href: 'https://openvibe.chat/', from: 'download' },
                 ],
