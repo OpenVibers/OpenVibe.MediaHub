@@ -40,7 +40,20 @@
         const fileUrl = video.getAttribute('src');
         if (!hlsUrl || !fileUrl) return Promise.resolve('file');
         if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            // Native HLS (Safari, iOS, and Chrome since it plays HLS itself) fetches segments as the element does. A
+            // segment Media moved to its object store redirects to another origin, which plays only in CORS mode: in
+            // no-cors mode Chrome could not parse it (VOD 5925 stopped at 1:23:35 on 2026-10-23). Media and its store
+            // both answer CORS. If the playlist still fails, the file plays from the same position, without CORS (its
+            // edge sends no CORS header), once.
+            video.crossOrigin = 'anonymous';
             video.src = hlsUrl;
+            video.addEventListener('error', function fallback() {
+                video.removeEventListener('error', fallback);
+                const at = video.currentTime || 0;
+                video.removeAttribute('crossorigin');
+                video.src = fileUrl;
+                if (at > 0) seek(video, at);
+            });
             return Promise.resolve('hls');
         }
         if (!window.MediaSource) return Promise.resolve('file');
