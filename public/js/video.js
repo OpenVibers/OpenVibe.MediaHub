@@ -43,9 +43,10 @@
             // Native HLS (Safari, iOS, and Chrome since it plays HLS itself) fetches segments as the element does. A
             // segment Media moved to its object store redirects to another origin, which plays only in CORS mode: in
             // no-cors mode Chrome could not parse it (VOD 5925 stopped at 1:23:35 on 2026-10-23). Media and its store
-            // both answer CORS. If the playlist still fails, the file plays from the same position, without CORS (its
-            // edge sends no CORS header), once.
-            video.crossOrigin = 'anonymous';
+            // both answer CORS. A private recording's signed playlist (?exp&sig) is served without CORS on purpose, so it
+            // stays in no-cors mode. If the playlist still fails, the file plays from the same position, without CORS
+            // (its edge sends no CORS header), once.
+            if (!/[?&]sig=/.test(hlsUrl)) video.crossOrigin = 'anonymous';
             video.src = hlsUrl;
             video.addEventListener('error', function fallback() {
                 video.removeEventListener('error', fallback);
