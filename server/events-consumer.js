@@ -12,7 +12,10 @@
  * scope events.subscription.manage.
  */
 const { serviceAuth } = require('openvibe-contracts');
-const { TOPICS } = require('openvibe-sdk/account-data');
+const { TOPICS: ACCOUNT_TOPICS } = require('openvibe-sdk/account-data');
+// Beside account export and deletion: Media's ready VODs, for the recordings of OpenRestream's record-only streams
+// (server/video/uploads.js importRecording; plan 2026-10-22 §3 D1).
+const TOPICS = Object.freeze([...ACCOUNT_TOPICS, 'media.vod.ready']);
 
 /** Create any missing subscription for TOPICS at Events (idempotent; retried in the background at boot). */
 function startSubscriptions({ config, port, secret, eventsUrl = config.events.url, fetchImpl = globalThis.fetch, log = console }) {

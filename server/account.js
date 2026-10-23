@@ -53,7 +53,7 @@ const TABLES = [
     { table: 'mh_sync_keys', subject: 'owner', value: AS_REQUESTER, file: 'sync_keys.json', columns: ['id', 'name', 'prefix', 'created_at', 'last_used_at', 'revoked_at'] },
 ];
 
-function createAccount({ db, config, media, log = console }) {
+function createAccount({ db, config, media, log = console, onMediaVodReady = null }) {
     /** The object ids of a deletion, read before the rows go (extraErase runs after them). */
     let pendingObjects = [];
     let pendingVods = [];
@@ -108,6 +108,13 @@ function createAccount({ db, config, media, log = console }) {
 
     /** One envelope → an outcome (see openvibe-sdk/account-data); throws so Events redelivers. */
     async function apply(ev, { send }) {
+        // Media's ready VODs: a record-only recording OpenRestream made in this tenant becomes its owner's private video
+        // (server/video/uploads.js importRecording). Every other VOD is acknowledged and left alone.
+        if (ev && ev.event_type === 'media.vod.ready') {
+            if (ev.source !== 'media' || !onMediaVodReady) return 'ignored:source';
+            const row = await onMediaVodReady(ev.payload && typeof ev.payload === 'object' ? ev.payload : {});
+            return row ? 'filed' : 'ignored:not_record_only';
+        }
         if (ev && ev.event_type === 'network.account.deleted' && ev.source === 'network') {
             const payload = ev.payload && typeof ev.payload === 'object' ? ev.payload : {};
             // Read the media objects first: the erase deletes the rows that name them.

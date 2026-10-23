@@ -13,6 +13,8 @@
  *                              its size is not known ahead, so parts_expected stays 0 until complete()
  *   chunk(row, n, buffer)      the n-th piece of a recording (any size up to 9 MB), in order; the size and the person's
  *                              quota are checked as it grows
+ *   importRecording(vod)       a recording OpenRestream made for a record-only stream, filed as its owner's private video
+ *                              when Media says it is ready (media.vod.ready; plan 2026-10-22 §3 D1)
  *
  * Rules: MP4 (QuickTime and M4V are the same container and go to Media as MP4), WebM and Matroska; at most
  * VIDEO_UPLOAD_MAX_BYTES (2 GB) a file, VIDEO_UPLOAD_QUOTA_BYTES (20 GB) a person, VIDEO_UPLOADS_PER_DAY (10) a day.
@@ -182,6 +184,40 @@ function createUploads({ s, media, config, log = console, events = null }) {
         return now;
     }
 
+    /**
+     * A recording OpenRestream made for a record-only stream ("Record only, to my videos" on openre.stream): Media's VOD
+     * in this tenant, ready, becomes its owner's private video here, like a browser recording, with the AI edit on its
+     * page. Only a VOD of this tenant whose meta says so is taken (source openre, record_only, the owner's subject):
+     * MediaHub and OpenRestream are the only services that may write to this tenant. A VOD already filed changes
+     * nothing (one upload per VOD, migration 0018). It counts toward the person's storage like any video, but is never
+     * refused for it: the session was already recorded. → the row, or null when the VOD is not such a recording.
+     */
+    async function importRecording(vod) {
+        const meta = vod && vod.meta && typeof vod.meta === 'object' ? vod.meta : {};
+        if (!vod || String(vod.app_id) !== String(config.media.app) || meta.source !== 'openre' || meta.record_only !== true) return null;
+        const subject = String(meta.owner_subject || '');
+        const vodId = Number(vod.id);
+        if (!/^usr_[0-9A-HJKMNP-TV-Z]{26}$/.test(subject) || !Number.isSafeInteger(vodId) || vodId < 1) return null;
+        const known = await s.db.maybe('SELECT * FROM video_uploads WHERE media_vod_id = $1', [vodId]);
+        if (known) return known;
+        const now = s.iso();
+        const title = cleanLine(vod.title, 120) || `Recording, ${now.slice(0, 16).replace('T', ' ')} UTC`;
+        const size = Number(vod.file_size) > 0 ? Math.round(Number(vod.file_size)) : 0;
+        const row = await s.db.maybe(`INSERT INTO video_uploads (id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, status, created_at, updated_at)
+                                       VALUES ($1, $2, NULL, $3, '', 'private', $4, 'video/mp4', $5, 0, 0, 'processing', $6, $6)
+                                       ON CONFLICT (media_vod_id) WHERE media_vod_id IS NOT NULL DO NOTHING RETURNING *`,
+        [s.newId('vup'), `user:${subject}`, title, vodId, size, now]);
+        if (!row) return await s.db.maybe('SELECT * FROM video_uploads WHERE media_vod_id = $1', [vodId]);
+        log.log(`[MediaHub] a record-only recording is ${row.id} (Media VOD ${vodId})`);
+        return await absorb(row, vod);
+    }
+
+    /** The owner's channel name on rows filed without one (record-only recordings), once they are signed in to see them. */
+    async function fillUsername(owner, username) {
+        if (!owner || !username) return 0;
+        return await s.db.exec('UPDATE video_uploads SET owner_username = $2 WHERE owner = $1 AND owner_username IS NULL', [owner, String(username).slice(0, 64)]);
+    }
+
     /** A row still processing: ask Media how it is going (no more than once every 15 seconds per row). */
     const lastAsked = new Map();
     async function refresh(row) {
@@ -224,7 +260,7 @@ function createUploads({ s, media, config, log = console, events = null }) {
 
     return {
         PART_SIZE, REASONS, UploadError, kindOf, addressId, canSee,
-        byId, bySeq, start, part, complete, refresh, update, remove, report, startRecording, chunk,
+        byId, bySeq, start, part, complete, refresh, update, remove, report, startRecording, chunk, importRecording, fillUsername,
         mine: (owner, limit = 60) => s.db.many("SELECT * FROM video_uploads WHERE owner = $1 AND state <> 'removed' ORDER BY id DESC LIMIT $2", [owner, limit]),
         latest: (limit = 12) => s.db.many("SELECT * FROM video_uploads WHERE visibility = 'public' AND status = 'ready' AND state = 'active' ORDER BY id DESC LIMIT $1", [limit]),
         channel: (username, limit = 48) => s.db.many("SELECT * FROM video_uploads WHERE lower(owner_username) = lower($1) AND visibility = 'public' AND status = 'ready' AND state = 'active' ORDER BY id DESC LIMIT $2", [String(username), limit]),

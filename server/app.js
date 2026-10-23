@@ -69,7 +69,8 @@ async function createApp(opts = {}) {
     const identity = createIdentity({ config, fetchImpl, log });
     const drive = createService({ s, media, identity, config, log });
     const uploads = createUploads({ s, media, config, service: drive, log });
-    const account = createAccount({ db: s.db, config, media, log });
+    // videoUploads is made below; the account consumer only calls it when an event arrives.
+    const account = createAccount({ db: s.db, config, media, log, onMediaVodReady: (vod) => videoUploads.importRecording(vod) });
     const playlists = createPlaylists({ s, config, log });
     // MediaHub's own events (server/events-outbox.js): written with the change, relayed to OpenVibe.Events.
     const eventsOutbox = require('./events-outbox').createEventsOutbox({ s, config, log, fetchImpl: opts.fetchImpl || null });

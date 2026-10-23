@@ -215,6 +215,8 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
     }, 400));
 
     r.get('/me/videos', mustSignIn('/me/videos', 'Sign in to see the videos you uploaded.'), async (req, res) => {
+        // A record-only recording arrives without its owner's channel name: it is filled in the first time they look.
+        if (req.viewer && req.viewer.username) await up.fillUsername(ownerOf(req), req.viewer.username).catch(() => 0);
         const rows = await up.mine(ownerOf(req));
         await Promise.all(rows.filter((x) => x.status === 'processing').map((x) => up.refresh(x).catch(() => null)));
         const fresh = await up.mine(ownerOf(req));
