@@ -123,6 +123,7 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
                 file_url: v.status === 'ready' ? `https://openvibe.media/v/vod-${v.id}.mp4` : null,
                 hls_url: v.status === 'ready' ? `https://openvibe.media/o/med_vod${v.id}/master.m3u8` : null,
                 thumbnail_url: v.status === 'ready' ? `https://openvibe.media/t/vod-${v.id}.jpg` : null,
+                meta: v.meta || {},
             });
             if (parts.length === 4 && req.method === 'POST') {
                 const body = JSON.parse(raw.toString('utf8') || '{}');
