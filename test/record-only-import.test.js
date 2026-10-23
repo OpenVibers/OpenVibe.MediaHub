@@ -3,6 +3,8 @@
  * Record only, to my videos (plan 2026-10-22 §3 D1): OpenRestream records a record-only stream into this tenant as a
  * private Media VOD whose meta names the owner; when Media says it is ready (media.vod.ready, signed on
  * POST /internal/events) it becomes that person's private video here (server/video/uploads.js importRecording).
+ * Media's events carry no meta (server/events.js slim, as in production on 2026-10-23), so MediaHub reads the VOD back
+ * from Media; Media unreachable answers 503 and Events delivers the event again.
  *   - only a VOD of this tenant marked record-only by OpenRestream, with an owner subject, is filed; anything else,
  *     and anything not from Media, is acknowledged and left alone;
  *   - it is private and ready, plays for its owner only, and a redelivery files nothing twice;
@@ -37,10 +39,16 @@ function vget(base, path, cookie) {
 
     // The VOD OpenRestream asked Media for (server/store/recordings.js vodFields), finished.
     const meta = { source: 'openre', openre_session_id: 'ses_01JABCDEFGHJKMNPQRSTVWXYZ0', openre_stream_id: 'str_01JABCDEFGHJKMNPQRSTVWXYZ0', protocol: 'rtmp', mode: 'vod', record_only: true, owner_subject: kim.subject };
-    t.media.vods.set(900, { id: 900, title: 'Morning take', visibility: 'private', user_id: null, meta, bytes: Buffer.alloc(4096, 1), types: [], status: 'ready' });
+    const vod = (id, m) => t.media.vods.set(id, { id, title: 'Morning take', visibility: 'private', user_id: null, meta: m, bytes: Buffer.alloc(4096, 1), types: [], status: 'ready' });
+    vod(900, meta);
+    vod(902, { ...meta, record_only: false });
+    vod(903, { source: 'media-hub', record_only: true, owner_subject: kim.subject });
+    vod(904, { ...meta, owner_subject: 'kim' });
+    vod(907, meta);
+    // The event as Media sends it: the VOD without its meta.
     const ready = (over = {}) => ({
         id: 900, app_id: 'media-hub', title: 'Morning take', user_id: null, visibility: 'private', is_recording: false,
-        duration_seconds: 42.5, file_size: 4096, file_url: 'https://openvibe.media/v/vod-900.mp4', thumbnail_url: 'https://openvibe.media/t/vod-900.jpg', meta, ...over,
+        duration_seconds: 42.5, file_size: 4096, file_url: 'https://openvibe.media/v/vod-900.mp4', thumbnail_url: 'https://openvibe.media/t/vod-900.jpg', ...over,
     });
     const deliver = (payload, { source = 'media', type = 'media.vod.ready' } = {}) => {
         const event = { event_id: `evt_${Math.random().toString(16).slice(2)}`, event_type: type, source, at: new Date().toISOString(), payload };
@@ -65,13 +73,22 @@ function vget(base, path, cookie) {
     });
 
     await check('any other VOD, or one not from Media, is acknowledged and left alone', async () => {
-        const live = await deliver(ready({ id: 901, app_id: 'live', meta: { source: 'openre', mode: 'vod' } }));
+        const live = await deliver(ready({ id: 901, app_id: 'live' }));
         assert.deepStrictEqual([live.status, live.json().outcome], [200, 'ignored:not_record_only']);
-        assert.strictEqual((await deliver(ready({ id: 902, meta: { ...meta, record_only: false } }))).json().outcome, 'ignored:not_record_only');
-        assert.strictEqual((await deliver(ready({ id: 903, meta: { source: 'media-hub', record_only: true, owner_subject: kim.subject } }))).json().outcome, 'ignored:not_record_only');
-        assert.strictEqual((await deliver(ready({ id: 904, meta: { ...meta, owner_subject: 'kim' } }))).json().outcome, 'ignored:not_record_only');
+        for (const id of [902, 903, 904]) assert.strictEqual((await deliver(ready({ id }))).json().outcome, 'ignored:not_record_only', `VOD ${id}`);
+        assert.strictEqual((await deliver(ready({ id: 906 }))).json().outcome, 'ignored:not_record_only', 'a VOD Media no longer has');
         assert.strictEqual((await deliver(ready({ id: 905 }), { source: 'network' })).json().outcome, 'ignored:source');
         assert.strictEqual((await rows()).length, 1);
+    });
+
+    await check('Media unreachable: 503, nothing filed, and the redelivery files it', async () => {
+        t.media.state.tokenRejects = true;
+        const down = await deliver(ready({ id: 907 }));
+        assert.strictEqual(down.status, 503);
+        assert.strictEqual((await rows()).length, 1);
+        t.media.state.tokenRejects = false;
+        assert.strictEqual((await deliver(ready({ id: 907 }))).json().outcome, 'filed');
+        assert.strictEqual((await rows()).length, 2);
     });
 
     await check('it plays for its owner only, and their channel name is filled in when they open their videos', async () => {

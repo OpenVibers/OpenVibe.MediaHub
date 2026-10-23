@@ -192,12 +192,26 @@ function createUploads({ s, media, config, log = console, events = null }) {
      * nothing (one upload per VOD, migration 0018). It counts toward the person's storage like any video, but is never
      * refused for it: the session was already recorded. → the row, or null when the VOD is not such a recording.
      */
-    async function importRecording(vod) {
-        const meta = vod && vod.meta && typeof vod.meta === 'object' ? vod.meta : {};
-        if (!vod || String(vod.app_id) !== String(config.media.app) || meta.source !== 'openre' || meta.record_only !== true) return null;
+    async function importRecording(event) {
+        if (!event || String(event.app_id) !== String(config.media.app)) return null;
+        const vodId = Number(event.id);
+        if (!Number.isSafeInteger(vodId) || vodId < 1) return null;
+        // Media leaves a VOD's meta out of its events (they reach every subscriber, server/events.js slim): it is read
+        // back from Media here, with this tenant's own access, for a VOD of this tenant only. Media unreachable throws,
+        // so Events delivers the event again; a VOD Media no longer has is nothing to file.
+        let vod = event;
+        if (!event.meta) {
+            const out = await media.vodGet(vodId);
+            if (!out.ok) {
+                if (out.status === 404 || out.status === 410) return null;
+                throw new Error(`OpenVibe.Media could not be read for VOD ${vodId} (${out.code || out.status})`);
+            }
+            vod = { ...event, ...(out.data && (out.data.vod || out.data)) };
+        }
+        const meta = vod.meta && typeof vod.meta === 'object' ? vod.meta : {};
+        if (meta.source !== 'openre' || meta.record_only !== true) return null;
         const subject = String(meta.owner_subject || '');
-        const vodId = Number(vod.id);
-        if (!/^usr_[0-9A-HJKMNP-TV-Z]{26}$/.test(subject) || !Number.isSafeInteger(vodId) || vodId < 1) return null;
+        if (!/^usr_[0-9A-HJKMNP-TV-Z]{26}$/.test(subject)) return null;
         const known = await s.db.maybe('SELECT * FROM video_uploads WHERE media_vod_id = $1', [vodId]);
         if (known) return known;
         const now = s.iso();
