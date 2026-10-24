@@ -38,6 +38,12 @@
 .ovv-section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin: 0 0 .75rem; }
 .ovv-section-head h2 { margin: 0; }
 .ovv-section-head a { font-size: .9rem; font-weight: 700; }
+/* The front page's headings take the network's heading face and sizes (openvibe-shared/showcase.css), like every other
+   OpenVibe home; a video's, picture's or channel's page keeps its compact headings (the hero is on the front page only). */
+.ovv-hero h1, .ovv-hero ~ .ovv-section > h2, .ovv-hero ~ .ovv-section > .ovv-section-head > h2 { font-family: var(--ov-font, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); letter-spacing: -.02em; }
+.ovv-hero h1 { font-weight: 800; }
+.ovv-hero ~ .ovv-section { margin-top: 56px; }
+.ovv-hero ~ .ovv-section > h2, .ovv-hero ~ .ovv-section > .ovv-section-head > h2 { font-size: clamp(22px, 2.6vw, 30px); }
 .ovv-section h2 { display: flex; align-items: center; gap: 8px; }
 .ovv-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--live-red, #ef4444); box-shadow: 0 0 0 4px color-mix(in srgb, var(--live-red, #ef4444) 25%, transparent); flex: none; }
 .ovv-tag.ovv-tag--live { background: color-mix(in srgb, var(--live-red, #ef4444) 70%, #000); text-transform: uppercase; letter-spacing: .4px; }
