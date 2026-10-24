@@ -139,12 +139,22 @@ function factualDescription(kind, item, firstWords = '') {
     return kind === 'vod' ? `${head} Watch with AI captions and chapters on OpenVibe.Video.` : `${head} Watch it on OpenVibe.Video.`;
 }
 
-/** The player's HLS source: Media's timeline playlist, for a finished item that has one, on the playback file's origin. */
+/**
+ * The player's HLS source, on the playback file's origin: Media's timeline playlist for a finished item that has one; for
+ * an MP4 recording still being written, its DVR playlist over the growing file (Media /v/<id>/dvr.m3u8, Media#168), so
+ * the page plays the recording without the seekable copy Media rewrote each pass. A private or WebM recording: the file.
+ */
 function hlsAttrs(item) {
-    const hls = !item.is_recording && httpsUrl(item.hls_url);
     const file = fileOf(item);
+    const hls = item.is_recording ? dvrPlaylist(item, file) : httpsUrl(item.hls_url);
     if (!hls || !file || new URL(hls).origin !== new URL(file).origin) return '';
     return html` data-ovv-hls="${hls}" data-ovv-hls-lib="${asset('vendor/hls.light.min.js')}"`;
+}
+
+function dvrPlaylist(item, file) {
+    const open = (item.visibility || (item.is_public ? 'public' : 'private')) !== 'private';
+    if (!file || !open || !/\.mp4$/i.test(String(item.file_path || '')) || !Number.isSafeInteger(Number(item.id))) return null;
+    return `${new URL(file).origin}/v/${Number(item.id)}/dvr.m3u8`;
 }
 
 function durationLabel(s) {
