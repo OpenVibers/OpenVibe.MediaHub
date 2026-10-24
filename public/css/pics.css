@@ -64,6 +64,12 @@
 .ovp-section { margin-top: 2.2rem; }
 .ovp-section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; margin: 0 0 .9rem; }
 .ovp-section-head h1, .ovp-section-head h2 { margin: 0; }
+/* The front page's headings take the network's heading face and sizes (openvibe-shared/showcase.css), like every other
+   OpenVibe home; a video's, picture's or channel's page keeps its compact headings (the hero is on the front page only). */
+.ovp-hero h1, .ovp-hero ~ .ovp-section > h2, .ovp-hero ~ .ovp-section > .ovp-section-head > h2 { font-family: var(--ov-font, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); letter-spacing: -.02em; }
+.ovp-hero h1 { font-weight: 800; }
+.ovp-hero ~ .ovp-section { margin-top: 56px; }
+.ovp-hero ~ .ovp-section > h2, .ovp-hero ~ .ovp-section > .ovp-section-head > h2 { font-size: clamp(22px, 2.6vw, 30px); }
 .ovp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
 .ovp-tile { position: relative; display: block; aspect-ratio: 1; overflow: hidden; border-radius: 12px; border: 1px solid var(--ovp-line); background: var(--bg-tertiary, #16223a); }
 .ovp-tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s ease; }
