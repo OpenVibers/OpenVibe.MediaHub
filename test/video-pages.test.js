@@ -36,6 +36,13 @@ function startLive() {
         transcript_status: 'done', stream_category: 'Just Chatting', stream_id: 1001, stream_started_at: '2026-10-12 09:30:00', stream_ended_at: '2026-10-12 09:30:45',
         stream_peak_viewers: 12, comment_count: 3, view_count: 100, is_recording: false,
     };
+    // An MP4 recording still being written (RTMP): its player plays Media's DVR playlist over the growing file.
+    const recordingVod = {
+        id: 107, title: 'Still live', description: '', duration_seconds: 600, created_at: '2026-10-24T16:00:00.000Z',
+        thumbnail_url: null, playback_url: 'https://openvibe.media/v/107', hls_url: null, visibility: 'public',
+        file_path: '/data/vods/vod-live-107.mp4', username: 'streamer', display_name: 'Streamer', view_count: 1,
+        is_recording: true, ai_overview: '', ai_transcript_json: null,
+    };
     const unlistedVod = {
         id: 102, title: 'An unlisted recording', description: '', duration_seconds: 20,
         created_at: '2026-10-11T10:00:00.000Z', thumbnail_url: null,
@@ -171,6 +178,8 @@ function startLive() {
             if (vodDetail[1] === '104') return json(200, { vod: secondVod, clips: [] });
             if (vodDetail[1] === '106') return json(200, { vod: thinVod, clips: [] });
             if (vodDetail[1] === '105') return json(200, { vod: hlsFirstVod, clips: [] });
+            if (vodDetail[1] === '107') return json(200, { vod: recordingVod, clips: [] });
+            if (vodDetail[1] === '108') return json(200, { vod: { ...recordingVod, id: 108, file_path: '/data/vods/vod-live-108.webm', playback_url: 'https://openvibe.media/v/108' }, clips: [] });
             return json(404, { error: 'not found' });
         }
         const clipDetail = /^\/api\/clips\/(\d+)$/.exec(p);
@@ -350,6 +359,15 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('/v/101?t=5'), 'the full recording link carries the clip start');
         assert.ok(r.text.includes('Discuss on OpenVibe.Community'));
         assert.ok(!r.text.includes('Manage this clip'), 'owner tools only for its maker or channel (video-owner.test.js)');
+    });
+
+    await check('a recording in progress plays Media\'s DVR playlist when it is an MP4, the file when it is a WebM', async () => {
+        let r = await getVideo('/v/107');
+        assert.strictEqual(r.status, 200);
+        assert.ok(r.text.includes('This recording is still in progress'));
+        assert.ok(r.text.includes('data-ovv-hls="https://openvibe.media/v/107/dvr.m3u8"'), 'the playlist over the growing file');
+        r = await getVideo('/v/108');
+        assert.ok(!r.text.includes('data-ovv-hls='), 'a WebM recording plays its file');
     });
 
     await check('an unlisted VOD is reachable but noindex', async () => {
