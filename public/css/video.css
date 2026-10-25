@@ -293,3 +293,14 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-record-preview { width: 100%; max-height: 420px; border-radius: 12px; background: #000; display: block; }
 .ovv-record-clock { position: absolute; top: 10px; left: 10px; margin: 0; padding: 2px 10px; border-radius: 999px; background: rgba(220, 38, 38, .9); color: #fff; font-weight: 700; font-variant-numeric: tabular-nums; }
 .ovv-record-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 0; }
+
+/* A phone on its side: the video fills the screen (2026-10-25). The 16:9 player is as wide as the page, so on a phone
+   held sideways it was taller than the screen (447px of 390) with the navbar over its top. On a watch page the navbar
+   steps aside and the player takes the whole screen (a 16:9 video fills it, an upright one sits in the middle); the
+   page below scrolls as before, and turning the phone back restores the navbar. */
+@media (orientation: landscape) and (max-height: 540px) and (hover: none) {
+  body:has(.ovv-watch) #navbar-mount { display: none; }
+  .ovv-page:has(.ovv-watch) { padding-top: 0; }
+  .ovv-watch .ovv-player-wrap { border-radius: 0; border: 0; }
+  .ovv-watch .ovv-player { aspect-ratio: auto; height: 100vh; height: 100dvh; object-fit: contain; }
+}
