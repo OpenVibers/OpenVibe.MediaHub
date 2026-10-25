@@ -80,7 +80,7 @@
 .ovv-card-placeholder { display: grid; place-items: center; width: 100%; height: 100%; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--ovv-accent) 22%, transparent), transparent 60%), var(--ovv-card); color: var(--ovv-faint); font-size: 1.6rem; }
 .ovv-dur, .ovv-tag { position: absolute; bottom: 8px; padding: 1px 7px; border-radius: 6px; background: rgba(5, 8, 15, .82); color: #fff; font-size: .75rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.5; }
 .ovv-dur { right: 8px; }
-.ovv-tag { left: 8px; background: color-mix(in srgb, var(--ovv-accent) 85%, #000); }
+.ovv-tag { left: 8px; background: var(--accent-strong, color-mix(in srgb, var(--ovv-accent) 85%, #000)); color: var(--on-accent-strong, #fff); }   /* the readable fill pair: a light accent (October's orange) failed 4.5:1 under white text */
 .ovv-tag--inline { position: static; display: inline-block; margin-right: 4px; vertical-align: 1px; }
 .ovv-card-body { min-width: 0; }
 .ovv-card-title { margin: 0; font-size: .98rem; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
