@@ -121,7 +121,7 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-panel > p.ovv-fine { margin-top: .6rem; }
 
 /* Chapters */
-.ovv-chapters ol { list-style: none; margin: 0 -8px; padding: 0; display: grid; gap: 2px; max-height: 520px; overflow-y: auto; }
+.ovv-chapters ol { list-style: none; margin: 0 -8px; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; max-height: 520px; overflow-y: auto; }
 .ovv-chapters a { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 8px; border-radius: 8px; color: inherit; text-decoration: none; font-size: .9rem; line-height: 1.4; }
 .ovv-chapters a:hover, .ovv-chapters a:focus-visible { background: var(--bg-hover, #1c2a44); }
 .ovv-chapters a.is-current { background: color-mix(in srgb, var(--ovv-accent) 14%, transparent); }
@@ -221,7 +221,7 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-pl-edit[open] > summary { margin-bottom: 10px; border-color: var(--ovv-accent); }
 .ovv-pl-edit .ovv-playlist-actions { padding-top: 10px; border-top: 1px solid var(--ovv-line); }
 
-.ovv-playlist-list, .ovv-item-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ovv-playlist-list, .ovv-item-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .ovv-playlist-row, .ovv-item-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--ovv-line); border-radius: 12px; background: var(--ovv-card); }
 .ovv-playlist-main { display: grid; gap: 2px; min-width: 0; flex: 1 1 220px; }
 .ovv-playlist-title, .ovv-item-title { font-weight: 700; overflow-wrap: anywhere; color: inherit; text-decoration: none; }
@@ -280,7 +280,7 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-cut-modes legend { padding: 0; margin-bottom: 4px; font-size: .85rem; font-weight: 700; color: var(--ovv-dim); }
 .ovv-cut-modes .ovv-radio { flex-wrap: wrap; column-gap: 8px; row-gap: 0; }
 .ovv-cut-modes .ovv-fine { flex-basis: 100%; margin: 0 0 0 24px; }
-.ovv-cuts { list-style: none; margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid var(--ovv-line); display: grid; gap: 6px; font-size: .86rem; color: var(--ovv-dim); }
+.ovv-cuts { list-style: none; margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid var(--ovv-line); display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; font-size: .86rem; color: var(--ovv-dim); }
 .ovv-cuts b { color: var(--text-primary, #e6edf7); }
 .ovv-edited-from { margin: 0 0 10px; }
 .ovv-table { width: 100%; border-collapse: collapse; }
