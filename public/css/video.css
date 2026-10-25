@@ -302,5 +302,7 @@ a.ovv-channel-name:hover { text-decoration: underline; }
   body:has(.ovv-watch) #navbar-mount { display: none; }
   .ovv-page:has(.ovv-watch) { padding-top: 0; }
   .ovv-watch .ovv-player-wrap { border-radius: 0; border: 0; }
-  .ovv-watch .ovv-player { aspect-ratio: auto; height: 100vh; height: 100dvh; object-fit: contain; }
+  /* video.ovv-player inside the wrapper outranks the shared player's .ov-player .ov-player-video { height: 100% }, which
+     loads after this file and left the video at its 16:9 height. */
+  .ovv-watch .ovv-player-wrap video.ovv-player { aspect-ratio: auto; height: 100vh; height: 100dvh; object-fit: contain; }
 }
