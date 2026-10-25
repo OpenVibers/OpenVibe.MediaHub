@@ -95,7 +95,10 @@
 .ovv-watch--clip { grid-template-columns: minmax(0, 960px); justify-content: center; }
 .ovv-main, .ovv-side { min-width: 0; }
 .ovv-side { display: grid; gap: 18px; }
-.ovv-player-wrap { border-radius: 14px; overflow: hidden; background: #000; border: 1px solid var(--ovv-line); box-shadow: 0 18px 40px rgba(0, 0, 0, .35); }
+.ovv-player-wrap { position: relative; border-radius: 14px; background: #000; border: 1px solid var(--ovv-line); box-shadow: 0 18px 40px rgba(0, 0, 0, .35); }
+/* The player clips itself to the corners, so the wrapper can let the ambient glow (shared player.js) spill around it. */
+.ovv-player-wrap > .ov-player, .ovv-player-wrap > video { border-radius: inherit; overflow: hidden; }
+.ovv-player-wrap.ov-player-host { box-shadow: none; border-color: transparent; }
 .ovv-player { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
 .ovv-title { margin: 1rem 0 .6rem; font-size: clamp(1.3rem, 2.4vw, 1.75rem); line-height: 1.25; }
 .ovv-byline { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; padding-bottom: 16px; border-bottom: 1px solid var(--ovv-line); }

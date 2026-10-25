@@ -75,8 +75,10 @@ const CARD_SIZES = '(max-width: 520px) calc(100vw - 32px), (max-width: 820px) 45
 // The player shows the item's picture until it plays: without a poster the page's largest paint waited for the first
 // video frame (3.8 s on a phone-speed CPU, 2026-10-17). A Media thumbnail is asked for as a 1280 px WebP, as uploads are.
 function posterAttr(url) {
-    if (/^https:\/\/openvibe\.media\/t\/[^?#\s]+$/.test(url || '')) return html` poster="${`${url}?w=1280&fmt=webp`}"`;
-    return url ? html` poster="${url}"` : '';
+    // A Media thumbnail comes in sizes: the poster at 1280 px, and a 32 px preview the player shows blurred (and takes its
+    // background colour from) before the poster arrives. data-ov-ambient: the picture's glow around the player.
+    if (/^https:\/\/openvibe\.media\/t\/[^?#\s]+$/.test(url || '')) return html` poster="${`${url}?w=1280&fmt=webp`}" data-ov-thumb="${`${url}?w=32&fmt=webp`}" data-ov-ambient`;
+    return url ? html` poster="${url}" data-ov-ambient` : '';
 }
 
 /**

@@ -275,6 +275,8 @@ function countOccurrences(haystack, needle) {
     await check('the player shows the item\'s picture until it plays (a 1280 px WebP of a Media thumbnail)', async () => {
         const vod = await getVideo('/v/101');
         assert.ok(/<video class="ovv-player"[^>]* poster="https:\/\/openvibe\.media\/t\/101\.jpg\?w=1280&amp;fmt=webp"/.test(vod.text), vod.text.match(/<video[^>]*>/)?.[0]);
+        // The player's layered loading and glow (openvibe-shared 4.13): a 32 px preview and data-ov-ambient.
+        assert.ok(/<video class="ovv-player"[^>]* data-ov-thumb="https:\/\/openvibe\.media\/t\/101\.jpg\?w=32&amp;fmt=webp" data-ov-ambient/.test(vod.text), vod.text.match(/<video[^>]*>/)?.[0]);
         const clip = await getVideo('/c/201');
         assert.ok(clip.status !== 200 || !/<video class="ovv-player"[^>]* poster=/.test(clip.text), 'no thumbnail, no poster');
     });
