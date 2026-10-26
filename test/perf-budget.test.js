@@ -18,11 +18,11 @@ const BUDGETS = {
                        // FAQPage JSON-LD) and next steps on the network; was 29.7 at 27.5
     htmlBrotliKB: 10.4,   // 9.4 on 10-22 (the same sections); was 7.7 at 7.1
     jsFiles: 5,   // 5 (theme-loader, web-runtime, navbar, footer, boost: openvibe-shared/shell)
-    jsRawKB: 264,   // 239.8
+    jsRawKB: 269,   // 264.3 with Shared 4.13.0 (2026-10-26: account links); 239.8
     jsBrotliKB: 67,   // 65.3 Shared 4.12.0: the light/dark switch, the seasonal mark and the theme pairs; 56.5
     cssFiles: 2,   // 2 (app.css + the cached /shared/showcase.css)
-    cssRawKB: 18.3,   // measured 16.6 (shared 4.1.8: four steps two by two); was 16.5 at 15.0
-    cssBrotliKB: 4.4,   // 3.7; 4.2 with the drive previews (10-15)
+    cssRawKB: 28,   // 23.6 with Shared 4.13.0 (2026-10-26: account links); measured 16.6 (shared 4.1.8: four steps two by two); was 16.5 at 15.0
+    cssBrotliKB: 7,   // 5.4 with Shared 4.13.0 (2026-10-26: account links); 3.7; 4.2 with the drive previews (10-15)
     externalFiles: 0,   // 0
 };
 

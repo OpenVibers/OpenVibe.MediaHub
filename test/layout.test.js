@@ -43,7 +43,7 @@ const BOOST = /<script src="\/shared\/boost\.js\?v=[0-9a-f]{12}" data-main="#mai
         assert.ok(head.includes('<link rel="canonical" href="https://openvibe.download/">'), 'canonical');
         assert.ok(head.includes('<meta name="robots" content="index, follow">'), 'robots');
         const ld = [...head.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])['@type']);
-        assert.deepStrictEqual(ld, ['WebSite', 'WebApplication', 'WebPage', 'FAQPage'], 'the home JSON-LD');
+        assert.deepStrictEqual(ld, ['WebSite', 'WebApplication', 'WebPage', 'FAQPage', 'Organization'], 'the home JSON-LD');
         // FAQPage only for questions shown on the page: every question in it is a <summary> in the body.
         const faq = [...head.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])).find((x) => x['@type'] === 'FAQPage');
         const shown = [...r.text.matchAll(/<summary>([^<]*)<\/summary>/g)].map((m) => m[1].replace(/&#39;/g, "'"));
