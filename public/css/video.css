@@ -309,16 +309,3 @@ a.ovv-channel-name:hover { text-decoration: underline; }
      loads after this file and left the video at its 16:9 height. */
   .ovv-watch .ovv-player-wrap video.ovv-player { aspect-ratio: auto; height: 100vh; height: 100dvh; object-fit: contain; }
 }
-
-/* Until the Shared 4.14 player (Shared#122, "a volume slider on phones"): the shared player hides its volume slider on
-   touch screens, so a phone could only mute (the owner, 2026-10-26: "can't easily adjust volume"). Here it shows,
-   finger-sized, on touch screens other than an iPhone, whose Safari ignores a page setting the volume
-   (-webkit-touch-callout is Safari on iOS only). Remove with the openvibe-shared 4.14 pin. */
-@supports not (-webkit-touch-callout: none) {
-  @media (hover: none) {
-    .ovv-player-wrap .ov-player .ov-player-volume-slider { display: block; width: 84px; height: 36px; opacity: 1; margin: 0 8px 0 0; }
-    .ovv-player-wrap .ov-player .ov-player-volume-slider::-webkit-slider-thumb { width: 18px; height: 18px; margin-top: -7px; }
-    .ovv-player-wrap .ov-player .ov-player-volume-slider::-moz-range-thumb { width: 18px; height: 18px; }
-  }
-  @media (hover: none) and (max-width: 360px) { .ovv-player-wrap .ov-player .ov-player-volume-slider { width: 64px; } }
-}
