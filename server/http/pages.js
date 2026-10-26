@@ -236,6 +236,7 @@ ${raw(showcase.nextSteps({
                     { to: 'chat', what: 'Talk it over', text: 'Rooms, servers and voice channels.', href: 'https://openvibe.chat/', from: 'download' },
                 ],
             }))}
+${raw(showcase.network({ service: 'video' }))}
 ${raw(showcase.cta({ title: 'Before you upload', text: 'Read the rules: what is not allowed, how reports work, and who to write to.', actions: [{ label: 'The safety rules', href: '/safety' }, { label: 'What shipped', href: '/updates' }] }))}`,
         });
     });
