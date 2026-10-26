@@ -35,6 +35,26 @@
         });
     }
 
+    // The player takes the picture's shape once it plays (2026-10-26): an upright recording opens into an upright box,
+    // and one that turns mid-stream (OpenVibe.Media cuts it in one part per shape) eases from one to the other. A size
+    // change that keeps the ratio within 3% (a lowered resolution) moves nothing. Until playback starts the box stays
+    // 16:9, so loading the page shifts nothing below it; video.css caps the height so the title stays on screen.
+    function followShape(video) {
+        let current = 0;
+        let on = false;
+        const update = function () {
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+            if (!on || !(w > 0 && h > 0)) return;
+            const r = Math.min(3.2, Math.max(0.4, w / h));
+            if (current && Math.abs(Math.log(r / current)) < 0.03) return;
+            current = r;
+            video.style.setProperty('--ovv-ar', r.toFixed(4));
+        };
+        video.addEventListener('playing', function () { on = true; update(); });
+        video.addEventListener('resize', update);
+    }
+
     function attachSource(video) {
         const hlsUrl = video.getAttribute('data-ovv-hls');
         const fileUrl = video.getAttribute('src');
@@ -112,6 +132,7 @@
             });
         }
 
+        followShape(video);
         const t = startSeconds();
         attachSource(video).then(function (source) {
             video.setAttribute('data-ovv-source', source);

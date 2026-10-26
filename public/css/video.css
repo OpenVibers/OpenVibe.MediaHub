@@ -99,7 +99,10 @@
 /* The player clips itself to the corners, so the wrapper can let the ambient glow (shared player.js) spill around it. */
 .ovv-player-wrap > .ov-player, .ovv-player-wrap > video { border-radius: inherit; overflow: hidden; }
 .ovv-player-wrap.ov-player-host { box-shadow: none; border-color: transparent; }
-.ovv-player { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+/* The picture's shape once it plays (video.js followShape: --ovv-ar), eased when a recording turns mid-stream; 16:9
+   before that. The height is capped so the title under the player stays on screen. */
+.ovv-player { display: block; width: 100%; aspect-ratio: var(--ovv-ar, 16 / 9); max-height: calc(100vh - 150px); max-height: calc(100dvh - 150px); background: #000; object-fit: contain; transition: aspect-ratio .45s cubic-bezier(.22, 1, .36, 1); }
+@media (prefers-reduced-motion: reduce) { .ovv-player { transition: none; } }
 .ovv-title { margin: 1rem 0 .6rem; font-size: clamp(1.3rem, 2.4vw, 1.75rem); line-height: 1.25; }
 .ovv-byline { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; padding-bottom: 16px; border-bottom: 1px solid var(--ovv-line); }
 .ovv-avatar { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-light, #60a5fa), var(--accent-strong, #2563eb)); color: #fff !important; font-weight: 800; text-decoration: none; }
