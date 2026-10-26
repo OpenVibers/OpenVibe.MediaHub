@@ -165,6 +165,20 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
         async clipAs(token, id) {
             try { return await asPerson(token, 'GET', `/api/clips/${id}`); } catch (err) { if (err.status === 404) return null; throw err; }
         },
+        /** A private recording's moments, as its owner (the public read answers 404 for it). */
+        async vodMemoriesAs(token, id) {
+            try { return await asPerson(token, 'GET', `/api/vods/${id}/memories`); } catch (err) { if (err.status === 404) return null; throw err; }
+        },
+        /**
+         * Where the file of a recording or clip downloads from: { url } (OpenVibe.Media's bytes as an attachment named
+         * `name`), null when Live has no such item. As the person for a private item of theirs (a signed URL).
+         */
+        downloadUrl(kind, id, name) {
+            return getJson(`/api/${kind === 'clip' ? 'clips' : 'vods'}/${id}/download-url?name=${encodeURIComponent(String(name || ''))}`);
+        },
+        async downloadUrlAs(token, kind, id, name) {
+            try { return await asPerson(token, 'GET', `/api/${kind === 'clip' ? 'clips' : 'vods'}/${id}/download-url?name=${encodeURIComponent(String(name || ''))}`); } catch (err) { if (err.status === 404) return null; throw err; }
+        },
         updateVod: (token, id, fields) => asPerson(token, 'PUT', `/api/vods/${id}`, fields),
         deleteVod: (token, id) => asPerson(token, 'DELETE', `/api/vods/${id}`),
         setClipTitle: (token, id, title) => asPerson(token, 'PUT', `/api/clips/${id}/title`, { title }),

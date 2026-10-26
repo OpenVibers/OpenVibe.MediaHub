@@ -104,6 +104,66 @@
         return h ? h + ':' + String(m).padStart(2, '0') + ':' + s : m + ':' + s;
     }
 
+    // The Download menu (a <details>, usable without this): it closes on a click elsewhere, on Escape, on its close
+    // button and once a format is chosen, and stays inside the window; on a phone it is a sheet over a dimmed page.
+    // "Copy for a YouTube description" copies the chapters' text where the browser lets a page write the clipboard.
+    function downloads() {
+        const menus = Array.prototype.slice.call(document.querySelectorAll('[data-ovv-dl]'));
+        const close = function (dl, focus) {
+            if (!dl.open) return;
+            dl.open = false;
+            if (focus) dl.querySelector('summary').focus();
+        };
+        menus.forEach(function (dl) {
+            dl.classList.add('ovv-dl--js');
+            const menu = dl.querySelector('.ovv-dl-menu');
+            dl.addEventListener('toggle', function () {
+                menu.style.left = '';
+                dl.classList.remove('ovv-dl--up');
+                if (!dl.open || window.innerWidth <= 600) return;
+                const over = menu.getBoundingClientRect().right - (document.documentElement.clientWidth - 12);
+                if (over > 0) menu.style.left = -over + 'px';
+                // Below the button when it fits; above when only that fits; else below, scrolled into view.
+                const button = dl.querySelector('summary').getBoundingClientRect();
+                const tall = menu.getBoundingClientRect().height + 16;
+                const below = window.innerHeight - button.bottom;
+                if (tall > below && button.top > below && button.top >= tall) dl.classList.add('ovv-dl--up');
+                else if (tall > below) menu.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            });
+            const x = dl.querySelector('[data-ovv-dl-close]');
+            if (x) x.addEventListener('click', function () { close(dl, true); });
+            menu.addEventListener('click', function (e) {
+                if (e.target.closest('a[download]')) setTimeout(function () { close(dl, false); }, 150);
+            });
+        });
+        if (menus.length) {
+            document.addEventListener('click', function (e) {
+                menus.forEach(function (dl) {
+                    if (dl.open && !dl.querySelector('.ovv-dl-menu').contains(e.target) && !dl.querySelector('summary').contains(e.target)) close(dl, false);
+                });
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') menus.forEach(function (dl) { close(dl, true); });
+            });
+        }
+        if (!navigator.clipboard || !window.fetch) return;
+        document.querySelectorAll('[data-ovv-copy]').forEach(function (b) {
+            const wrap = b.closest('[data-ovv-copy-wrap]');
+            if (wrap) wrap.hidden = false;
+            const label = b.innerHTML;
+            const say = function (text) {
+                b.textContent = text;
+                setTimeout(function () { b.innerHTML = label; }, 2000);
+            };
+            b.addEventListener('click', function () {
+                fetch(b.getAttribute('data-ovv-copy'), { credentials: 'same-origin' })
+                    .then(function (r) { return r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)); })
+                    .then(function (text) { return navigator.clipboard.writeText(text); })
+                    .then(function () { say('Copied'); }, function () { say('Could not copy: use the TXT download'); });
+            });
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         // A clip still being cut: look again in a few seconds (the server answers once it is ready).
         const cutting = document.querySelector('[data-ovv-reload]');
@@ -111,6 +171,8 @@
             const wait = Math.max(3, Number(cutting.getAttribute('data-ovv-reload')) || 8) * 1000;
             setTimeout(function () { window.location.replace(window.location.pathname); }, wait);
         }
+
+        downloads();
 
         const video = document.querySelector('video[data-ovv-video]');
         if (!video) return;

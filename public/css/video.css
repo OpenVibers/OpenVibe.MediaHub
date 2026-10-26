@@ -192,6 +192,47 @@ a.ovv-channel-name:hover { text-decoration: underline; }
   .ovv-person { flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; }
 }
 
+/* Downloads (server/video/downloads.js): the Download button's menu, a sheet on phones, and each panel's own links */
+.ovv-dl { position: relative; }
+.ovv-dl > summary { list-style: none; cursor: pointer; }
+.ovv-dl > summary::-webkit-details-marker { display: none; }
+.ovv-dl[open] > summary { border-color: var(--ovv-accent); background: var(--bg-hover, #1c2a44); }
+.ovv-dl-menu { position: absolute; z-index: 40; top: calc(100% + 8px); left: 0; width: min(430px, calc(100vw - 32px)); box-sizing: border-box; padding: 6px; border: 1px solid var(--ovv-line-strong); border-radius: 14px; background: var(--bg-secondary, #0f1729); box-shadow: 0 18px 48px rgba(0, 0, 0, .45); }
+.ovv-dl-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 10px; font-size: .9rem; font-weight: 700; }
+.ovv-dl-close { all: unset; display: none; place-items: center; width: 34px; height: 34px; border-radius: 8px; cursor: pointer; color: var(--ovv-dim); }
+.ovv-dl--js .ovv-dl-close { display: grid; }
+.ovv-dl-close:hover, .ovv-dl-close:focus-visible { background: var(--bg-hover, #1c2a44); color: var(--text-primary, #e6edf7); }
+.ovv-dl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.ovv-dl-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; }
+.ovv-dl-row:hover { background: color-mix(in srgb, var(--ovv-accent) 8%, transparent); }
+.ovv-dl-row > i { text-align: center; color: var(--accent-light, var(--ovv-accent)); }
+.ovv-dl-what { display: grid; min-width: 0; }
+.ovv-dl-label { font-size: .92rem; font-weight: 700; }
+.ovv-dl-about { font-size: .78rem; color: var(--ovv-dim); overflow-wrap: anywhere; }
+.ovv-dl-formats { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.ovv-dl-format { display: inline-flex; align-items: center; min-height: 30px; padding: 2px 10px; border-radius: 8px; border: 1px solid var(--ovv-line-strong); color: inherit !important; font-size: .78rem; font-weight: 700; letter-spacing: .3px; text-decoration: none; }
+.ovv-dl-format:hover, .ovv-dl-format:focus-visible { border-color: var(--ovv-accent); background: var(--bg-hover, #1c2a44); }
+.ovv-dl-format--main { border-color: var(--accent-strong, #2563eb); background: var(--accent-strong, #2563eb); color: var(--on-accent-strong, #fff) !important; }
+.ovv-dl-format--main:hover, .ovv-dl-format--main:focus-visible { background: var(--accent-dark, #1d4ed8); border-color: var(--accent-light, #60a5fa); }
+.ovv-dl--up .ovv-dl-menu { top: auto; bottom: calc(100% + 8px); }   /* no room below the button: it opens upward (video.js) */
+.ovv-dl-row--all { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--ovv-line); border-radius: 0 0 10px 10px; }
+.ovv-dl-hint { margin: 4px 10px 6px; font-size: .74rem; color: var(--ovv-faint); }
+.ovv-panel-dl { margin: .7rem 0 0; font-size: .82rem; color: var(--ovv-dim); }
+.ovv-panel .ovv-panel-dl a { display: inline; padding: 0; border-radius: 0; font-size: inherit; font-weight: 700; color: var(--accent-light, var(--ovv-accent)); text-decoration: underline; }   /* not a chapter row (.ovv-chapters a) */
+.ovv-panel-dl i { margin-right: 4px; color: var(--ovv-faint); }
+.ovv-transcript .ovv-panel-dl { margin: 0 0 .6rem; }
+.ovv-btn--small { min-height: 32px; padding: 4px 10px; font-size: .82rem; }
+@media (max-width: 600px) {
+  /* A sheet from the bottom, over a dimmed page (the dim and the close button come with video.js: without it, the
+     Download button above the sheet closes it). */
+  .ovv-dl--js[open]::before { content: ''; position: fixed; inset: 0; z-index: 39; background: rgba(0, 0, 0, .55); }
+  .ovv-dl-menu { position: fixed; top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 82vh; max-height: 82dvh; overflow-y: auto; border-radius: 16px; padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
+  .ovv-dl-row { grid-template-columns: 24px minmax(0, 1fr); row-gap: 6px; padding: 7px 8px; }
+  .ovv-dl-formats { grid-column: 2; justify-content: flex-start; }
+  .ovv-dl-format { min-height: 36px; padding: 4px 13px; font-size: .82rem; }
+  .ovv-dl-hint { display: none; }
+}
+
 /* Playlists */
 .ovv-save { position: relative; }
 .ovv-save > summary { list-style: none; cursor: pointer; }
