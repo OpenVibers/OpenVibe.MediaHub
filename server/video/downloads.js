@@ -240,12 +240,6 @@ function downloadMenu({ kind, id, item, has }) {
 </div></details>`;
 }
 
-/** A panel's own links ("Download: TXT · SRT …"), for the transcript, chapters and chat replay panels. */
-function panelLinks(kind, id, what, exts, helps = {}) {
-    const at = `/${kind === 'clip' ? 'c' : 'v'}/${id}/download/${what}`;
-    return html`<p class="ovv-panel-dl"><i class="fa-solid fa-download" aria-hidden="true"></i> Download ${exts.map((ext, i) => html`${i ? ' · ' : ''}<a href="${at}.${ext}" download rel="nofollow" title="${helps[ext] || FORMAT_HELP[ext] || ''}">${ext.toUpperCase()}</a>`)}</p>`;
-}
-
 // ── Routes ─────────────────────────────────────────────────
 const TYPES = {
     txt: 'text/plain; charset=utf-8', srt: 'application/x-subrip; charset=utf-8', vtt: 'text/vtt; charset=utf-8',
@@ -425,6 +419,6 @@ function mountDownloads(r, deps) {
 }
 
 module.exports = {
-    mountDownloads, downloadMenu, panelLinks, fileBase, disposition, clockLabel, srtTime, csvCell, zip, crc32, sizeLabel,
+    mountDownloads, downloadMenu, fileBase, disposition, clockLabel, srtTime, csvCell, zip, crc32, sizeLabel,
     transcriptFormats, chatFormats, chapterFormats, infoJson, CHAPTER_TXT_HELP,
 };

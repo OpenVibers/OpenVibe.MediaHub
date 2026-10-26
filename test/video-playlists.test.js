@@ -124,7 +124,7 @@ const videoEnv = (live) => ({
     await check('the signed-out watch page offers sign-in, not the save form', async () => {
         const r = await vreq(t.base, '/v/101');
         assert.strictEqual(r.status, 200);
-        assert.ok(r.text.includes('Sign in to save to a playlist'), r.text.slice(0, 400));
+        assert.ok(r.text.includes('title="Sign in to save it to a playlist"'), r.text.slice(0, 400));
         assert.ok(!r.text.includes('name="kind"'), 'no add-to-playlist form for a guest');
     });
 

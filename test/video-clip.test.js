@@ -68,7 +68,7 @@ function vreq(base, path, { method = 'GET', cookie, form, same = true } = {}) {
 
     await check('signed out, the panel offers sign-in; signed in, the form', async () => {
         const anon = await vreq(t.base, '/v/101');
-        assert.ok(anon.text.includes('Make a clip') && anon.text.includes('to cut a clip of up to 60 seconds'), 'a sign-in prompt');
+        assert.ok(/<a class="ovv-btn" href="\/auth\/login\?next=%2Fv%2F101" title="Sign in to make a clip of up to 60 seconds">[^<]*<i class="fa-solid fa-scissors"/.test(anon.text), 'the Clip button signs in first');
         assert.ok(!anon.text.includes('action="/v/101/clip"'));
         const r = await vreq(t.base, '/v/101', { cookie: samCookie });
         assert.ok(r.text.includes('action="/v/101/clip"'), 'any signed-in viewer, not only the channel');

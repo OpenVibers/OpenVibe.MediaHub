@@ -41,7 +41,8 @@ const formatBytes = (b) => rules.formatBytes(b).replace(/\.0 /, ' ');
 const { createVideoApiRoutes } = require('./api');
 const { createUploadApi, mountUploadPages } = require('./upload-routes');
 const { ACCESS_COOKIE, REFRESH_COOKIE } = require('../auth/sso');
-const { mountDownloads, downloadMenu, panelLinks, CHAPTER_TXT_HELP } = require('./downloads');
+const { mountDownloads, downloadMenu } = require('./downloads');
+const { actionMenu, menuLinks, companion } = require('./watch-ui');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 const HOME_LIMIT = 10;
@@ -253,13 +254,6 @@ function utcSeconds(v) {
 }
 
 /** An offset into the stream as H:MM:SS (no leading zero on the hour). */
-function streamTime(s) {
-    const n = Math.max(0, Math.floor(Number(s) || 0));
-    const h = Math.floor(n / 3600);
-    const m = Math.floor((n % 3600) / 60);
-    const sec = n % 60;
-    return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-}
 
 /** A short "2 hours ago" for a comment's created time. */
 function relativeDate(iso) {
@@ -594,30 +588,33 @@ function createVideoRoutes(ctx) {
     }
     const savedNotice = (req) => (req.query.saved === '1' ? notice('Saved on OpenVibe.Live.', 'ok') : '');
     const visibilityOptions = (current) => VISIBILITIES.map((v) => html`<option value="${v}"${v === current ? ' selected' : ''}>${visibilityLabel(v)}</option>`);
-    /** "Make a clip" of a finished recording, for any signed-in viewer who can see it (Live's rule, as on Live). */
-    function clipPanel(req, id, vod) {
+    /**
+     * "Clip" in the action row: a finished recording, any signed-in viewer who can see it (Live's rule, as on Live). A
+     * small form under the button; signed out, the button signs in first and comes back.
+     */
+    function clipAction(req, id, vod) {
         if (vod.is_recording) return '';
         if (!signedIn(req)) {
-            return html`<section class="ovv-panel ovv-clipper" aria-labelledby="h-clip"><h2 id="h-clip">Make a clip</h2><p class="ovv-fine"><a href="/auth/login?next=${encodeURIComponent(req.originalUrl)}">Sign in with OpenVibe</a> to cut a clip of up to ${CLIP_MAX_SECONDS} seconds from this recording.</p></section>`;
+            return html`<a class="ovv-btn" href="/auth/login?next=${encodeURIComponent(req.originalUrl)}" title="Sign in to make a clip of up to ${CLIP_MAX_SECONDS} seconds"><i class="fa-solid fa-scissors" aria-hidden="true"></i> Clip</a>`;
         }
         const dur = Math.floor(Number(vod.duration_seconds) || 0);
-        return html`<details class="ovv-panel ovv-clipper" data-ovv-clipper><summary><h2 id="h-clip">Make a clip</h2></summary>
+        return actionMenu({ icon: 'fa-solid fa-scissors', label: 'Clip', title: `Make a clip of up to ${CLIP_MAX_SECONDS} seconds`, cls: 'ovv-clipper', body: html`<p class="ovv-pop-title">Make a clip</p>
 <form class="ovv-owner-form" method="post" action="/v/${id}/clip">
 <div class="ovv-clip-times">
 <label class="ovv-field"><span>Start</span><input name="start" type="text" inputmode="numeric" placeholder="0:00" pattern="[0-9:.]{1,12}" required data-ovv-clip-start></label>
 <label class="ovv-field"><span>End</span><input name="end" type="text" inputmode="numeric" placeholder="0:30" pattern="[0-9:.]{1,12}" required data-ovv-clip-end></label>
 </div>
-<p class="ovv-clip-now" hidden data-ovv-clip-now><button type="button" class="ovv-btn" data-ovv-clip-mark="start">Start here</button> <button type="button" class="ovv-btn" data-ovv-clip-mark="end">End here</button></p>
+<p class="ovv-clip-now" hidden data-ovv-clip-now><button type="button" class="ovv-btn ovv-btn--small" data-ovv-clip-mark="start">Start here</button> <button type="button" class="ovv-btn ovv-btn--small" data-ovv-clip-mark="end">End here</button></p>
 <label class="ovv-field"><span>Title <span class="ovv-fine">(optional)</span></span><input name="title" type="text" maxlength="100"></label>
-<p class="ovv-fine">Up to ${CLIP_MAX_SECONDS} seconds${dur ? `, within ${clock(dur)}` : ''}. Times are m:ss or h:mm:ss. The clip is cut on OpenVibe.Media and credited to you.</p>
+<p class="ovv-fine">Up to ${CLIP_MAX_SECONDS} seconds${dur ? `, within ${clock(dur)}` : ''}. Times are m:ss or h:mm:ss. It is cut on OpenVibe.Media and credited to you.</p>
 <button class="ovv-btn ovv-btn--primary" type="submit">Make the clip</button>
-</form></details>`;
+</form>` });
     }
 
     function ownerPanel(kind, id, item) {
         const what = kind === 'vod' ? 'recording' : 'clip';
         const action = `/${kind === 'vod' ? 'v' : 'c'}/${id}`;
-        return html`<section class="ovv-panel ovv-owner" aria-labelledby="h-owner"><h2 id="h-owner">Manage this ${what}</h2>
+        return html`<details class="ovv-panel ovv-owner" id="manage"><summary><h2 id="h-owner">Manage this ${what}</h2><span class="ovv-fine">Title, ${kind === 'vod' ? 'description, ' : ''}who can see it, delete</span></summary>
 <form class="ovv-owner-form" method="post" action="${action}/manage">
 <label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="200" value="${item.title || ''}" required></label>
 ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textarea name="description" rows="3" maxlength="2000">${item.description || ''}</textarea></label>` : ''}
@@ -628,7 +625,7 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
 <details class="ovv-danger"><summary>Delete this ${what}</summary>
 <form class="ovv-owner-delete" method="post" action="${action}/delete"><label class="ovv-confirm"><input type="checkbox" name="confirm" value="1" required> I want to delete it for good</label> <button class="ovv-btn ovv-btn--danger" type="submit">Delete</button></form>
 </details>
-</section>`;
+</details>`;
     }
 
     // The shell's navbar/footer scripts come from the site's own /shared copy, and the one
@@ -661,11 +658,11 @@ ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textar
     // ── Playlist page pieces ───────────────────────────────
     async function playlistForm(req, kind, id) {
         if (!signedIn(req)) {
-            return html`<a class="ovv-btn" href="/auth/login?next=${encodeURIComponent(req.originalUrl)}"><i class="fa-solid fa-plus" aria-hidden="true"></i> Sign in to save to a playlist</a>`;
+            return html`<a class="ovv-btn" href="/auth/login?next=${encodeURIComponent(req.originalUrl)}" title="Sign in to save it to a playlist"><i class="fa-solid fa-plus" aria-hidden="true"></i> Save</a>`;
         }
         const lists = await playlists.list(ownerOf(req));
-        return html`<details class="ovv-save"><summary class="ovv-btn"><i class="fa-solid fa-plus" aria-hidden="true"></i> Save to playlist</summary>
-<form class="ovv-save-form" method="post" action="/playlists/add">
+        return html`<details class="ovv-save ovv-pop" data-ovv-menu><summary class="ovv-btn" title="Save to a playlist"><i class="fa-solid fa-plus" aria-hidden="true"></i> Save</summary>
+<form class="ovv-save-form ovv-pop-panel" method="post" action="/playlists/add">
 <input type="hidden" name="kind" value="${kind}">
 <input type="hidden" name="id" value="${id}">
 <span class="ovv-save-label">Add to playlist</span>
@@ -1051,13 +1048,15 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
         // Chapters, comments, chat replay, the playlist form and up next do not depend on each other: asked together
         // (one after another, five services' answers in turn, the page's p95 was 581 ms on 2026-10-17).
         const fail = Symbol('failed');
-        const [m, cm, replay, saveForm, up] = await Promise.all([
+        const [m, cm, replay, saveForm, up, hist] = await Promise.all([
             // A private recording's moments are Live's answer to its owner only.
             Promise.resolve().then(() => (ownOnly ? asPerson(req, res, (token) => live.vodMemoriesAs(token, id)) : live.vodMemories(id))).catch(() => fail),
             Promise.resolve().then(() => live.comments('vod', id)).catch(() => fail),
             Promise.resolve().then(() => chat.chatReplay(vod.stream_id)).catch(() => fail),
             playlistForm(req, 'vod', id),
             upNext(req, 'vod', id),
+            // One part of a stream recorded in parts (its broadcaster reconnected): the other parts, to move between.
+            Promise.resolve().then(() => (vod.part ? live.streamHistory(vod.stream_id) : null)).catch(() => fail),
         ]);
         let mems = [];
         try { if (m !== fail) mems = chapters(moments(m && m.memories), vod.duration_seconds); } catch { mems = []; }
@@ -1094,6 +1093,17 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
 
         const thin = thinRecording(vod, segs.length);
         const about = vod.description || vod.ai_overview || factualDescription('vod', vod, segs.slice(0, 6).map((s) => s.text).join(' '));
+
+        // The other parts of a stream recorded in parts, in order: Part 1 · Part 2 (this one).
+        const parts = hist && hist !== fail && Array.isArray(hist.parts) ? hist.parts.filter((p) => p && live.isId(p.vod_id)) : [];
+        const partNav = parts.length > 1 ? html`<p class="ovv-about-parts"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> The stream was recorded in ${parts.length} parts: ${parts.map((p, i) => [i ? ' · ' : '', String(p.vod_id) === id ? html`<b>Part ${p.part} (this one)</b>` : html`<a href="/v/${p.vod_id}">Part ${p.part}</a>`])}</p>` : '';
+        // The More menu: where else this lives, and the owner's tools.
+        const moreItems = [];
+        if (channelName) moreItems.push({ href: liveChannel, icon: 'fa-solid fa-tower-broadcast', label: 'Channel on OpenVibe.Live', hint: 'Live streams and chat' });
+        if (threadUrl) moreItems.push({ href: threadUrl, icon: 'fa-regular fa-comments', label: 'Discuss on OpenVibe.Community' });
+        if (manageable) moreItems.push({ href: '#manage', icon: 'fa-solid fa-pen', label: 'Manage this recording', hint: 'Title, description, who can see it', data: raw('data-ovv-open="manage"') });
+        // Chat replay, chapters and the transcript, beside the player.
+        const side = companion({ kind: 'vod', id, chat: chatRows, chapters: mems, transcript: segs, long: Number(vod.duration_seconds) >= 3600 });
         return page(req, res, {
             index: !unlisted && !ownOnly && !thin,
             noindex: unlisted || ownOnly || thin,
@@ -1106,29 +1116,38 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
             }),
             scripts: ['js/video.js'],
             player: true,
-            body: html`<div class="ovv-watch">
-<div class="ovv-main">
+            body: html`<div class="ovv-watch ovv-watch--vod">
+<div class="ovv-col ovv-col--main">
+<div class="ovv-stage">
 ${savedNotice(req)}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this recording.', 'info') : ''}
 <div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(vod.thumbnail_url))} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video></div>
+<div class="ovv-head">
 <h1 class="ovv-title">${vod.title || 'Stream recording'}</h1>
+<div class="ovv-head-row">
 <div class="ovv-byline">
 ${channelName ? html`<a class="ovv-avatar" href="${localChannel || liveChannel}" aria-hidden="true" tabindex="-1">${String(channelName).slice(0, 1).toUpperCase()}${live.isUsername(String(vod.username || '')) ? html`<img src="${config.networkUrl}/avatar/${vod.username}" alt="" loading="lazy">` : ''}</a>` : ''}
 <div class="ovv-byline-text">${channelName ? (localChannel ? html`<a class="ovv-channel-name" href="${localChannel}">@${channelName}</a>` : html`<span class="ovv-channel-name">@${channelName}</span>`) : ''}
 ${metaParts.length ? html`<span class="ovv-meta">${metaParts.map((p, i) => (i === 0 ? p : [html` · `, p]))}</span>` : ''}</div>
-<div class="ovv-byline-actions">${saveForm}${downloadMenu({ kind: 'vod', id, item: vod, has: { transcript: segs.length, chat: chatRows ? chatRows.rows.length + chatRows.leftOut : 0, chapters: mems.length } })}${channelName ? html`<a class="ovv-btn" href="${liveChannel}"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Channel on OpenVibe.Live</a>` : ''}${threadUrl ? html`<a class="ovv-btn" href="${threadUrl}"><i class="fa-regular fa-comments" aria-hidden="true"></i> Discuss on OpenVibe.Community</a>` : ''}</div>
+</div>
+<div class="ovv-actions">${saveForm}${ownOnly ? '' : clipAction(req, id, vod)}${downloadMenu({ kind: 'vod', id, item: vod, has: { transcript: segs.length, chat: chatRows ? chatRows.rows.length + chatRows.leftOut : 0, chapters: mems.length } })}<button type="button" class="ovv-btn" hidden data-ovv-share="${base}/v/${id}" title="Share a link (at the current time once it plays)"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Share</button>${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
 </div>
 ${vod.is_recording ? html`<p class="ovv-recording" role="status"><i class="fa-solid fa-circle" aria-hidden="true"></i> This recording is still in progress. <a href="${liveChannel}">Watch the live channel</a>.</p>` : ''}
-${vod.ai_overview ? html`<section class="ovv-panel" aria-labelledby="h-overview"><h2 id="h-overview">About this stream</h2><p>${vod.ai_overview}</p><p class="ovv-fine">Written by AI from the stream.</p></section>` : ''}
-${segs.length ? html`<details class="ovv-panel ovv-transcript"><summary>Transcript <span class="ovv-fine">(AI, ${segs.length} lines)</span></summary>${panelLinks('vod', id, 'transcript', ['txt', 'srt', 'vtt', 'json'])}<div class="ovv-transcript-body">${segs.map((s) => html`<p><button type="button" class="ovv-seek" data-ovv-seek="${s.start}">${vttTime(s.start).slice(0, 8)}</button> <span>${s.text}</span></p>`)}</div></details>` : ''}
-${commentsOk ? html`<section class="ovv-panel ovv-comments" aria-labelledby="h-comments"><h2 id="h-comments">Comments</h2>${commentRows.length ? commentRows.map(commentItem) : html`<p class="ovv-comments-empty">No comments yet.</p>`}${threadUrl ? html`<p class="ovv-comments-link"><a class="ovv-btn" href="${threadUrl}">Join the discussion on OpenVibe.Community</a></p>` : ''}</section>` : ''}
 </div>
-<aside class="ovv-side">
+</div>
+<section class="ovv-about" aria-labelledby="h-about">
+<h2 id="h-about" class="ovv-about-title">About</h2>
+${vod.description ? html`<p class="ovv-about-text">${vod.description}</p>` : ''}
+${vod.ai_overview ? html`<p class="ovv-about-text"><span class="ovv-ai-chip">AI summary</span> ${vod.ai_overview}</p>` : ''}
+${partNav}
+${channelName ? html`<p class="ovv-about-from"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Streamed live on <a href="${liveChannel}">${channelName}'s OpenVibe.Live channel</a>${vod.stream_category ? html`, in ${String(vod.stream_category).charAt(0).toUpperCase()}${String(vod.stream_category).slice(1)}` : ''}.</p>` : ''}
+</section>
 ${manageable ? ownerPanel('vod', id, vod) : ''}
-${ownOnly ? '' : clipPanel(req, id, vod)}
+${commentsOk ? html`<section class="ovv-panel ovv-comments" aria-labelledby="h-comments"><header class="ovv-panel-head"><h2 id="h-comments">Comments${commentRows.length ? html` <span class="ovv-count">${commentRows.length}</span>` : ''}</h2>${threadUrl ? html`<a class="ovv-panel-link" href="${threadUrl}">Discuss on OpenVibe.Community <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>` : ''}</header>${commentRows.length ? commentRows.map(commentItem) : html`<p class="ovv-comments-empty">No comments yet.${threadUrl ? html` <a href="${threadUrl}">Start the discussion</a>.` : ''}</p>`}</section>` : ''}
+</div>
+<aside class="ovv-col ovv-col--side">
+${side || ''}
 ${up.html}
-${mems.length ? html`<section class="ovv-panel ovv-chapters" aria-labelledby="h-chapters"><h2 id="h-chapters">Chapters</h2><ol>${mems.map((m) => html`<li><a href="/v/${id}?t=${m.offset_seconds}" data-ovv-chapter="${m.offset_seconds}"><span class="ovv-time">${vttTime(m.offset_seconds).slice(0, 8)}</span><span>${m.description}</span></a></li>`)}</ol><p class="ovv-fine">From the AI moments of the stream.</p>${panelLinks('vod', id, 'chapters', ['txt', 'vtt', 'json'], { txt: CHAPTER_TXT_HELP })}<p class="ovv-panel-dl" hidden data-ovv-copy-wrap><button type="button" class="ovv-btn ovv-btn--small" data-ovv-copy="/v/${id}/download/chapters.txt"><i class="fa-regular fa-copy" aria-hidden="true"></i> Copy for a YouTube description</button></p></section>` : ''}
-${chatRows ? html`<section class="ovv-panel ovv-chat" aria-labelledby="h-chat"><h2 id="h-chat">Chat replay</h2><div class="ovv-chat-body" data-ovv-chat>${chatRows.rows.map((r) => html`<div class="ovv-chat-row" data-ovv-at="${r.offset}"><button type="button" class="ovv-seek" data-ovv-seek="${r.offset}">${streamTime(r.offset)}</button><span class="ovv-chat-msg">${r.name ? html`<b class="ovv-chat-name">${r.name}</b> ` : ''}${r.text}</span></div>`)}</div>${chatRows.leftOut ? html`<p class="ovv-fine">Showing the first 1,000 messages; ${chatRows.leftOut} more not shown (the download has them all).</p>` : ''}${panelLinks('vod', id, 'chat', ['txt', 'csv', 'json'])}</section>` : ''}
-${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 id="h-clips">Clips from this stream</h2><div class="ovv-grid ovv-grid--side">${clips.map(clipCard)}</div></section>` : ''}
+${clips.length ? html`<section class="ovv-panel ovv-clips" aria-labelledby="h-clips"><h2 id="h-clips">Clips from this stream</h2><div class="ovv-grid ovv-grid--side">${clips.map(clipCard)}</div></section>` : ''}
 </aside>
 </div>`,
         });
@@ -1173,6 +1192,13 @@ ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 i
         const nextAttr = up.nextUrl ? html` data-ovv-next="${up.nextUrl}"` : '';
         const viewAttr = html` data-ovv-view="${livePublic}/api/views/clip/${id}"`;
         const hlsAttr = hlsAttrs(clip);
+        const segs = transcriptSegments(clip);
+        const moreItems = [];
+        if (clip.source_streamer_username) moreItems.push({ href: `${livePublic}/@${clip.source_streamer_username}`, icon: 'fa-solid fa-tower-broadcast', label: 'Channel on OpenVibe.Live', hint: 'Live streams and chat' });
+        if (threadUrl) moreItems.push({ href: threadUrl, icon: 'fa-regular fa-comments', label: 'Discuss on OpenVibe.Community' });
+        if (manageable) moreItems.push({ href: '#manage', icon: 'fa-solid fa-pen', label: 'Manage this clip', hint: 'Title, who can see it', data: raw('data-ovv-open="manage"') });
+        // A clip's transcript, when it has one, beside the player as on a recording.
+        const side = companion({ kind: 'clip', id, chat: null, chapters: [], transcript: segs, long: false });
 
         return page(req, res, {
             index: !unlisted && !ownOnly && !aiClip,
@@ -1187,20 +1213,27 @@ ${clips.length ? html`<section class="ovv-panel" aria-labelledby="h-clips"><h2 i
             scripts: ['js/video.js'],
             player: true,
             body: html`<div class="ovv-watch ovv-watch--clip">
-<div class="ovv-main">
+<div class="ovv-col ovv-col--main">
+<div class="ovv-stage">
 ${savedNotice(req)}${req.query.made === '1' ? notice('Your clip was made. It is credited to you on OpenVibe.Live and here.', 'ok') : ''}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this clip.', 'info') : ''}
 ${cutting ? html`<div class="ovv-player-wrap ovv-cutting" role="status" data-ovv-reload="8"><p><i class="fa-solid fa-scissors" aria-hidden="true"></i> This clip is being cut. It plays here in a moment; the page checks again by itself.</p></div>`
         : html`<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(clip.thumbnail_url))} src="${fileOf(clip) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>`}
+<div class="ovv-head">
 <h1 class="ovv-title">${clip.title || 'Clip'}</h1>
-<div class="ovv-byline">
-<div class="ovv-byline-text"><span class="ovv-channel-name">${clip.auto_generated ? html`<span class="ovv-tag ovv-tag--inline">AI clip</span> ` : ''}${attribution}</span>
-${clip.created_at ? html`<span class="ovv-meta"><time datetime="${clip.created_at}">${dateLabel(clip.created_at)}</time>${clip.duration_seconds != null ? html` · ${durationLabel(clip.duration_seconds)}` : ''}</span>` : ''}</div>
-<div class="ovv-byline-actions">${saveForm}${cutting ? '' : downloadMenu({ kind: 'clip', id, item: clip, has: { transcript: transcriptSegments(clip).length } })}${fullRecording ? html`<a class="ovv-btn ovv-btn--primary" href="${fullRecording}"><i class="fa-solid fa-film" aria-hidden="true"></i> Watch in the full recording</a>` : ''}${threadUrl ? html`<a class="ovv-btn" href="${threadUrl}"><i class="fa-regular fa-comments" aria-hidden="true"></i> Discuss on OpenVibe.Community</a>` : ''}</div>
+<div class="ovv-head-row">
+<div class="ovv-byline"><div class="ovv-byline-text"><span class="ovv-channel-name">${clip.auto_generated ? html`<span class="ovv-tag ovv-tag--inline">AI clip</span> ` : ''}${attribution}</span>
+${clip.created_at ? html`<span class="ovv-meta"><time datetime="${clip.created_at}">${dateLabel(clip.created_at)}</time>${clip.duration_seconds != null ? html` · ${durationLabel(clip.duration_seconds)}` : ''}</span>` : ''}</div></div>
+<div class="ovv-actions">${fullRecording ? html`<a class="ovv-btn ovv-btn--primary" href="${fullRecording}" title="Watch the recording it was cut from, from this moment"><i class="fa-solid fa-film" aria-hidden="true"></i> Full recording</a>` : ''}${saveForm}${cutting ? '' : downloadMenu({ kind: 'clip', id, item: clip, has: { transcript: segs.length } })}<button type="button" class="ovv-btn" hidden data-ovv-share="${base}/c/${id}" title="Share a link"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Share</button>${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
 </div>
-${up.html}
-${clip.ai_overview ? html`<section class="ovv-panel"><p>${clip.ai_overview}</p><p class="ovv-fine">Written by AI from the clip.</p></section>` : ''}
+</div>
+</div>
+${clip.ai_overview ? html`<section class="ovv-about" aria-labelledby="h-about"><h2 id="h-about" class="ovv-about-title">About</h2><p class="ovv-about-text"><span class="ovv-ai-chip">AI summary</span> ${clip.ai_overview}</p></section>` : ''}
 ${manageable ? ownerPanel('clip', id, clip) : ''}
 </div>
+<aside class="ovv-col ovv-col--side">
+${side || ''}
+${up.html}
+</aside>
 </div>`,
         });
     });
