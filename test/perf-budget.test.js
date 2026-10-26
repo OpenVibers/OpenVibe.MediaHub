@@ -14,7 +14,7 @@ const { measure, check, format } = require('openvibe-shared/perf-budget');
 // Budgets are set from the numbers measured on 2026-10-08 (the real ones, fresh database), rounded up with about 10%
 // headroom; file counts are the measured counts and external files stay at 0.
 const BUDGETS = {
-    htmlRawKB: 43.5,   // measured 39.4 on 10-22: the home gained the backup command, the limits table, six questions (and their
+    htmlRawKB: 49,   // 44.2 with the Part of OpenVibe section (Shared 4.13, 2026-10-26); measured 39.4 on 10-22: the home gained the backup command, the limits table, six questions (and their
                        // FAQPage JSON-LD) and next steps on the network; was 29.7 at 27.5
     htmlBrotliKB: 10.4,   // 9.4 on 10-22 (the same sections); was 7.7 at 7.1
     jsFiles: 5,   // 5 (theme-loader, web-runtime, navbar, footer, boost: openvibe-shared/shell)
