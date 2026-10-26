@@ -15,6 +15,10 @@ assert.strictEqual(out[0].description, 'Moment 0', 'the heard part is dropped');
 // A short clip-length recording keeps close moments (the gap is a twelfth of 45 s).
 assert.deepStrictEqual(chapters([{ offset_seconds: 10, description: 'Intro' }, { offset_seconds: 30, description: 'Main' }], 45).map((c) => c.offset_seconds), [10, 30]);
 
+// A moment with only what was heard (no title), or past the video's end, is no chapter (VOD 6026: "0:16 " and 41:16 in 32:01).
+assert.deepStrictEqual(chapters([{ offset_seconds: 16, description: ' — heard: "hey"' }, { offset_seconds: 287, description: 'A campsite' }, { offset_seconds: 2476, description: 'Later' }], 1921)
+    .map((c) => [c.offset_seconds, c.description]), [[287, 'A campsite']]);
+
 // Titles: a trailing period goes; a long one is cut at a word with an ellipsis.
 assert.strictEqual(chapterTitle('A streamer waves.'), 'A streamer waves');
 const long = chapterTitle('word '.repeat(40));
