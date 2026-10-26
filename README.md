@@ -304,6 +304,8 @@ does not sign in on the other.
 | `/playlists/:id` | anyone with the link | one playlist: public and unlisted are open by link (unlisted noindex), private only to the owner |
 | `/v/:id/captions.vtt` | anyone | the AI transcript as WebVTT captions |
 | `/v/:id/chapters.vtt` | anyone | the AI moments as WebVTT chapters |
+| `/v/:id/download/:file` | whoever may see the recording (a private one: its owner) | the Download menu's files: `video` (OpenVibe.Media's file as an attachment, through Live's download link), `thumbnail`, `transcript.{txt,srt,vtt,json}`, `chat.{txt,csv,json}` (every message, in the recording's own time), `chapters.{txt,vtt,json}` (TXT is the lines a YouTube description takes), `info.json`, `all.zip` (everything but the video); named `<title> - <channel> - <date>.<what>.<ext>` ([server/video/downloads.js](server/video/downloads.js)) |
+| `/c/:id/download/:file` | whoever may see the clip | `video`, `thumbnail`, `transcript.{txt,srt,vtt,json}`, `info.json`, `all.zip` |
 | `/sitemap.xml`, `/robots.txt`, `/llms.txt` | anyone | crawl artifacts for the video host |
 | `/<INDEXNOW_KEY>.txt` | anyone | IndexNow's key file, only with a key: every 10 minutes a sweep of Live's public feed sends new watch pages, their channel pages and the sitemap to search engines ([server/video/indexnow.js](server/video/indexnow.js)) |
 

@@ -603,8 +603,9 @@ function countOccurrences(haystack, needle) {
     await check('the chat replay caps at 1,000 messages and says how many were left out', async () => {
         const r = await getVideo('/v/104');
         assert.strictEqual(r.status, 200);
-        assert.ok(r.text.includes('Showing the first 1,000 messages; 5 more not shown.'), 'the cap note names the count');
+        assert.ok(r.text.includes('Showing the first 1,000 messages; 5 more not shown (the download has them all).'), 'the cap note names the count');
         assert.strictEqual(countOccurrences(r.text, 'class="ovv-chat-row"'), 1000, 'exactly 1,000 rows render');
+        assert.ok(r.text.includes('1005 messages'), 'the Download menu counts every message');
     });
 
     await check('the VOD page shows the newest comments and the Community link', async () => {
