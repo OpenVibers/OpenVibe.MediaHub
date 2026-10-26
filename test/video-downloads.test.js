@@ -60,6 +60,9 @@ function startLive() {
         const json = (status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
         let m = /^\/api\/chat\/(\d+)\/replay$/.exec(url.pathname);
         if (m) return json(200, { messages: m[1] === '2795' ? messages : [] });
+        if (url.pathname === '/api/streams/2795/history') {
+            return json(200, { stream_id: 2795, parts: [{ part: 1, vod_id: 6025, at: 28, end: 708 }, { part: 2, vod_id: 6026, at: 709, end: 1930 }], shapes: [], reconnects: [] });
+        }
         m = /^\/api\/(vods|clips)\/(\d+)(\/memories|\/download-url)?$/.exec(url.pathname);
         if (!m) return json(404, { error: 'not found' });
         const item = (m[1] === 'vods' ? vods : clips)[m[2]];
@@ -147,7 +150,16 @@ function unzip(buf) {
         assert.ok(menu.includes('The whole recording · 571 MB'), 'the video with its size');
         assert.ok(menu.includes('2 lines, by AI') && menu.includes('2 messages') && menu.includes('2 chapters'), 'what each holds');
         assert.ok(/rel="nofollow"/.test(menu) && /download rel/.test(menu), 'download links, not followed by crawlers');
-        assert.ok(r.text.includes('class="ovv-panel-dl"') && r.text.includes('data-ovv-copy="/v/6026/download/chapters.txt"'), 'panel links and the copy button');
+        // Each tab's own download menu sits in its corner (one quiet icon), with Copy for YouTube on the chapters.
+        const panel = (key) => { const i = r.text.indexOf(`data-ovv-tp="${key}"`); return r.text.slice(i, r.text.indexOf('</section>', i)); };
+        assert.ok(panel('chat').includes('class="ovv-mini"') && panel('chat').includes('href="/v/6026/download/chat.csv"'), 'the chat panel\'s corner menu');
+        assert.ok(panel('transcript').includes('href="/v/6026/download/transcript.srt"'), 'the transcript panel\'s corner menu');
+        assert.ok(panel('chapters').includes('data-ovv-copy="/v/6026/download/chapters.txt"') && panel('chapters').includes('href="/v/6026/download/chapters.vtt"'), 'the chapters panel\'s, with Copy for YouTube');
+        assert.ok(!r.text.includes('ovv-panel-dl'), 'no line of links under a panel any more');
+        // The layout: tabs beside the player, one action row, the stream's parts in About.
+        assert.strictEqual((r.text.match(/role="tab"/g) || []).length, 3, 'Chat, Chapters, Transcript');
+        assert.ok(r.text.includes('data-ovv-share="https://openvibe.video/v/6026"') && r.text.includes('aria-label="More"'), 'Share and More');
+        assert.ok(r.text.includes('<a href="/v/6025">Part 1</a>') && r.text.includes('<b>Part 2 (this one)</b>'), 'the other part of the stream');
         // Chat replay sits in the part's own time: 12 s in, not 721 s.
         assert.ok(r.text.includes('data-ovv-at="12"') && !r.text.includes('in part one'), 'chat in part 2\'s time');
     });

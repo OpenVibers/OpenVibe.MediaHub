@@ -113,7 +113,7 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
 
     await check('a ready upload goes in a playlist (kind upload, by its number): listed, played, and next in line', async () => {
         const watch = await vreq(t.base, `/u/${id}`, { cookie: samCookie });
-        assert.ok(watch.text.includes('Save to playlist'), 'a signed-in viewer can save it');
+        assert.ok(watch.text.includes('title="Save to a playlist"'), 'a signed-in viewer can save it');
         assert.ok(watch.text.includes('<input type="hidden" name="kind" value="upload">'));
         const seq = Number((/<input type="hidden" name="id" value="(\d+)">/.exec(watch.text) || [])[1]);
         assert.ok(seq > 0, 'the form carries the upload\'s number');

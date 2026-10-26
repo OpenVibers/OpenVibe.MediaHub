@@ -357,7 +357,7 @@ function countOccurrences(haystack, needle) {
         assert.strictEqual(cld.duration, 'PT10S');
         assert.ok(r.text.includes('src="https://openvibe.media/c/201"'), 'the clip playback url');
         assert.ok(r.text.includes('Made by Clipper'), 'attributed to the person who made it');
-        assert.ok(r.text.includes('Watch in the full recording'));
+        assert.ok(r.text.includes('Full recording</a>') && r.text.includes('title="Watch the recording it was cut from, from this moment"'));
         assert.ok(r.text.includes('/v/101?t=5'), 'the full recording link carries the clip start');
         assert.ok(r.text.includes('Discuss on OpenVibe.Community'));
         assert.ok(!r.text.includes('Manage this clip'), 'owner tools only for its maker or channel (video-owner.test.js)');
@@ -582,9 +582,9 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('Chat replay'));
         assert.ok(r.text.includes('data-ovv-at="5"'), 'the first message is 5 seconds in');
         assert.ok(r.text.includes('data-ovv-seek="5"'), 'the seek button carries the offset');
-        assert.ok(r.text.includes('0:00:05'), 'the offset is H:MM:SS');
+        assert.ok(r.text.includes('>0:05</button>'), 'the offset reads as the player shows it (m:ss under an hour)');
         assert.ok(r.text.includes('data-ovv-at="25"'), 'the second message is 25 seconds in');
-        assert.ok(r.text.includes('0:00:25'));
+        assert.ok(r.text.includes('>0:25</button>'));
         assert.ok(r.text.includes('Hello &lt;b&gt;world&lt;/b&gt;'), 'message text is escaped');
         assert.ok(!r.text.includes('Hello <b>world</b>'), 'raw HTML never appears');
         assert.ok(!r.text.includes('EARLY_MSG_XYZ'), 'message before the stream start is dropped');
@@ -603,7 +603,7 @@ function countOccurrences(haystack, needle) {
     await check('the chat replay caps at 1,000 messages and says how many were left out', async () => {
         const r = await getVideo('/v/104');
         assert.strictEqual(r.status, 200);
-        assert.ok(r.text.includes('Showing the first 1,000 messages; 5 more not shown (the download has them all).'), 'the cap note names the count');
+        assert.ok(r.text.includes('The first 1,000 messages are shown here; the download has all 1,005.'), 'the cap note names the count');
         assert.strictEqual(countOccurrences(r.text, 'class="ovv-chat-row"'), 1000, 'exactly 1,000 rows render');
         assert.ok(r.text.includes('1005 messages'), 'the Download menu counts every message');
     });
@@ -619,7 +619,7 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('3 replies'), 'reply count when present');
         assert.ok(r.text.includes('<time class="ovv-comment-date"'), 'a relative date is shown');
         assert.strictEqual(countOccurrences(r.text, 'class="ovv-comment"'), 2, 'the deleted comment is not rendered');
-        assert.ok(r.text.includes('Join the discussion on OpenVibe.Community'));
+        assert.ok(r.text.includes('Discuss on OpenVibe.Community'));
         assert.ok(r.text.includes('href="https://openvibe.community/t/vod-101"'));
     });
 
