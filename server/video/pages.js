@@ -383,14 +383,22 @@ function chapterTitle(description) {
     return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), 50))}…`;
 }
 
-/** The AI moments as chapters: the first one, then one at least a twelfth of the stream later, at most twelve. */
+/**
+ * The AI moments as chapters: the first one, then one at least a twelfth of the stream later, at most twelve. A moment
+ * with nothing seen to title it (only what was heard), or past the video's end (a stream's moments read for one part of
+ * it, before Live kept parts), is no chapter: VOD 6026 listed "0:16" with no title and 41:16 in a 32-minute video.
+ */
 function chapters(mems, durationSeconds) {
-    const gap = Math.max(0, Number(durationSeconds) || 0) / MAX_CHAPTERS;
+    const length = Math.max(0, Number(durationSeconds) || 0);
+    const gap = length / MAX_CHAPTERS;
     const out = [];
     for (const m of mems) {
         if (out.length >= MAX_CHAPTERS) break;
+        if (length && m.offset_seconds >= length) break;
+        const title = chapterTitle(m.description);
+        if (!title) continue;
         if (out.length && m.offset_seconds - out[out.length - 1].offset_seconds < gap) continue;
-        out.push({ offset_seconds: m.offset_seconds, description: chapterTitle(m.description) });
+        out.push({ offset_seconds: m.offset_seconds, description: title });
     }
     return out;
 }
