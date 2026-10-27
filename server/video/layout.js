@@ -86,7 +86,9 @@ ${render(o.body)}
             logoutUrl: '/auth/logout?next={path}',
             silentLogin: `${String(o.baseUrl).replace(/\/+$/, '')}/auth/login?silent=1&next={url}`,
         },
-        footer: { service: 'media-hub', variant: 'compact', brandName: SITE_NAME, updates: '/updates' },
+        // The full footer (the network's sites, its legal links), as every browse page has (owner, 2026-10-27: "where are
+        // all those cool SEO links that … interconnect all our platforms"); the quiet line only where someone is mid-task.
+        footer: { service: 'media-hub', variant: /^\/(upload|record)(\/|$)/.test(String(o.path || '')) ? 'compact' : 'full', brandName: SITE_NAME, updates: '/updates' },
         head,
         body,
     });
