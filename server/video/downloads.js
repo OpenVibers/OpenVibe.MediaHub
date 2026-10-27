@@ -217,11 +217,24 @@ function videoExt(item) {
  * chapters: n } (counts; 0 = left out). A <details> menu: it opens and closes without JavaScript; video.js only closes
  * it on a click elsewhere or Escape and keeps it on screen.
  */
+/** The parts of a whole recording (Live's `recording.parts` on its first part, once joined), or null. */
+function wholeParts(item) {
+    const r = item && item.recording;
+    if (!r || !r.joined || String(r.vod_id) !== String(item.id) || !Array.isArray(r.parts) || r.parts.length < 2) return null;
+    return r.parts.filter((p) => p && /^\d+$/.test(String(p.vod_id)));
+}
+
 function downloadMenu({ kind, id, item, has }) {
     const at = `/${kind === 'clip' ? 'c' : 'v'}/${id}/download`;
     const ready = !item.is_recording && (kind === 'vod' || !item.status || item.status === 'ready');
     const rows = [];
-    if (ready) {
+    const parts = wholeParts(item);
+    if (ready && parts) {
+        // A stream recorded in parts plays as one video (Media's recording); its files are one per session, named by where
+        // each sits in it.
+        rows.push(row({ icon: 'fa-solid fa-film', label: 'Video', about: `${parts.length} files, one per recorded session`,
+            links: parts.map((p, i) => ({ href: `${at}/video?part=${p.vod_id}`, ext: videoExt(item), main: i === 0, text: `${clockLabel(p.start_sec)}–${clockLabel(p.start_sec + p.duration_sec)}` })) }));
+    } else if (ready) {
         const size = sizeLabel(item.file_size);
         const ext = videoExt(item);
         rows.push(row({ icon: 'fa-solid fa-film', label: 'Video', about: [kind === 'clip' ? 'The clip' : 'The whole recording', size].filter(Boolean).join(' · '), links: [{ href: `${at}/video`, ext, main: true }] }));
@@ -364,10 +377,20 @@ function mountDownloads(r, deps) {
 
             if (file === 'video') {
                 // OpenVibe.Media's file as an attachment: Live hands out its URL (a signed one for an owner's private item).
+                // A whole recording's file is one per part (?part=<its VOD>): only the recording's own parts.
+                let fileId = id;
+                let fileName = name;
+                const parts = kind === 'vod' ? wholeParts(item) : null;
+                if (parts && req.query.part != null) {
+                    const i = parts.findIndex((p) => String(p.vod_id) === String(req.query.part));
+                    if (i < 0) return notFound(req, res);
+                    fileId = String(parts[i].vod_id);
+                    fileName = `${name} - part ${i + 1}`;
+                }
                 try {
                     const got = own
-                        ? await asPerson(req, res, (token) => live.downloadUrlAs(token, kind, id, name))
-                        : await live.downloadUrl(kind, id, name);
+                        ? await asPerson(req, res, (token) => live.downloadUrlAs(token, kind, fileId, fileName))
+                        : await live.downloadUrl(kind, fileId, fileName);
                     const url = got && httpsUrl(got.url);
                     if (!url) return notFound(req, res);
                     res.set({ 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex' });

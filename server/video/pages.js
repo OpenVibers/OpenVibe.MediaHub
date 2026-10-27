@@ -282,6 +282,26 @@ function relativeDate(iso) {
 function chatMessageRows(vod, messages, limit = 1000) {
     const streamStart = utcSeconds(vod && vod.stream_started_at);
     if (!Number.isFinite(streamStart) || !Array.isArray(messages)) return null;
+    // A whole recording (its parts joined, Live's recording.parts): each message at its moment in the video, the time
+    // between parts left out.
+    const rec = vod.recording;
+    const whole = rec && rec.joined && String(rec.vod_id) === String(vod.id) && Array.isArray(rec.parts)
+        ? rec.parts.filter((p) => p && p.stream_offset_sec != null && Number(p.duration_sec) > 0) : null;
+    if (whole && whole.length > 1) {
+        const rows = [];
+        for (const m of messages) {
+            if (!m || typeof m !== 'object' || m.is_deleted || m.is_filtered || m.message_type !== 'chat') continue;
+            const at = utcSeconds(m.timestamp);
+            if (!Number.isFinite(at)) continue;
+            const s = at - streamStart;
+            const p = whole.find((x) => s >= Number(x.stream_offset_sec) && s <= Number(x.stream_offset_sec) + Number(x.duration_sec) + 1);
+            if (!p) continue;
+            rows.push({ offset: Math.floor(Number(p.start_sec) + s - Number(p.stream_offset_sec)), name: m.display_name || m.username || '', username: m.username || '', sentAt: new Date(at * 1000).toISOString(), text: m.message == null ? '' : String(m.message) });
+        }
+        rows.sort((a, b) => a.offset - b.offset);
+        if (!rows.length) return null;
+        return { rows: rows.slice(0, limit), leftOut: rows.length > limit ? rows.length - limit : 0 };
+    }
     const partAt = Number(vod.stream_offset_sec);
     const inPart = vod.stream_offset_sec != null && Number.isFinite(partAt) && partAt >= 0;
     const start = streamStart + (inPart ? partAt : 0);
@@ -598,8 +618,11 @@ function createVideoRoutes(ctx) {
             return html`<a class="ovv-btn" href="/auth/login?next=${encodeURIComponent(req.originalUrl)}" title="Sign in to make a clip of up to ${CLIP_MAX_SECONDS} seconds"><i class="fa-solid fa-scissors" aria-hidden="true"></i> Clip</a>`;
         }
         const dur = Math.floor(Number(vod.duration_seconds) || 0);
+        // The whole video of a stream recorded in parts: its times are the video's, and a clip may cross a join.
+        const whole = !!(vod.recording && vod.recording.joined && String(vod.recording.vod_id) === String(id));
         return actionMenu({ icon: 'fa-solid fa-scissors', label: 'Clip', title: `Make a clip of up to ${CLIP_MAX_SECONDS} seconds`, cls: 'ovv-clipper', body: html`<p class="ovv-pop-title">Make a clip</p>
 <form class="ovv-owner-form" method="post" action="/v/${id}/clip">
+${whole ? html`<input type="hidden" name="recording_time" value="1">` : ''}
 <div class="ovv-clip-times">
 <label class="ovv-field"><span>Start</span><input name="start" type="text" inputmode="numeric" placeholder="0:00" pattern="[0-9:.]{1,12}" required data-ovv-clip-start${dur ? html` data-ovv-clip-duration="${dur}"` : ''}></label>
 <label class="ovv-field"><span>End</span><input name="end" type="text" inputmode="numeric" placeholder="0:30" pattern="[0-9:.]{1,12}" required data-ovv-clip-end></label>
@@ -1041,6 +1064,16 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
         }
         if (!data || !data.vod) return notFound(req, res);
         const vod = data.vod;
+        // A part of a stream recorded in parts, once the parts play as one video (Media's recording): its page is the whole
+        // video's, at the second this part starts (owner, 2026-10-27: "a single vod … that seeks just fine").
+        const rec = vod.recording;
+        if (rec && rec.joined && live.isId(rec.vod_id) && String(rec.vod_id) !== id) {
+            const t = Math.max(0, Math.floor(Number(rec.start_sec || 0) + (Number(req.query.t) > 0 ? Number(req.query.t) : 0)));
+            const q = new URLSearchParams();
+            if (t) q.set('t', String(t));
+            if (req.query.list) q.set('list', String(req.query.list));
+            return res.redirect(301, `/v/${rec.vod_id}${q.toString() ? `?${q}` : ''}`);
+        }
         if (vod && vod.ai_overview) vod.ai_overview = noLooks(vod.ai_overview).trim() || null;
         const manageable = mayManage(req, 'vod', vod);
         const clips = Array.isArray(data.clips) ? data.clips.filter((c) => c && c.visibility !== 'private') : [];
@@ -1269,7 +1302,8 @@ ${up.html}
         const title = String(b.title || '').trim().slice(0, 100);
         let out;
         try {
-            out = await asPerson(req, res, (token) => live.createClip(token, { vod_id: Number(id), start_time: start, end_time: end, ...(title ? { title } : {}) }, req.ip));
+            out = await asPerson(req, res, (token) => live.createClip(token, { vod_id: Number(id), start_time: start, end_time: end, ...(title ? { title } : {}),
+                ...(b.recording_time === '1' ? { recording_time: 1 } : {}) }, req.ip));
         } catch (err) { return ownerRefused(req, res, err, back); }
         const clipId = out && out.clip && out.clip.id;
         live.forget('vod', id);
