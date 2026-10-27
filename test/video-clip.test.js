@@ -74,6 +74,12 @@ function vreq(base, path, { method = 'GET', cookie, form, same = true } = {}) {
         assert.ok(r.text.includes('action="/v/101/clip"'), 'any signed-in viewer, not only the channel');
         assert.ok(r.text.includes('within 1:00:00'), 'the recording length');
         assert.ok(r.text.includes('data-ovv-clip-now'), 'the Start here / End here buttons (shown by the script)');
+        // Owner, 2026-10-27: the times start where the video is, and an empty title is named by AI (said on the form).
+        assert.ok(r.text.includes('data-ovv-clip-duration="3600"'), 'the script keeps the times inside the video');
+        assert.ok(r.text.includes('placeholder="Leave empty: AI names it"') && r.text.includes('With no title, AI names the clip from what happens and what is said in it'));
+        const js = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'js', 'video.js'), 'utf8');
+        assert.ok(js.includes("clipper.addEventListener('toggle'") && js.includes('Math.floor(video.currentTime || 0)'), 'opening the menu starts at the current time');
+        assert.ok(js.includes('if (!clipper.open || typed) return;'), 'times the person typed are kept');
     });
 
     await check('a clip is made on Live as the person, with their address, then its page says it is being cut', async () => {
