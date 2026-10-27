@@ -341,7 +341,7 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('Transcript'));
         assert.ok(r.text.includes('A public overview'));
         assert.ok(r.text.includes('/@streamer'));
-        assert.ok(!r.text.includes('Manage this recording'), 'owner tools only for the channel (video-owner.test.js)');
+        assert.ok(!r.text.includes('Edit this recording'), 'owner tools only for the channel (video-owner.test.js)');
         assert.ok(r.text.includes('Discuss on OpenVibe.Community'));
         assert.ok(r.text.includes('data-ovv-chapter'));
         assert.ok(r.text.includes('data-ovv-seek'));
@@ -360,7 +360,7 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('Full recording</a>') && r.text.includes('title="Watch the recording it was cut from, from this moment"'));
         assert.ok(r.text.includes('/v/101?t=5'), 'the full recording link carries the clip start');
         assert.ok(r.text.includes('Discuss on OpenVibe.Community'));
-        assert.ok(!r.text.includes('Manage this clip'), 'owner tools only for its maker or channel (video-owner.test.js)');
+        assert.ok(!r.text.includes('Edit this clip'), 'owner tools only for its maker or channel (video-owner.test.js)');
     });
 
     await check('a recording in progress plays Media\'s DVR playlist when it is an MP4, the file when it is a WebM', async () => {
