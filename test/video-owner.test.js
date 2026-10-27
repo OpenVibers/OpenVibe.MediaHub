@@ -86,12 +86,19 @@ function vreq(base, path, { method = 'GET', cookie, form, same = true } = {}) {
     await check('only the channel sees the Manage panel', async () => {
         const mine = await vreq(t.base, '/v/101', { cookie: kimCookie });
         assert.strictEqual(mine.status, 200);
-        assert.ok(mine.text.includes('Manage this recording') && mine.text.includes('action="/v/101/manage"'), 'the owner panel');
-        assert.ok(mine.text.includes('value="Kim stream"') && mine.text.includes('<option value="public" selected>'), 'prefilled');
+        assert.ok(mine.text.includes('Edit this recording') && mine.text.includes('action="/v/101/manage"'), 'the owner panel');
+        // 2026-10-27: Edit is first in the action row and opens the panel under the player; who can see it is three
+        // choices; the meta line tells the owner which it is now.
+        assert.ok(/<div class="ovv-actions"><a class="ovv-btn ovv-btn--edit" href="#manage" data-ovv-open="manage"/.test(mine.text), 'Edit leads the actions');
+        assert.ok(mine.text.indexOf('id="manage"') < mine.text.indexOf('id="h-about"'), 'the panel sits under the player, before About');
+        assert.strictEqual((mine.text.match(/<input type="radio" name="visibility" value="(public|unlisted|private)"/g) || []).length, 3, 'three visibility choices');
+        assert.ok(/class="ovv-vis-badge ovv-vis-badge--/.test(mine.text), 'the owner sees who can see it');
+        assert.ok(mine.text.includes('value="Kim stream"') && mine.text.includes('<input type="radio" name="visibility" value="public" checked>'), 'prefilled');
         const other = await vreq(t.base, '/v/101', { cookie: samCookie });
-        assert.ok(!other.text.includes('Manage this recording'), 'not for someone else');
+        assert.ok(!other.text.includes('Edit this recording'), 'not for someone else');
+        assert.ok(!/class="ovv-vis-badge/.test(other.text) && !other.text.includes('ovv-btn--edit'), 'no badge or Edit for someone else');
         const anon = await vreq(t.base, '/v/101');
-        assert.ok(!anon.text.includes('Manage this recording'), 'not signed out');
+        assert.ok(!anon.text.includes('Edit this recording'), 'not signed out');
     });
 
     await check('an edit is made on Live as the person, then the page shows it', async () => {
@@ -131,7 +138,7 @@ function vreq(base, path, { method = 'GET', cookie, form, same = true } = {}) {
         assert.ok(r.text.includes('Private: only you'), 'a private notice');
         assert.ok(r.text.includes('noindex'), 'noindex');
         assert.match(String(r.headers['cache-control']), /private/);
-        assert.ok(r.text.includes('Manage this recording'), 'so the owner can make it public again');
+        assert.ok(r.text.includes('Edit this recording'), 'so the owner can make it public again');
     });
 
     await check('a clip\'s maker changes only what changed; deletes need the box ticked', async () => {

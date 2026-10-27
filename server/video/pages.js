@@ -647,6 +647,18 @@ function createVideoRoutes(ctx) {
     }
     const savedNotice = (req) => (req.query.saved === '1' ? notice('Saved on OpenVibe.Live.', 'ok') : '');
     const visibilityOptions = (current) => VISIBILITIES.map((v) => html`<option value="${v}"${v === current ? ' selected' : ''}>${visibilityLabel(v)}</option>`);
+    // Who can see it, as three choices with what each means (owner, 2026-10-27: the page had no clear way to make a
+    // recording private or unlisted). Radios, so the form works without JavaScript.
+    const VISIBILITY_LOOK = {
+        public: ['fa-solid fa-earth-americas', 'Listed and searchable'],
+        unlisted: ['fa-solid fa-link', 'Only people with the link'],
+        private: ['fa-solid fa-lock', 'Only you (and staff)'],
+    };
+    const visibilityChoices = (current) => html`<fieldset class="ovv-vis"><legend>Who can see it</legend>${VISIBILITIES.map((v) => html`<label class="ovv-vis-opt"><input type="radio" name="visibility" value="${v}"${v === current ? ' checked' : ''}><span class="ovv-vis-card"><i class="${VISIBILITY_LOOK[v][0]}" aria-hidden="true"></i><b>${visibilityLabel(v)}</b><small>${VISIBILITY_LOOK[v][1]}</small></span></label>`)}</fieldset>`;
+    /** The owner's badge in the meta line: who can see it now. */
+    const visibilityBadge = (v) => html`<span class="ovv-vis-badge ovv-vis-badge--${VISIBILITIES.includes(v) ? v : 'public'}"><i class="${(VISIBILITY_LOOK[v] || VISIBILITY_LOOK.public)[0]}" aria-hidden="true"></i> ${visibilityLabel(v || 'public')}</span>`;
+    /** The owner's Edit button, first in the action row: opens the edit panel under the player. */
+    const editButton = (what) => html`<a class="ovv-btn ovv-btn--edit" href="#manage" data-ovv-open="manage" title="Edit this ${what}: title, description, who can see it, delete"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit</a>`;
     /**
      * "Clip" in the action row: a finished recording, any signed-in viewer who can see it (Live's rule, as on Live). A
      * small form under the button; signed out, the button signs in first and comes back.
@@ -677,12 +689,11 @@ ${whole ? html`<input type="hidden" name="recording_time" value="1">` : ''}
     function ownerPanel(kind, id, item) {
         const what = kind === 'vod' ? 'recording' : 'clip';
         const action = `/${kind === 'vod' ? 'v' : 'c'}/${id}`;
-        return html`<details class="ovv-panel ovv-owner" id="manage"><summary><h2 id="h-owner">Manage this ${what}</h2><span class="ovv-fine">Title, ${kind === 'vod' ? 'description, ' : ''}who can see it, delete</span></summary>
+        return html`<details class="ovv-panel ovv-owner" id="manage"><summary><h2 id="h-owner"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit this ${what}</h2><span class="ovv-fine">Title, ${kind === 'vod' ? 'description, ' : ''}who can see it, delete</span></summary>
 <form class="ovv-owner-form" method="post" action="${action}/manage">
 <label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="200" value="${item.title || ''}" required></label>
 ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textarea name="description" rows="3" maxlength="2000">${item.description || ''}</textarea></label>` : ''}
-<label class="ovv-field"><span>Visibility</span><select name="visibility">${visibilityOptions(item.visibility || 'public')}</select></label>
-<p class="ovv-fine">Public is listed and searchable; unlisted opens only by its link; private only for you and staff.</p>
+${visibilityChoices(item.visibility || 'public')}
 <button class="ovv-btn ovv-btn--primary" type="submit">Save changes</button>
 </form>
 <details class="ovv-danger"><summary>Delete this ${what}</summary>
@@ -1157,8 +1168,9 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
         const metaParts = [];
         if (vod.created_at) metaParts.push(html`<time datetime="${vod.created_at}">${dateLabel(vod.created_at)}</time>`);
         if (vod.duration_seconds != null) metaParts.push(durationLabel(vod.duration_seconds));
-        if (vod.stream_category) metaParts.push(vod.stream_category);
-        if (vod.view_count != null) metaParts.push(`${Number(vod.view_count) || 0} views`);
+        if (vod.stream_category) metaParts.push(String(vod.stream_category).charAt(0).toUpperCase() + String(vod.stream_category).slice(1));
+        if (viewsLabel(vod.view_count)) metaParts.push(viewsLabel(vod.view_count));
+        if (manageable) metaParts.push(visibilityBadge(vod.visibility));
 
         const nextAttr = up.nextUrl ? html` data-ovv-next="${up.nextUrl}"` : '';
         const viewAttr = html` data-ovv-view="${livePublic}/api/views/vod/${id}"`;
@@ -1169,13 +1181,15 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
         const about = vod.description || vod.ai_overview || factualDescription('vod', vod, segs.slice(0, 6).map((s) => s.text).join(' '));
 
         // The other parts of a stream recorded in parts, in order: Part 1 · Part 2 (this one).
-        const parts = hist && hist !== fail && Array.isArray(hist.parts) ? hist.parts.filter((p) => p && live.isId(p.vod_id)) : [];
-        const partNav = parts.length > 1 ? html`<p class="ovv-about-parts"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> The stream was recorded in ${parts.length} parts: ${parts.map((p, i) => [i ? ' · ' : '', String(p.vod_id) === id ? html`<b>Part ${p.part} (this one)</b>` : html`<a href="/v/${p.vod_id}">Part ${p.part}</a>`])}</p>` : '';
+        // Numbered by their place in the list, each recording once: the stored part numbers repeat after a restart
+        // ("Part 1 (this one) · Part 2 · Part 1", 2026-10-27).
+        const seenParts = new Set();
+        const parts = hist && hist !== fail && Array.isArray(hist.parts) ? hist.parts.filter((p) => p && live.isId(p.vod_id) && !seenParts.has(String(p.vod_id)) && seenParts.add(String(p.vod_id))) : [];
+        const partNav = parts.length > 1 ? html`<p class="ovv-about-parts"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> The stream was recorded in ${parts.length} parts: ${parts.map((p, i) => [i ? ' · ' : '', String(p.vod_id) === id ? html`<b>Part ${i + 1} (this one)</b>` : html`<a href="/v/${p.vod_id}">Part ${i + 1}</a>`])}</p>` : '';
         // The More menu: where else this lives, and the owner's tools.
         const moreItems = [];
         if (channelName) moreItems.push({ href: liveChannel, icon: 'fa-solid fa-tower-broadcast', label: 'Channel on OpenVibe.Live', hint: 'Live streams and chat' });
         if (threadUrl) moreItems.push({ href: threadUrl, icon: 'fa-regular fa-comments', label: 'Discuss on OpenVibe.Community' });
-        if (manageable) moreItems.push({ href: '#manage', icon: 'fa-solid fa-pen', label: 'Manage this recording', hint: 'Title, description, who can see it', data: raw('data-ovv-open="manage"') });
         // Chat replay, chapters and the transcript, beside the player.
         const side = companion({ kind: 'vod', id, chat: chatRows, chapters: mems, transcript: segs, long: Number(vod.duration_seconds) >= 3600 });
         return page(req, res, {
@@ -1203,11 +1217,12 @@ ${channelName ? html`<a class="ovv-avatar" href="${localChannel || liveChannel}"
 <div class="ovv-byline-text">${channelName ? (localChannel ? html`<a class="ovv-channel-name" href="${localChannel}">@${channelName}</a>` : html`<span class="ovv-channel-name">@${channelName}</span>`) : ''}
 ${metaParts.length ? html`<span class="ovv-meta">${metaParts.map((p, i) => (i === 0 ? p : [html` · `, p]))}</span>` : ''}</div>
 </div>
-<div class="ovv-actions">${saveForm}${ownOnly ? '' : clipAction(req, id, vod)}${downloadMenu({ kind: 'vod', id, item: vod, has: { transcript: segs.length, chat: chatRows ? chatRows.rows.length + chatRows.leftOut : 0, chapters: mems.length } })}<button type="button" class="ovv-btn" hidden data-ovv-share="${base}/v/${id}" title="Share a link (at the current time once it plays)"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Share</button>${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
+<div class="ovv-actions">${manageable ? editButton('recording') : ''}${saveForm}${ownOnly ? '' : clipAction(req, id, vod)}${downloadMenu({ kind: 'vod', id, item: vod, has: { transcript: segs.length, chat: chatRows ? chatRows.rows.length + chatRows.leftOut : 0, chapters: mems.length } })}<button type="button" class="ovv-btn" hidden data-ovv-share="${base}/v/${id}" title="Share a link (at the current time once it plays)"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Share</button>${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
 </div>
 ${vod.is_recording ? html`<p class="ovv-recording" role="status"><i class="fa-solid fa-circle" aria-hidden="true"></i> This recording is still in progress. <a href="${liveChannel}">Watch the live channel</a>.</p>` : ''}
 </div>
 </div>
+${manageable ? ownerPanel('vod', id, vod) : ''}
 <section class="ovv-about" aria-labelledby="h-about">
 <h2 id="h-about" class="ovv-about-title">About</h2>
 ${vod.description ? html`<p class="ovv-about-text">${vod.description}</p>` : ''}
@@ -1215,7 +1230,6 @@ ${vod.ai_overview ? html`<p class="ovv-about-text"><span class="ovv-ai-chip">AI 
 ${partNav}
 ${channelName ? html`<p class="ovv-about-from"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Streamed live on <a href="${liveChannel}">${channelName}'s OpenVibe.Live channel</a>${vod.stream_category ? html`, in ${String(vod.stream_category).charAt(0).toUpperCase()}${String(vod.stream_category).slice(1)}` : ''}.</p>` : ''}
 </section>
-${manageable ? ownerPanel('vod', id, vod) : ''}
 ${commentsOk ? html`<section class="ovv-panel ovv-comments" aria-labelledby="h-comments"><header class="ovv-panel-head"><h2 id="h-comments">Comments${commentRows.length ? html` <span class="ovv-count">${commentRows.length}</span>` : ''}</h2>${threadUrl ? html`<a class="ovv-panel-link" href="${threadUrl}">Discuss on OpenVibe.Community <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>` : ''}</header>${commentRows.length ? commentRows.map(commentItem) : html`<p class="ovv-comments-empty">No comments yet.${threadUrl ? html` <a href="${threadUrl}">Start the discussion</a>.` : ''}</p>`}</section>` : ''}
 </div>
 <aside class="ovv-col ovv-col--side">
@@ -1270,7 +1284,6 @@ ${clips.length ? html`<section class="ovv-panel ovv-clips" aria-labelledby="h-cl
         const moreItems = [];
         if (clip.source_streamer_username) moreItems.push({ href: `${livePublic}/@${clip.source_streamer_username}`, icon: 'fa-solid fa-tower-broadcast', label: 'Channel on OpenVibe.Live', hint: 'Live streams and chat' });
         if (threadUrl) moreItems.push({ href: threadUrl, icon: 'fa-regular fa-comments', label: 'Discuss on OpenVibe.Community' });
-        if (manageable) moreItems.push({ href: '#manage', icon: 'fa-solid fa-pen', label: 'Manage this clip', hint: 'Title, who can see it', data: raw('data-ovv-open="manage"') });
         // A clip's transcript, when it has one, beside the player as on a recording.
         const side = companion({ kind: 'clip', id, chat: null, chapters: [], transcript: segs, long: false });
 
@@ -1296,13 +1309,13 @@ ${cutting ? html`<div class="ovv-player-wrap ovv-cutting" role="status" data-ovv
 <h1 class="ovv-title">${clip.title || 'Clip'}</h1>
 <div class="ovv-head-row">
 <div class="ovv-byline"><div class="ovv-byline-text"><span class="ovv-channel-name">${clip.auto_generated ? html`<span class="ovv-tag ovv-tag--inline">AI clip</span> ` : ''}${attribution}</span>
-${clip.created_at ? html`<span class="ovv-meta"><time datetime="${clip.created_at}">${dateLabel(clip.created_at)}</time>${clip.duration_seconds != null ? html` · ${durationLabel(clip.duration_seconds)}` : ''}</span>` : ''}</div></div>
-<div class="ovv-actions">${fullRecording ? html`<a class="ovv-btn ovv-btn--primary" href="${fullRecording}" title="Watch the recording it was cut from, from this moment"><i class="fa-solid fa-film" aria-hidden="true"></i> Full recording</a>` : ''}${saveForm}${cutting ? '' : downloadMenu({ kind: 'clip', id, item: clip, has: { transcript: segs.length } })}<button type="button" class="ovv-btn" hidden data-ovv-share="${base}/c/${id}" title="Share a link"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Share</button>${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
+${clip.created_at ? html`<span class="ovv-meta"><time datetime="${clip.created_at}">${dateLabel(clip.created_at)}</time>${clip.duration_seconds != null ? html` · ${durationLabel(clip.duration_seconds)}` : ''}${manageable ? html` · ${visibilityBadge(clip.visibility)}` : ''}</span>` : ''}</div></div>
+<div class="ovv-actions">${manageable ? editButton('clip') : ''}${fullRecording ? html`<a class="ovv-btn ovv-btn--primary" href="${fullRecording}" title="Watch the recording it was cut from, from this moment"><i class="fa-solid fa-film" aria-hidden="true"></i> Full recording</a>` : ''}${saveForm}${cutting ? '' : downloadMenu({ kind: 'clip', id, item: clip, has: { transcript: segs.length } })}<button type="button" class="ovv-btn" hidden data-ovv-share="${base}/c/${id}" title="Share a link"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Share</button>${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
 </div>
 </div>
 </div>
-${clip.ai_overview ? html`<section class="ovv-about" aria-labelledby="h-about"><h2 id="h-about" class="ovv-about-title">About</h2><p class="ovv-about-text"><span class="ovv-ai-chip">AI summary</span> ${clip.ai_overview}</p></section>` : ''}
 ${manageable ? ownerPanel('clip', id, clip) : ''}
+${clip.ai_overview ? html`<section class="ovv-about" aria-labelledby="h-about"><h2 id="h-about" class="ovv-about-title">About</h2><p class="ovv-about-text"><span class="ovv-ai-chip">AI summary</span> ${clip.ai_overview}</p></section>` : ''}
 </div>
 <aside class="ovv-col ovv-col--side">
 ${side || ''}
