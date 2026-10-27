@@ -18,8 +18,8 @@ const BUDGETS = {
                        // FAQPage JSON-LD) and next steps on the network; was 29.7 at 27.5
     htmlBrotliKB: 10.4,   // 9.4 on 10-22 (the same sections); was 7.7 at 7.1
     jsFiles: 5,   // 5 (theme-loader, web-runtime, navbar, footer, boost: openvibe-shared/shell)
-    jsRawKB: 275,   // 273.2 with Shared 4.15.0 (2026-10-27: the compact footer opens into the whole one, the pulse line); 264.3 with Shared 4.13.0; 239.8
-    jsBrotliKB: 68.5,   // 67.9 Shared 4.15.0; 65.3 Shared 4.12.0: the light/dark switch, the seasonal mark and the theme pairs; 56.5
+    jsRawKB: 292,   // 287.2 Shared 4.17.0: OpenCoins and Vibes chips (wallet: true) in the navbar; 273.2 with Shared 4.15.0 (2026-10-27: the compact footer opens into the whole one, the pulse line); 264.3 with Shared 4.13.0; 239.8
+    jsBrotliKB: 72,   // 70.5 Shared 4.17.0: OpenCoins and Vibes chips (wallet: true) in the navbar; 67.9 Shared 4.15.0; 65.3 Shared 4.12.0: the light/dark switch, the seasonal mark and the theme pairs; 56.5
     cssFiles: 2,   // 2 (app.css + the cached /shared/showcase.css)
     cssRawKB: 28,   // 23.6 with Shared 4.13.0 (2026-10-26: account links); measured 16.6 (shared 4.1.8: four steps two by two); was 16.5 at 15.0
     cssBrotliKB: 7,   // 5.4 with Shared 4.13.0 (2026-10-26: account links); 3.7; 4.2 with the drive previews (10-15)
