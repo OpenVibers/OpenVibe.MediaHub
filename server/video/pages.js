@@ -601,11 +601,12 @@ function createVideoRoutes(ctx) {
         return actionMenu({ icon: 'fa-solid fa-scissors', label: 'Clip', title: `Make a clip of up to ${CLIP_MAX_SECONDS} seconds`, cls: 'ovv-clipper', body: html`<p class="ovv-pop-title">Make a clip</p>
 <form class="ovv-owner-form" method="post" action="/v/${id}/clip">
 <div class="ovv-clip-times">
-<label class="ovv-field"><span>Start</span><input name="start" type="text" inputmode="numeric" placeholder="0:00" pattern="[0-9:.]{1,12}" required data-ovv-clip-start></label>
+<label class="ovv-field"><span>Start</span><input name="start" type="text" inputmode="numeric" placeholder="0:00" pattern="[0-9:.]{1,12}" required data-ovv-clip-start${dur ? html` data-ovv-clip-duration="${dur}"` : ''}></label>
 <label class="ovv-field"><span>End</span><input name="end" type="text" inputmode="numeric" placeholder="0:30" pattern="[0-9:.]{1,12}" required data-ovv-clip-end></label>
 </div>
 <p class="ovv-clip-now" hidden data-ovv-clip-now><button type="button" class="ovv-btn ovv-btn--small" data-ovv-clip-mark="start">Start here</button> <button type="button" class="ovv-btn ovv-btn--small" data-ovv-clip-mark="end">End here</button></p>
-<label class="ovv-field"><span>Title <span class="ovv-fine">(optional)</span></span><input name="title" type="text" maxlength="100"></label>
+<label class="ovv-field"><span>Title <span class="ovv-fine">(optional)</span></span><input name="title" type="text" maxlength="100" placeholder="Leave empty: AI names it" aria-describedby="ovv-clip-title-note"></label>
+<p class="ovv-fine" id="ovv-clip-title-note">With no title, AI names the clip from what happens and what is said in it, a minute or so after it is cut.</p>
 <p class="ovv-fine">Up to ${CLIP_MAX_SECONDS} seconds${dur ? `, within ${clock(dur)}` : ''}. Times are m:ss or h:mm:ss. It is cut on OpenVibe.Media and credited to you.</p>
 <button class="ovv-btn ovv-btn--primary" type="submit">Make the clip</button>
 </form>` });

@@ -334,7 +334,26 @@
         transcript(video);
         if (!video) return;
 
-        // "Make a clip": with the player here, mark the start and end at the current time.
+        // "Make a clip": opening the Clip menu starts it where the video is (owner, 2026-10-27: "it should have the
+        // start/end time set based on the current timestamp the user is on rather than being at 0"): the start at the
+        // current second, the end 30 s on, both inside the video. Opened again later, it follows the video again, unless
+        // the person typed their own times.
+        const clipper = document.querySelector('details.ovv-clipper');
+        const startIn = document.querySelector('[data-ovv-clip-start]');
+        const endIn = document.querySelector('[data-ovv-clip-end]');
+        if (clipper && startIn && endIn) {
+            let typed = false;
+            [startIn, endIn].forEach(function (i) { i.addEventListener('input', function () { typed = true; }); });
+            clipper.addEventListener('toggle', function () {
+                if (!clipper.open || typed) return;
+                const total = Number(startIn.getAttribute('data-ovv-clip-duration')) || video.duration || 0;
+                let a = Math.max(0, Math.floor(video.currentTime || 0));
+                let b = a + 30;
+                if (total > 1 && b > total) { b = Math.floor(total); a = Math.max(0, b - 30); }
+                startIn.value = clockOf(a);
+                endIn.value = clockOf(b);
+            });
+        }
         const now = document.querySelector('[data-ovv-clip-now]');
         if (now) {
             now.hidden = false;
@@ -342,7 +361,7 @@
                 b.addEventListener('click', function () {
                     const which = b.getAttribute('data-ovv-clip-mark');
                     const input = document.querySelector(which === 'start' ? '[data-ovv-clip-start]' : '[data-ovv-clip-end]');
-                    if (input) input.value = clockOf(video.currentTime);
+                    if (input) { input.value = clockOf(video.currentTime); input.dispatchEvent(new Event('input')); }
                     if (which === 'start') {
                         const end = document.querySelector('[data-ovv-clip-end]');
                         if (end && !end.value) end.value = clockOf(video.currentTime + 30);
