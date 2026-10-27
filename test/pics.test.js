@@ -86,7 +86,9 @@ function multipart(fields, file) {
             assert.ok(home.includes('/api/v1/images \\\n  -H "Authorization: Bearer $OPENVIBE_TOKEN" \\\n'), 'the curl sample keeps its line breaks');
             const ld = [...home.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap((m) => [].concat(JSON.parse(m[1])));
             const faq = ld.find((x) => x['@type'] === 'FAQPage');
-            const shown = [...home.matchAll(/<summary>([^<]*)<\/summary>/g)].map((m) => m[1].replace(/&#39;/g, "'"));
+            // The questions section's own disclosures: the shared footer's "More from OpenVibe" is one too (openvibe-shared 4.15).
+            const questions = home.slice(home.indexOf('>Questions</h2>'), home.indexOf('>More on OpenVibe</h2>'));
+            const shown = [...questions.matchAll(/<summary>([^<]*)<\/summary>/g)].map((m) => m[1].replace(/&#39;/g, "'"));
             assert.deepStrictEqual(faq.mainEntity.map((q) => q.name), shown, 'every question in the FAQPage is on the page');
             const map = (await t.get('/sitemap.xml', { headers: PICS })).text;
             assert.ok(map.includes('<loc>https://openvibe.pics/</loc>') && map.includes('<loc>https://openvibe.pics/dmca</loc>'), 'the sitemap lists the home and the rules');
