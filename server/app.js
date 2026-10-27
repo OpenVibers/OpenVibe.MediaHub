@@ -152,7 +152,8 @@ async function createApp(opts = {}) {
     // ── Sign-in (OAuth2 + PKCE client of OpenVibe.Network) ──
     // Mounted before the host routing too: both hosts sign in through the same routes, and createSso picks the
     // callback URI from the Host header (the drive's, or the video host's).
-    app.use('/auth/', rateLimit({ windowMs: 15 * 60_000, limit: 60, standardHeaders: true, legacyHeaders: false }));
+    // /auth/me is the navbar's who-is-signed-in read on every page, so it is not counted with sign-ins: 60 page views in 15 minutes made a signed-in visitor look signed out.
+    app.use('/auth/', rateLimit({ windowMs: 15 * 60_000, limit: 60, skip: (req) => req.path === '/me', standardHeaders: true, legacyHeaders: false }));
     app.use('/auth', sso.routes());
 
     // /release.json (and loopback /metrics) answer on both hosts: the shared release check on openvibe.video reads its own
