@@ -157,6 +157,45 @@ function hlsAttrs(item) {
     return html` data-ovv-hls="${hls}" data-ovv-hls-lib="${asset('vendor/hls.light.min.js')}"`;
 }
 
+/**
+ * The picture-in-pictures that were on screen during a recording (Live's `vod.pips`, OpenVibe.Live
+ * streaming/pip-history.js), with what public/js/video.js needs to play each over the player: its own VOD's file and
+ * playlist, its window in this recording (from, to, in seconds), that VOD's second at `from`, where it starts (fractions
+ * of the player), whether it starts with sound, and a link to its own page. Each PIP's VOD comes from Live's cached
+ * answer (`live`, the page's Live client); one Live does not answer is left out.
+ */
+async function pipsOf(vod, live) {
+    const list = (Array.isArray(vod.pips) ? vod.pips : []).filter((p) => p && live.isId(String(p.vod_id))
+        && Number.isFinite(Number(p.from)) && Number(p.to) > Number(p.from)).slice(0, 60);
+    if (!list.length) return [];
+    const got = new Map();
+    await Promise.all([...new Set(list.map((p) => String(p.vod_id)))].slice(0, 6).map(async (pid) => {
+        try { const d = await live.vod(pid); if (d && d.vod) got.set(pid, d.vod); } catch { /* Live down: that PIP is left out */ }
+    }));
+    const unit = (v, lo, hi, dflt) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt; };
+    const out = [];
+    for (const p of list) {
+        const pv = got.get(String(p.vod_id));
+        const file = pv && fileOf(pv);
+        if (!file) continue;
+        const hls = httpsUrl(pv.hls_url);
+        out.push({
+            file, hls: hls && new URL(hls).origin === new URL(file).origin ? hls : null,
+            from: Number(p.from), to: Number(p.to), offset: Math.max(0, Number(p.offset) || 0),
+            x: unit(p.x, 0, 1, 0.72), y: unit(p.y, 0, 1, 0.7), w: unit(p.w, 0.08, 0.6, 0.25), muted: p.muted !== false,
+            title: String(p.title || pv.title || 'Picture-in-picture').slice(0, 120),
+            href: `/v/${String(p.vod_id)}${Number(p.offset) >= 1 ? `?t=${Math.floor(Number(p.offset))}` : ''}`,
+        });
+    }
+    return out;
+}
+
+/** The PIPs as data for the player (a JSON block: never run, so the page's CSP is untouched). */
+function pipsTag(pips) {
+    if (!pips.length) return '';
+    return raw(`<script type="application/json" data-ovv-pips>${JSON.stringify(pips).replace(/</g, '\\u003c')}</script>`);
+}
+
 function dvrPlaylist(item, file) {
     const open = (item.visibility || (item.is_public ? 'public' : 'private')) !== 'private';
     if (!file || !open || !/\.mp4$/i.test(String(item.file_path || '')) || !Number.isSafeInteger(Number(item.id))) return null;
@@ -1124,6 +1163,7 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
         const nextAttr = up.nextUrl ? html` data-ovv-next="${up.nextUrl}"` : '';
         const viewAttr = html` data-ovv-view="${livePublic}/api/views/vod/${id}"`;
         const hlsAttr = hlsAttrs(vod);
+        const pips = await pipsOf(vod, live);
 
         const thin = thinRecording(vod, segs.length);
         const about = vod.description || vod.ai_overview || factualDescription('vod', vod, segs.slice(0, 6).map((s) => s.text).join(' '));
@@ -1154,7 +1194,7 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
 <div class="ovv-col ovv-col--main">
 <div class="ovv-stage">
 ${savedNotice(req)}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this recording.', 'info') : ''}
-<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(vod.thumbnail_url))} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video></div>
+<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(vod.thumbnail_url))} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video>${pipsTag(pips)}</div>
 <div class="ovv-head">
 <h1 class="ovv-title">${vod.title || 'Stream recording'}</h1>
 <div class="ovv-head-row">
