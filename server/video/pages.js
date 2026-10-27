@@ -78,6 +78,23 @@ function thumbImg(url, sizes) {
 const CARD_SIZES = '(max-width: 520px) calc(100vw - 32px), (max-width: 820px) 45vw, 240px';
 // The player shows the item's picture until it plays: without a poster the page's largest paint waited for the first
 // video frame (3.8 s on a phone-speed CPU, 2026-10-17). A Media thumbnail is asked for as a 1280 px WebP, as uploads are.
+/**
+ * The picture's shape from the first paint (owner, 2026-10-27: on a phone, a recording made upright on a phone opened in
+ * a 16:9 box with wide bars, and turned only once it played). Live's stream history keeps each stream's shapes (at,
+ * width, height); the one in force where this video starts is its first. Null when Live has none (streams before
+ * 2026-10-25): video.js then takes the shape once it plays, as before. Clamped like video.js followShape.
+ */
+function startAspect(hist, vod) {
+    if (!hist || !Array.isArray(hist.shapes)) return null;
+    const own = Array.isArray(hist.parts) ? hist.parts.find((p) => p && String(p.vod_id) === String(vod.id)) : null;
+    const from = own && Number.isFinite(Number(own.at)) ? Number(own.at) : 0;
+    const shapes = hist.shapes.filter((s) => s && Number(s.width) > 0 && Number(s.height) > 0).sort((a, b) => Number(a.at) - Number(b.at));
+    let pick = shapes[0] || null;
+    for (const s of shapes) if (Number(s.at) <= from + 1) pick = s;
+    if (!pick) return null;
+    return Math.round(Math.min(3.2, Math.max(0.4, Number(pick.width) / Number(pick.height))) * 10000) / 10000;
+}
+
 function posterAttr(url) {
     // A Media thumbnail comes in sizes: the poster at 1280 px, and a 32 px preview the player shows blurred (and takes its
     // background colour from) before the poster arrives. data-ov-ambient: the picture's glow around the player.
@@ -1139,8 +1156,9 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
             Promise.resolve().then(() => chat.chatReplay(vod.stream_id)).catch(() => fail),
             playlistForm(req, 'vod', id),
             upNext(req, 'vod', id),
-            // One part of a stream recorded in parts (its broadcaster reconnected): the other parts, to move between.
-            Promise.resolve().then(() => (vod.part ? live.streamHistory(vod.stream_id) : null)).catch(() => fail),
+            // The stream's history: the picture's shape where this video starts, and for one part of a stream recorded in
+            // parts (its broadcaster reconnected) the other parts, to move between.
+            Promise.resolve().then(() => (live.isId(vod.stream_id) ? live.streamHistory(vod.stream_id) : null)).catch(() => fail),
         ]);
         let mems = [];
         try { if (m !== fail) mems = chapters(moments(m && m.memories), vod.duration_seconds); } catch { mems = []; }
@@ -1184,8 +1202,10 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
         // Numbered by their place in the list, each recording once: the stored part numbers repeat after a restart
         // ("Part 1 (this one) · Part 2 · Part 1", 2026-10-27).
         const seenParts = new Set();
-        const parts = hist && hist !== fail && Array.isArray(hist.parts) ? hist.parts.filter((p) => p && live.isId(p.vod_id) && !seenParts.has(String(p.vod_id)) && seenParts.add(String(p.vod_id))) : [];
+        const parts = vod.part && hist && hist !== fail && Array.isArray(hist.parts) ? hist.parts.filter((p) => p && live.isId(p.vod_id) && !seenParts.has(String(p.vod_id)) && seenParts.add(String(p.vod_id))) : [];
         const partNav = parts.length > 1 ? html`<p class="ovv-about-parts"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> The stream was recorded in ${parts.length} parts: ${parts.map((p, i) => [i ? ' · ' : '', String(p.vod_id) === id ? html`<b>Part ${i + 1} (this one)</b>` : html`<a href="/v/${p.vod_id}">Part ${i + 1}</a>`])}</p>` : '';
+        const ar = hist && hist !== fail ? startAspect(hist, vod) : null;
+        const shapeAttr = ar ? html` style="--ovv-ar: ${String(ar)}" data-ovv-ar="${String(ar)}"` : '';
         // The More menu: where else this lives, and the owner's tools.
         const moreItems = [];
         if (channelName) moreItems.push({ href: liveChannel, icon: 'fa-solid fa-tower-broadcast', label: 'Channel on OpenVibe.Live', hint: 'Live streams and chat' });
@@ -1208,7 +1228,7 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
 <div class="ovv-col ovv-col--main">
 <div class="ovv-stage">
 ${savedNotice(req)}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this recording.', 'info') : ''}
-<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(vod.thumbnail_url))} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video>${pipsTag(pips)}</div>
+<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(vod.thumbnail_url))}${shapeAttr} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video>${pipsTag(pips)}</div>
 <div class="ovv-head">
 <h1 class="ovv-title">${vod.title || 'Stream recording'}</h1>
 <div class="ovv-head-row">

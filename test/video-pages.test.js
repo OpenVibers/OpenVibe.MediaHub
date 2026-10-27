@@ -170,6 +170,12 @@ function startLive() {
             if (memories[1] === '101') return json(200, { memories: [{ offset_seconds: 10, description: 'Intro & setup' }, { offset_seconds: 30, description: 'The <main> part' }] });
             return json(200, { memories: [] });
         }
+        // Live's stream history: stream 1001 (VOD 101) was streamed upright from a phone, then turned sideways later.
+        const history = /^\/api\/streams\/(\d+)\/history$/.exec(p);
+        if (history) {
+            if (history[1] === '1001') return json(200, { stream_id: 1001, parts: [{ part: 1, vod_id: 101, at: 3.2, end: 48 }], shapes: [{ at: 2.9, width: 720, height: 1280 }, { at: 40, width: 1280, height: 720 }] });
+            return json(404, { error: 'not found' });
+        }
         const vodDetail = /^\/api\/vods\/(\d+)$/.exec(p);
         if (vodDetail) {
             if (vodDetail[1] === '103') return json(404, { error: 'not found' });
@@ -270,6 +276,16 @@ function countOccurrences(haystack, needle) {
         assert.ok(!r.text.includes('Chat replay'), 'no chat panel when Chat is down');
         assert.ok(!r.text.includes('ovv-chat'), 'no chat markup when Chat is down');
         live.setChatDown(false);
+    });
+
+    await check('the player opens in the recording\'s shape (an upright phone stream) from Live\'s stream history', async () => {
+        const r = await getVideo('/v/101');
+        assert.strictEqual(r.status, 200);
+        const video = /<video class="ovv-player"[^>]*>/.exec(r.text)[0];
+        assert.ok(video.includes('style="--ovv-ar: 0.5625"') && video.includes('data-ovv-ar="0.5625"'), video);
+        assert.ok(!r.text.includes('The stream was recorded in'), 'a whole recording lists no parts');
+        const other = await getVideo('/v/104');   // stream 1002: no history, so 16:9 until it plays, as before
+        assert.ok(!/<video class="ovv-player"[^>]*--ovv-ar/.test(other.text));
     });
 
     await check('the player shows the item\'s picture until it plays (a 1280 px WebP of a Media thumbnail)', async () => {

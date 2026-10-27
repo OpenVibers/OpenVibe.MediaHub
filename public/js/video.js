@@ -40,12 +40,16 @@
     // change that keeps the ratio within 3% (a lowered resolution) moves nothing. Until playback starts the box stays
     // 16:9, so loading the page shifts nothing below it; video.css caps the height so the title stays on screen.
     function followShape(video) {
-        let current = 0;
+        // The page may already know it (pages.js startAspect, from Live's stream history): then nothing moves on play.
+        let current = Number(video.getAttribute('data-ovv-ar')) || 0;
         let on = false;
         const update = function () {
             const w = video.videoWidth;
             const h = video.videoHeight;
-            if (!on || !(w > 0 && h > 0)) return;
+            if (!(w > 0 && h > 0)) return;
+            // Before playback: with no shape from the page the box waits (loading shifts nothing); with one, the file's own
+            // size corrects it at once should Live's history have been wrong, and a match moves nothing.
+            if (!on && !current) return;
             const r = Math.min(3.2, Math.max(0.4, w / h));
             if (current && Math.abs(Math.log(r / current)) < 0.03) return;
             current = r;

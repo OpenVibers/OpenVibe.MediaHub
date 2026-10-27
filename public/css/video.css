@@ -115,6 +115,9 @@ body:has(> main.ovv-page) .openvibe-navbar.ovnav-top { background-color: var(--b
    before that. The height is capped so the title under the player stays on screen. */
 .ovv-player { display: block; width: 100%; aspect-ratio: var(--ovv-ar, 16 / 9); max-height: calc(100vh - 150px); max-height: calc(100dvh - 150px); background: #000; object-fit: contain; transition: aspect-ratio .45s cubic-bezier(.22, 1, .36, 1); }
 @media (prefers-reduced-motion: reduce) { .ovv-player { transition: none; } }
+/* An upright recording on a phone or tablet held upright: at most 70% of the screen, so its title and buttons show under
+   it without scrolling. */
+@media (max-width: 1000px) and (orientation: portrait) { .ovv-player { max-height: 70vh; max-height: 70svh; } }
 .ovv-title { margin: 1rem 0 .6rem; font-size: clamp(1.3rem, 2.4vw, 1.75rem); line-height: 1.25; }
 .ovv-byline { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; padding-bottom: 16px; border-bottom: 1px solid var(--ovv-line); }
 .ovv-avatar { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-light, #60a5fa), var(--accent-strong, #2563eb)); color: #fff !important; font-weight: 800; text-decoration: none; }
@@ -327,7 +330,10 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-head { margin-top: 14px; }
 .ovv-head .ovv-title { margin: 0 0 12px; }
 .ovv-head-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; }
-.ovv-head .ovv-byline { flex: 1 1 240px; padding: 0; border: 0; min-width: 0; }
+/* The picture, the name and the date stay on one row; the actions go under them when the row is too narrow for both
+   (a tablet put the name under the picture beside five buttons, 2026-10-27). */
+.ovv-head .ovv-byline { flex: 1 1 300px; flex-wrap: nowrap; padding: 0; border: 0; min-width: 0; }
+.ovv-head .ovv-byline-text { flex: 1 1 auto; }
 .ovv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .ovv-btn--icon { width: 38px; padding: 0; justify-content: center; }
 .ovv-btn[hidden] { display: none; }
@@ -443,9 +449,14 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 }
 @media (max-width: 600px) {
   /* The actions in one row that scrolls sideways; their menus open as sheets from the bottom (video.js dims the page). */
-  .ovv-actions { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px; width: calc(100% + 32px); }
-  .ovv-actions::-webkit-scrollbar { display: none; }
-  .ovv-actions .ovv-btn { white-space: nowrap; }
+  /* The actions fit one row: each its icon over a short word, all the same width (they ran off the edge, "Sha…"). */
+  .ovv-actions { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; width: 100%; }
+  .ovv-actions > .ovv-btn, .ovv-actions > details > summary.ovv-btn { flex-direction: column; justify-content: center; gap: 4px; width: 100%; min-height: 54px; padding: 6px 2px; font-size: .72rem; line-height: 1.1; white-space: normal; text-align: center; border-radius: 12px; }
+  .ovv-actions > details { min-width: 0; }
+  .ovv-actions .ovv-btn i { font-size: 1rem; margin: 0; }
+  .ovv-actions .ovv-btn--icon { width: 100%; }
+  /* Less space before the footer: the page's own bottom and the footer's top margin made a band of nothing. */
+  .ovv-page { padding-bottom: 20px; }
   .ovv-pop-panel, .ovv-save[open] > .ovv-save-form, .ovv-more-menu .ovv-pop-panel { position: fixed; top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 82vh; max-height: 82dvh; overflow-y: auto; border-radius: 16px; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
   .ovv-pop--js[open]::before { content: ''; position: fixed; inset: 0; z-index: 39; background: rgba(0, 0, 0, .55); }
   .ovv-head .ovv-title { font-size: 1.2rem; }
