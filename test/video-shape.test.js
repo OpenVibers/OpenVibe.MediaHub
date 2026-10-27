@@ -18,7 +18,7 @@ vm.runInContext(`${m[0]}; this.followShape = followShape;`, ctx);
 const listeners = {};
 const vars = {};
 const video = {
-    videoWidth: 0, videoHeight: 0,
+    videoWidth: 0, videoHeight: 0, getAttribute: () => null,
     style: { setProperty: (k, v) => { vars[k] = v; } },
     addEventListener: (t, f) => { (listeners[t] = listeners[t] || []).push(f); },
 };
@@ -37,6 +37,26 @@ show(960, 720);
 assert.strictEqual(vars['--ovv-ar'], '1.3333');
 show(8000, 100);
 assert.strictEqual(vars['--ovv-ar'], '3.2000', 'a broken size is held to 32:10');
+
+// The page already knows the shape (pages.js startAspect, from Live's stream history; owner, 2026-10-27: an upright
+// phone recording opened in a 16:9 box): the box is upright from the first paint and the matching file moves nothing.
+{
+    const l2 = {};
+    const v2 = {};
+    const known = {
+        videoWidth: 0, videoHeight: 0, getAttribute: (k) => (k === 'data-ovv-ar' ? '0.5625' : null),
+        style: { setProperty: (k, v) => { v2[k] = v; } },
+        addEventListener: (t, f) => { (l2[t] = l2[t] || []).push(f); },
+    };
+    const fire2 = (t) => (l2[t] || []).forEach((f) => f());
+    ctx.followShape(known);
+    known.videoWidth = 720; known.videoHeight = 1280; fire2('resize');
+    assert.strictEqual(v2['--ovv-ar'], undefined, 'the file matches the page: nothing moves');
+    fire2('playing');
+    assert.strictEqual(v2['--ovv-ar'], undefined);
+    known.videoWidth = 1280; known.videoHeight = 720; fire2('resize');
+    assert.strictEqual(v2['--ovv-ar'], '1.7778', 'a turn mid-stream is still followed');
+}
 
 assert.match(src, /followShape\(video\);\n\s+const t = startSeconds\(\);/, 'the watch page follows its video');
 const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'video.css'), 'utf8');
