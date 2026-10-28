@@ -501,10 +501,13 @@ function countOccurrences(haystack, needle) {
         assert.ok(none.text.includes('Nothing matched') && !none.text.includes('<script>alert(1)'), 'nothing found, and the words are escaped');
     });
 
-    await check('the navbar names the site\'s places: Videos, Search, Upload, Record, Your videos and Playlists, the current one active', async () => {
+    // The bar (2026-10-28): the places with icons (the phone app bar), Playlists under More, Search is the magnifier
+    // (this site's search first); the page without JavaScript keeps its Search link.
+    await check('the navbar names the site\'s places: Videos, Upload, Record, Your videos, and Playlists under More; Search is the magnifier', async () => {
         const home = (await getVideo('/')).text;
-        assert.match(home, /"links":\[\{"label":"Videos","href":"\/","active":true\},\{"label":"Search","href":"\/search","active":false\},\{"label":"Upload","href":"\/upload","active":false\},\{"label":"Record","href":"\/record","active":false\},\{"label":"Your videos","href":"\/me\/videos","active":false\},\{"label":"Playlists","href":"\/playlists","active":false\}\]/);
-        assert.ok(home.includes('href="/playlists"'), 'the no-JS nav links Playlists too');
+        assert.match(home, /"links":\[\{"label":"Videos","href":"\/","icon":"fa-play","active":true\},\{"label":"Upload","href":"\/upload","icon":"fa-upload","active":false\},\{"label":"Record","href":"\/record","icon":"fa-video","active":false\},\{"label":"Your videos","href":"\/me\/videos","icon":"fa-photo-film","active":false\},\{"label":"Playlists","href":"\/playlists","icon":"fa-list-check","more":true,"active":false\}\]/);
+        assert.ok(/"appBar":true/.test(home) && /"search":\{"page":"\/search","label":"OpenVibe.Video"\}/.test(home), 'the app bar, and the magnifier offers Video\'s search first');
+        assert.ok(home.includes('href="/playlists"') && home.includes('href="/search"'), 'the no-JS nav links Playlists and Search too');
     });
 
     await check('/updates: the shared update log on the video host, one heading, in the sitemap', async () => {
