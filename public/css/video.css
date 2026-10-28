@@ -574,11 +574,10 @@ html.ov-motion .ovv-stat.is-live .ovv-dot { animation: ovv-pulse 1.6s ease-out i
 @keyframes ovv-pulse { from { box-shadow: 0 0 0 0 rgba(239, 68, 68, .6); } to { box-shadow: 0 0 0 7px rgba(239, 68, 68, 0); } }
 .ovv-section[id] { scroll-margin-top: 72px; }
 @media (max-width: 560px) {
-    .ovv-hero-actions { display: grid; grid-template-columns: 1fr 1fr; }
+    .ovv-hero-actions { display: grid; grid-template-columns: 1fr; }
     .ovv-hero-actions .ovv-btn { justify-content: center; }
-    .ovv-hero-actions .ovv-btn--primary { grid-column: 1 / -1; }
-    .ovv-hero-actions > a:last-child:nth-child(3n) { grid-column: 1 / -1; }
-    .ovv-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .ovv-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ovv-stats > li:has(.is-live) { grid-column: 1 / -1; }
     .ovv-stat { padding: 10px 12px; }
     .ovv-stat b { font-size: 1.2rem; }
 }
