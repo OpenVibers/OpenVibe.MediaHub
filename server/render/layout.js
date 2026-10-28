@@ -23,12 +23,12 @@ const NETWORK_URL = 'https://openvibe.network';
 const SITE_NAME = 'OpenVibe.Download';
 const TAGLINE = 'Your files, shared on your terms.';
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
-// The product's own navigation: one entry per public page it serves.
+// The product's own places: the main ones carry an icon (phones get them as the bottom tab bar), the rest fold into
+// the navbar's More (Shared 4.22). Search is the navbar's magnifier and What shipped is the footer's.
 const NAV = [
-    { label: 'Your files', href: '/files' },
-    { label: 'Backups', href: '/sync' },
-    { label: 'Safety', href: '/safety' },
-    { label: 'What shipped', href: '/updates' },
+    { label: 'Your files', href: '/files', icon: 'fa-file-lines' },
+    { label: 'Backups', href: '/sync', icon: 'fa-clock-rotate-left' },
+    { label: 'Safety', href: '/safety', icon: 'fa-shield-halved', more: true },
 ];
 
 const hashes = new Map();
@@ -59,7 +59,8 @@ function renderPage(o) {
     const nav = {
         service: 'media-hub',
         apiBase: NETWORK_URL,
-        links: NAV.map((l) => ({ label: l.label, href: l.href, active: pathNow === l.href || pathNow.startsWith(`${l.href}/`) })),
+        links: NAV.map((l) => ({ label: l.label, href: l.href, ...(l.icon ? { icon: l.icon } : {}), ...(l.more ? { more: true } : {}), active: pathNow === l.href || pathNow.startsWith(`${l.href}/`) })),
+        appBar: true,   // phones: the places with icons as the bottom tab bar (Shared 4.20)
         history: { type: 'page', title: o.title || SITE_NAME },
         silentLogin: `${o.config.baseUrl}/auth/login?silent=1&next={url}`,
         sessionUrl: '/auth/me',
