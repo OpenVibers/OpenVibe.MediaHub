@@ -79,7 +79,9 @@ ${render(o.body)}
         navbar: {
             service: 'media-hub',
             apiBase: NETWORK_URL,
-            links: NAV_LINKS.map((l) => ({ ...l, active: l.href === '/' ? o.path === '/' : String(o.path || '').startsWith(l.href) })),
+            links: NAV_LINKS.filter((l) => !l.noscriptOnly).map(({ noscriptOnly, ...l }) => ({ ...l, active: l.href === '/' ? o.path === '/' : String(o.path || '').startsWith(l.href) })),
+            appBar: true,   // phones: the places with icons as the bottom tab bar (Shared 4.20)
+            search: { page: '/search', label: 'OpenVibe.Video' },
             history: { type: 'page', title },
             sessionUrl: '/auth/me',
             loginUrl: '/auth/login?next={path}',
@@ -95,7 +97,17 @@ ${render(o.body)}
 }
 
 // The site's own places in the navbar: the videos, and your playlists (signed in; the page asks you to sign in).
-const NAV_LINKS = [{ label: 'Videos', href: '/' }, { label: 'Search', href: '/search' }, { label: 'Upload', href: '/upload' }, { label: 'Record', href: '/record' }, { label: 'Your videos', href: '/me/videos' }, { label: 'Playlists', href: '/playlists' }];
+// The places: the main ones carry an icon (phones get them as the bottom tab bar), Playlists folds into the navbar's More
+// (Shared 4.22). Search is the navbar's magnifier, which offers this site's own search first; the page without
+// JavaScript keeps its Search link.
+const NAV_LINKS = [
+    { label: 'Videos', href: '/', icon: 'fa-play' },
+    { label: 'Search', href: '/search', icon: 'fa-magnifying-glass', noscriptOnly: true },
+    { label: 'Upload', href: '/upload', icon: 'fa-upload' },
+    { label: 'Record', href: '/record', icon: 'fa-video' },
+    { label: 'Your videos', href: '/me/videos', icon: 'fa-photo-film' },
+    { label: 'Playlists', href: '/playlists', icon: 'fa-list-check', more: true },
+];
 
 // A signed-out copy is never reused without asking: Cloudflare drops `Vary` (it keeps only Accept-Encoding), so a
 // browser keyed the guest copy by its URL alone and, for five minutes after a quiet sign-in, showed the signed-out page
