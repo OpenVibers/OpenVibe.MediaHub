@@ -451,7 +451,10 @@ function countOccurrences(haystack, needle) {
         assert.ok(top.indexOf('/c/201') !== -1 && top.indexOf('/c/201') < top.indexOf('/v/101'), 'the clip with more views comes first');
         assert.ok(top.includes('250 views') && top.includes('100 views'), 'view counts');
         // The numbers are Live's and Search's own.
-        assert.ok(/<dd>812<\/dd>/.test(r.text) && /<dd>399<\/dd>/.test(r.text), 'recordings and clips counted by Live');
+        assert.ok(/href="#recordings"><b>812<\/b>/.test(r.text) && /href="#clips"><b>399<\/b>/.test(r.text), 'recordings and clips counted by Live, each a link to its section');
+        assert.ok(/class="ovv-stat is-live" href="https:\/\/openvibe\.live\/"/.test(r.text), 'with two streams live, the live now tile opens everyone live');
+        assert.ok(r.text.includes('src="https://openvibe.media/live/@elsewhere/frame.jpg?w=640"'), "a stream without Live's own thumbnail shows Media's live frame");
+        assert.ok(r.text.includes('id="recordings"') && r.text.includes('id="clips"') && r.text.includes('id="categories"'), 'the sections the stats link to');
         assert.ok(r.text.includes('Watch 812 stream recordings and 399 clips'), 'the description carries the counts');
         // Categories and channels from Search's facets: only known categories, only real usernames with two or more.
         assert.ok(r.text.includes('href="/category/gaming"') && r.text.includes('5 recordings'), 'a category with its count');
