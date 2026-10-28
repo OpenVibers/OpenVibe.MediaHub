@@ -557,3 +557,29 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 }
 @media (max-width: 420px) { .ovv-vis-card small { display: none; } }
 @media (prefers-reduced-motion: reduce) { .ovv-owner[open] { animation: none; } }
+
+/* Home, 10-28: the stats are links laid out as an even grid (the live tile first, with its pulse), the hero's actions
+   stack cleanly on a phone, and anchored sections stop clear of the sticky bar. */
+.ovv-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; margin: 1.4rem 0 0; padding: 0; list-style: none; }
+.ovv-stats > li { min-width: 0; }
+.ovv-stat { display: flex; flex-direction: column; gap: 2px; height: 100%; padding: 11px 14px; border: 1px solid var(--ovv-line); border-radius: 14px; background: var(--ovv-card); color: inherit; text-decoration: none; transition: border-color .15s, transform .15s; }
+.ovv-stat b { font-size: 1.4rem; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.ovv-stat span { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--ovv-dim); }
+.ovv-stat:hover { border-color: var(--accent, #ff7a1a); transform: translateY(-1px); }
+.ovv-stat:focus-visible { outline: 2px solid var(--accent, #ff7a1a); outline-offset: 2px; }
+.ovv-stat.is-live { border-color: color-mix(in srgb, #ef4444 55%, var(--ovv-line)); background: color-mix(in srgb, #ef4444 10%, var(--ovv-card)); }
+.ovv-stat.is-live span { color: var(--text-primary, #e6edf7); font-weight: 700; }
+.ovv-stat .ovv-dot { width: 8px; height: 8px; margin: 0; }
+html.ov-motion .ovv-stat.is-live .ovv-dot { animation: ovv-pulse 1.6s ease-out infinite; }
+@keyframes ovv-pulse { from { box-shadow: 0 0 0 0 rgba(239, 68, 68, .6); } to { box-shadow: 0 0 0 7px rgba(239, 68, 68, 0); } }
+.ovv-section[id] { scroll-margin-top: 72px; }
+@media (max-width: 560px) {
+    .ovv-hero-actions { display: grid; grid-template-columns: 1fr 1fr; }
+    .ovv-hero-actions .ovv-btn { justify-content: center; }
+    .ovv-hero-actions .ovv-btn--primary { grid-column: 1 / -1; }
+    .ovv-hero-actions > a:last-child:nth-child(3n) { grid-column: 1 / -1; }
+    .ovv-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .ovv-stat { padding: 10px 12px; }
+    .ovv-stat b { font-size: 1.2rem; }
+}
+@media (prefers-reduced-motion: reduce) { .ovv-stat { transition: none; } .ovv-stat:hover { transform: none; } }
