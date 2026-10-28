@@ -66,9 +66,9 @@ const { signJwt } = require('./helpers/mocks');
         assert.strictEqual(JSON.parse(flow).next, '/v/5902');
     });
 
-    await check('signing out clears what the browser kept of the site', async () => {
+    await check('signing out sends no Clear-Site-Data (Chrome holds such an answer until its cache is cleared: phones hung, 2026-10-28)', async () => {
         const out = await s.get('/auth/logout', { as: staff, headers: { 'sec-fetch-site': 'same-origin' } });
-        assert.strictEqual(out.headers.get('clear-site-data'), '"cache"');
+        assert.strictEqual(out.headers.get('clear-site-data'), null);
     });
 
     await check('another site cannot sign a person out; this site can', async () => {
