@@ -893,7 +893,7 @@ ${visibilityChoices(item.visibility || 'public')}
                 const started = s.started_at ? new Date(`${String(s.started_at).replace(' ', 'T')}${/[zZ]|[+-]\d\d:?\d\d$/.test(String(s.started_at)) ? '' : 'Z'}`) : null;
                 return card({
                     href: `${livePublic}/@${s.username}`, live: true, badge: 'Live',
-                    thumb: LIVE_THUMB.test(String(s.thumbnail_url || '')) ? httpsUrl(`${livePublic}${s.thumbnail_url}`) : null,
+                    thumb: LIVE_THUMB.test(String(s.thumbnail_url || '')) ? httpsUrl(`${livePublic}${s.thumbnail_url}`) : `https://openvibe.media/live/@${s.username}/frame.jpg?w=640`,
                     title: s.title || `${s.display_name || s.username} is live`,
                     channel: s.username, channelHref: `${livePublic}/@${s.username}`,
                     extra: [cat ? cat.label : null, watching > 0 ? `${watching.toLocaleString('en-US')} watching` : null].filter(Boolean).join(' · ') || null,
@@ -901,6 +901,13 @@ ${visibilityChoices(item.visibility || 'public')}
                     iso: started && !Number.isNaN(started.getTime()) ? started.toISOString() : null,
                 });
             });
+    }
+    // The same streams' names in the same order, for the "live now" tile's link.
+    function liveNames(answer) {
+        const streams = (answer && Array.isArray(answer.streams)) ? answer.streams : [];
+        return streams.filter((s) => s && !s.is_nsfw && /^[A-Za-z0-9_]{1,32}$/.test(String(s.username || '')))
+            .sort((a, b) => (Number(b.total_viewer_count ?? b.viewer_count) || 0) - (Number(a.total_viewer_count ?? a.viewer_count) || 0))
+            .slice(0, 8).map((s) => s.username);
     }
     const n = (v) => Number(v).toLocaleString('en-US');
     const HOME_FAQ = (vu) => [
@@ -935,12 +942,15 @@ ${visibilityChoices(item.visibility || 'public')}
         const categories = (shelf && shelf.categories) || [];
         const channels = ((shelf && shelf.channels) || []).filter((c) => c.count >= 2).slice(0, 12);
         const counts = totals || {};
+        const onAirNames = liveNames(onAir);
+        const liveHref = onAirNames.length === 1 ? `${livePublic}/@${onAirNames[0]}` : `${livePublic}/`;
         const stats = [
-            counts.vods ? { value: n(counts.vods), label: counts.vods === 1 ? 'stream recording' : 'stream recordings' } : null,
-            counts.clips ? { value: n(counts.clips), label: counts.clips === 1 ? 'clip' : 'clips' } : null,
-            shelf && shelf.channels.length ? { value: n(shelf.channels.length), label: shelf.channels.length === 1 ? 'channel' : 'channels' } : null,
-            categories.length ? { value: n(categories.length), label: categories.length === 1 ? 'category' : 'categories' } : null,
-            onAirCards.length ? { value: n(onAirCards.length), label: 'live now' } : null,
+            onAirCards.length ? { value: n(onAirCards.length), label: 'live now', href: liveHref, live: true,
+                title: onAirNames.length === 1 ? `Watch ${onAirNames[0]} live` : 'Everyone live on OpenVibe.Live' } : null,
+            counts.vods ? { value: n(counts.vods), label: counts.vods === 1 ? 'stream recording' : 'stream recordings', href: '#recordings' } : null,
+            counts.clips ? { value: n(counts.clips), label: counts.clips === 1 ? 'clip' : 'clips', href: '#clips' } : null,
+            shelf && shelf.channels.length ? { value: n(shelf.channels.length), label: shelf.channels.length === 1 ? 'channel' : 'channels', href: '#channels' } : null,
+            categories.length ? { value: n(categories.length), label: categories.length === 1 ? 'category' : 'categories', href: '#categories' } : null,
         ].filter(Boolean);
         const description = counts.vods && counts.clips
             ? `Watch ${n(counts.vods)} stream recordings and ${n(counts.clips)} clips from OpenVibe.Live, or upload and record your own videos, with AI captions and chapters.`
@@ -962,14 +972,14 @@ ${visibilityChoices(item.visibility || 'public')}
 <p class="ovv-lede">Recordings and clips of streams on OpenVibe.Live land here when the stream ends. Upload a video or record your camera or screen in the browser, and OpenVibe.AI adds captions, chapters and a summary. Everything you post plays on your channel at openvibe.video/@you.</p>
 <p class="ovv-hero-actions"><a class="ovv-btn ovv-btn--primary" href="/upload"><i class="fa-solid fa-upload" aria-hidden="true"></i> Upload a video</a> <a class="ovv-btn" href="/record"><i class="fa-solid fa-video" aria-hidden="true"></i> Record in the browser</a> <a class="ovv-btn" href="${livePublic}/docs/go-live-in-your-browser"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Go live from your browser</a></p>
 ${searchForm()}
-${stats.length ? html`<dl class="ovv-stats">${stats.map((s) => html`<div><dt>${s.label}</dt><dd>${s.value}</dd></div>`)}</dl>` : ''}</header>
+${stats.length ? html`<ul class="ovv-stats" role="list">${stats.map((s) => html`<li><a class="${s.live ? 'ovv-stat is-live' : 'ovv-stat'}" href="${s.href}"${s.title ? html` title="${s.title}"` : ''}><b>${s.value}</b><span>${s.live ? html`<i class="ovv-dot" aria-hidden="true"></i> ` : ''}${s.label}</span></a></li>`)}</ul>` : ''}</header>
 ${onAirCards.length ? html`<section class="ovv-section" aria-labelledby="h-live"><div class="ovv-section-head"><h2 id="h-live"><span class="ovv-dot" aria-hidden="true"></span> Live now on OpenVibe.Live</h2><a href="${livePublic}/">Everyone live</a></div>${grid(onAirCards)}</section>` : ''}
 ${uploaded.length ? html`<section class="ovv-section" aria-labelledby="h-uploads"><h2 id="h-uploads">Latest uploads</h2>${grid(uploaded.map(uploadCard))}</section>` : ''}
 ${topItems.length ? html`<section class="ovv-section" aria-labelledby="h-top"><h2 id="h-top">Most watched this month</h2>${grid(topItems.map((it) => feedCard(it, { views: true })))}</section>` : ''}
-<section class="ovv-section" aria-labelledby="h-vods"><h2 id="h-vods">Latest stream recordings</h2>${grid(vodItems.map(feedCard), 'No recordings yet.')}</section>
+<section class="ovv-section" id="recordings" aria-labelledby="h-vods"><h2 id="h-vods">Latest stream recordings</h2>${grid(vodItems.map(feedCard), 'No recordings yet.')}</section>
 ${categories.length ? html`<section class="ovv-section" id="categories" aria-labelledby="h-cats"><h2 id="h-cats">Browse by category</h2><ul class="ovv-shelf" role="list">${categories.map((c) => html`<li><a class="ovv-shelf-tile" href="/category/${c.slug}"><i class="fa-solid ${c.icon}" aria-hidden="true"></i><span class="ovv-shelf-name">${c.label}</span><span class="ovv-shelf-count">${n(c.count)} ${c.count === 1 ? 'recording' : 'recordings'}</span></a></li>`)}</ul></section>` : ''}
-<section class="ovv-section" aria-labelledby="h-clips"><h2 id="h-clips">Latest clips</h2>${grid(clipItems.map(feedCard), 'No clips yet.')}</section>
-${channels.length ? html`<section class="ovv-section" aria-labelledby="h-channels"><h2 id="h-channels">Channels</h2><ul class="ovv-people" role="list">${channels.map((c) => html`<li><a class="ovv-person" href="/@${c.username}"><span class="ovv-avatar" aria-hidden="true">${c.username.slice(0, 1).toUpperCase()}<img src="${config.networkUrl}/avatar/${c.username}" alt="" loading="lazy" width="42" height="42"></span><span class="ovv-person-text"><span class="ovv-person-name">@${c.username}</span><span class="ovv-person-count">${n(c.count)} ${c.count === 1 ? 'recording' : 'recordings'}</span></span></a></li>`)}</ul></section>` : ''}
+<section class="ovv-section" id="clips" aria-labelledby="h-clips"><h2 id="h-clips">Latest clips</h2>${grid(clipItems.map(feedCard), 'No clips yet.')}</section>
+${channels.length ? html`<section class="ovv-section" id="channels" aria-labelledby="h-channels"><h2 id="h-channels">Channels</h2><ul class="ovv-people" role="list">${channels.map((c) => html`<li><a class="ovv-person" href="/@${c.username}"><span class="ovv-avatar" aria-hidden="true">${c.username.slice(0, 1).toUpperCase()}<img src="${config.networkUrl}/avatar/${c.username}" alt="" loading="lazy" width="42" height="42"></span><span class="ovv-person-text"><span class="ovv-person-name">@${c.username}</span><span class="ovv-person-count">${n(c.count)} ${c.count === 1 ? 'recording' : 'recordings'}</span></span></a></li>`)}</ul></section>` : ''}
 <section class="ovv-section" aria-labelledby="h-how"><h2 id="h-how">How it works</h2><ol class="ovv-steps">
 <li><h3>Stream or upload</h3><p>Go live on OpenVibe.Live from your browser and the recording comes here, or upload a file: MP4, MOV, WebM or MKV up to ${formatBytes(config.videoUploads.maxBytes)}.</p></li>
 <li><h3>Let AI do the busywork</h3><p>OpenVibe.AI writes captions, chapters and a summary. On an upload, the AI cut can make an edited copy with the pauses taken out.</p></li>
