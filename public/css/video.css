@@ -582,3 +582,23 @@ html.ov-motion .ovv-stat.is-live .ovv-dot { animation: ovv-pulse 1.6s ease-out i
     .ovv-stat b { font-size: 1.2rem; }
 }
 @media (prefers-reduced-motion: reduce) { .ovv-stat { transition: none; } .ovv-stat:hover { transform: none; } }
+
+/* The home on phones (2026-10-29): a taste and a door. Each video list is one row that scrolls sideways (every video is
+   still there), eight channels show, the figures are one strip, and how it works folds under its heading. */
+.ovv-fold { border: 1px solid var(--border, #1f2d47); border-radius: 14px; background: var(--bg-card, #131c2e); }
+.ovv-fold > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 52px; padding: 0 16px; cursor: pointer; list-style: none; }
+.ovv-fold > summary::-webkit-details-marker { display: none; }
+.ovv-fold > summary h2 { margin: 0; }
+.ovv-fold > summary span { color: var(--text-muted, #7386a3); font-weight: 600; font-size: .86rem; text-align: right; }
+.ovv-fold > summary:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: -2px; border-radius: 14px; }
+.ovv-fold > .ovv-steps { padding: 0 16px 16px; }
+@media (max-width: 599px) {
+  .ovv-row .ovv-grid { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 16px; scrollbar-width: none; gap: 12px; margin-left: -16px; margin-right: -16px; padding: 0 16px 4px; }
+  .ovv-row .ovv-grid::-webkit-scrollbar { display: none; }
+  .ovv-row .ovv-grid > * { flex: 0 0 46%; min-width: 0; scroll-snap-align: start; }
+  #channels .ovv-people > li:nth-child(n+9) { display: none; }
+  .ovv-hero .ovv-stats { display: flex; overflow-x: auto; scrollbar-width: none; gap: 8px; margin-left: -16px; margin-right: -16px; padding: 0 16px 2px; }
+  .ovv-hero .ovv-stats::-webkit-scrollbar { display: none; }
+  .ovv-hero .ovv-stats > li { flex: 0 0 auto; width: 132px; }
+  .ovv-fold > summary span { display: none; }
+}
