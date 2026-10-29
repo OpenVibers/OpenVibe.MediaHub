@@ -1745,7 +1745,7 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
 
     r.get('/robots.txt', (_req, res) => {
         return res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 }))
-            .send(`# openvibe.video: the public watch pages are for search and AI crawlers.\n${seo.robotsTxt({ sitemaps: [`${base}/sitemap.xml`] })}`);
+            .send(`# openvibe.video: the public watch pages are for search and AI crawlers.\n${seo.robotsTxt({ sitemaps: [`${base}/sitemap.xml`] })}\n# Agent manifest: ${base}/.well-known/agent.json\n`);
     });
     // RFC 9116, canonical to this host (openvibe.video), not the drive's.
     r.get('/.well-known/security.txt', securityTxt.handler(base));

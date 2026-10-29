@@ -168,6 +168,27 @@ async function createApp(opts = {}) {
     const picsRoutes = createPicsRoutes(ctx);
     // GET /<key>.txt on the video host: IndexNow's key file, only when a key is configured.
     if (ctx.indexnow.enabled) app.use((req, res, next) => (videoHost && req.hostname === videoHost ? ctx.indexnow.keyFile(req, res, next) : next()));
+    // The agent layer (openvibe-shared/agent-layer) on the video host: /.well-known/agent.json and the Markdown
+    // twins of the public watch pages. Before the video routes, so a twin is the page's own render and never a
+    // route of its own; on the video host only, so the drive never answers with the video's manifest.
+    // A twin request and the manifest only: the layer renders every page as a signed-out visitor, and a watch page
+    // is not one page (the owner's Manage panel, a signed-in person's playlist form). Anything else is the app's
+    // own page, which names its twin in the head and the Link header itself (server/video/layout.js).
+    if (videoHost) {
+        const agentRouter = express.Router();
+        require('openvibe-shared/agent-layer').mount(agentRouter, {
+            descriptor: require('./agent-descriptor'),
+            render: require('./video/agent-pages').createAgentPages({ router: videoRoutes, videoHost }).renderPublicPage,
+        });
+        const wantsTwin = (req) => /\.md$/.test(req.path)
+            || req.query.format === 'markdown'
+            || req.accepts(['html', 'text/markdown']) === 'text/markdown';
+        app.use((req, res, next) => {
+            if (req.hostname !== videoHost) return next();
+            if (req.path === '/.well-known/agent.json' || wantsTwin(req)) return agentRouter(req, res, next);
+            return next();
+        });
+    }
     app.use((req, res, next) => {
         if (videoHost && req.hostname === videoHost) return videoRoutes(req, res, next);
         if (picsHost && req.hostname === picsHost) return picsRoutes(req, res, next);
