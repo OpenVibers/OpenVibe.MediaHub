@@ -29,6 +29,7 @@ const { createPrincipal } = require('./http/principal');
 const { createSyncKeys } = require('./drive/syncKeys');
 const { createDrops } = require('./drive/drops');
 const { createApi } = require('./http/api');
+const openapi = require('./http/openapi');
 const { createPageRoutes } = require('./http/pages');
 const { createVideoRoutes } = require('./video/pages');
 const { createPicsRoutes } = require('./pics/pages');
@@ -159,6 +160,10 @@ async function createApp(opts = {}) {
     // /release.json (and loopback /metrics) answer on both hosts: the shared release check on openvibe.video reads its own
     // origin's /release.json, and so does the host's browser watch.
     release.mount(app, { registry: metrics.registry });
+
+    // GET /openapi.json: the public OpenAPI 3.1 document (server/http/openapi.js), one per request host. Mounted
+    // before host routing so openvibe.video and openvibe.pics serve it too.
+    openapi.mount(app, { hosts: [config.baseUrl, config.video.url, config.pics.url] });
 
     // ── Host routing: openvibe.video is OpenVibe.Video, openvibe.pics is OpenVibe.Pics; every other host
     // (openvibe.download) stays the drive. On those hosts the drive's pages, API and legal pages never answer.

@@ -72,7 +72,7 @@ async function boot(opts = {}) {
     }
 
     const t = {
-        base, network, media, config, ctx: built.ctx, get, signIn, dbDump,
+        base, network, media, config, ctx: built.ctx, app: built.app, get, signIn, dbDump,
         logs: () => captured.join('\n'),
         async close() {
             await new Promise((r) => server.close(r));
