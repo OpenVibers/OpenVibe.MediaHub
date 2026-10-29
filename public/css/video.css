@@ -597,7 +597,7 @@ html.ov-motion .ovv-stat.is-live .ovv-dot { animation: ovv-pulse 1.6s ease-out i
   .ovv-row .ovv-grid::-webkit-scrollbar { display: none; }
   .ovv-row .ovv-grid > * { flex: 0 0 46%; min-width: 0; scroll-snap-align: start; }
   #channels .ovv-people > li:nth-child(n+9) { display: none; }
-  .ovv-hero .ovv-stats { display: flex; overflow-x: auto; scrollbar-width: none; gap: 8px; margin-left: -16px; margin-right: -16px; padding: 0 16px 2px; }
+  .ovv-hero .ovv-stats { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 8px; margin-left: -16px; margin-right: -16px; padding: 0 16px 2px; }
   .ovv-hero .ovv-stats::-webkit-scrollbar { display: none; }
   .ovv-hero .ovv-stats > li { flex: 0 0 auto; width: 132px; }
   .ovv-fold > summary span { display: none; }
