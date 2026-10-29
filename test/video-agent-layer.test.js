@@ -76,7 +76,10 @@ function vreq(base, path, { method = 'GET', cookie, host = 'openvibe.video', acc
         assert.strictEqual(d.sitemap, 'https://openvibe.video/sitemap.xml');
         assert.deepStrictEqual(d.policy.auth, ['none', 'Network OIDC']);
         const drive = await vreq(t.base, '/.well-known/agent.json', { host: 'openvibe.download' });
-        assert.strictEqual(drive.status, 404, 'the drive does not answer with the video manifest');
+        assert.strictEqual(drive.status, 200, 'the drive answers with its own manifest');
+        const dd = JSON.parse(drive.text);
+        assert.strictEqual(dd.id, 'download', 'the drive does not answer with the video manifest');
+        assert.strictEqual(dd.site, 'openvibe.download');
     });
 
     await check('a recording\'s twin is the page\'s own render', async () => {
