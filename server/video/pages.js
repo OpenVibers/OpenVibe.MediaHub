@@ -23,6 +23,7 @@
 const express = require('express');
 const path = require('path');
 const cache = require('openvibe-shared/cache-policy');
+const securityTxt = require('../http/security-txt');
 const seo = require('openvibe-shared/seo');
 const ovServe = require('openvibe-shared/serve');
 const { asyncRouter } = require('../http/router');
@@ -1746,6 +1747,8 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
         return res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 }))
             .send(`# openvibe.video: the public watch pages are for search and AI crawlers.\n${seo.robotsTxt({ sitemaps: [`${base}/sitemap.xml`] })}`);
     });
+    // RFC 9116, canonical to this host (openvibe.video), not the drive's.
+    r.get('/.well-known/security.txt', securityTxt.handler(base));
 
     r.get('/llms.txt', async (req, res) => {
         const [vods, clips] = await Promise.all([

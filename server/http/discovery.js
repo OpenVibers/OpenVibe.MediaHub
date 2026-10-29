@@ -12,6 +12,7 @@ const path = require('path');
 const seo = require('openvibe-shared/seo');
 const cache = require('openvibe-shared/cache-policy');
 const { asyncRouter } = require('./router');
+const securityTxt = require('./security-txt');
 
 const SITE_NAME = 'OpenVibe.Download';
 const DESCRIPTION = 'A private drive on your OpenVibe account: upload files, share them with links you can take back, and back up a folder from your computer.';
@@ -113,6 +114,9 @@ function createDiscoveryRoutes(ctx) {
         const urls = publicPages().map((e) => ({ loc: abs(e.path), ...(lastmod ? { lastmod } : {}), changefreq: e.changefreq, priority: e.priority }));
         res.type('application/xml').set('Cache-Control', TEXT).send(seo.sitemapXml(urls));
     });
+
+    // RFC 9116: the host's own canonical URL, this service's drive host.
+    r.get('/.well-known/security.txt', securityTxt.handler(site));
 
     return r;
 }
