@@ -1739,7 +1739,9 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
             ...((shelf && shelf.categories) || []).filter((c) => c.count >= 4).map((c) => ({ loc: `${base}/category/${c.slug}` })),
             ...items.map((it) => {
                 const video = sitemapVideo(it);
-                return { loc: `${base}${it.kind === 'clip' ? '/c/' : '/v/'}${Number(it.id)}`, lastmod: day(it.created_at), ...(video ? { videos: [video] } : {}) };
+                // The same thumbnail as an <image:image> on the video's own entry (SEO-17): an image entry needs a URL
+                // this site really serves, and sitemapVideo only builds one from a thumbnail that exists and is https.
+                return { loc: `${base}${it.kind === 'clip' ? '/c/' : '/v/'}${Number(it.id)}`, lastmod: day(it.created_at), ...(video ? { videos: [video], images: [video.thumbnail_loc] } : {}) };
             }),
             ...uploaded.map((x) => ({ loc: `${base}/u/${x.id}`, lastmod: day(x.updated_at) })),
             ...[...channels].map(([u, d]) => ({ loc: `${base}/@${u}`, lastmod: d })),

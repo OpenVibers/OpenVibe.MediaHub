@@ -4,6 +4,7 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
 
 ## Unreleased
 
+- openvibe.video's sitemap carries an image entry per video (SEO-17): the same entry that names `<video:video>` also names its thumbnail as `<image:image><image:loc>` — built from the thumbnail the video entry already has, so it is only there when the URL exists and is https. Entries without a thumbnail keep no image, the video entries and the ten-minute cache are unchanged, and openvibe.download's private shares and openvibe.pics (`/i/` is in its robots' disallow) are untouched. `test/video-pages.test.js` pins one image per video entry, the same URL as its `thumbnail_loc`.
 - openvibe.video's search basics (2026-10-20). A watch page nobody wrote about gets a description of its own (who,
   how long, when, its first words) instead of the site tagline. A recording under two minutes with nothing written
   about it is noindex and out of the sitemap: 118 of 785 were under a minute, mostly test streams. The sitemap lists
