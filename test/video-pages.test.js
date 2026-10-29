@@ -10,6 +10,14 @@ const assert = require('assert');
 const http = require('http');
 const { boot, check, done } = require('./helpers/boot');
 
+function graphOf(html) {
+    const scripts = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];
+    assert.strictEqual(scripts.length, 1, 'one JSON-LD script');
+    const graph = JSON.parse(scripts[0][1]);
+    assert.strictEqual(graph['@context'], 'https://schema.org');
+    return graph['@graph'];
+}
+
 function startLive() {
     const vodFeedItem = {
         key: 'vod:101', kind: 'vod', id: 101, title: 'A public recording',
@@ -311,7 +319,7 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('Latest stream recordings'));
         assert.ok(r.text.includes('Latest clips'));
         assert.ok(r.text.includes('/v/101'));
-        const ld = [...r.text.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap((m) => [].concat(JSON.parse(m[1])));
+        const ld = graphOf(r.text);
         assert.ok(ld.some((n) => n['@type'] === 'WebSite' && n.name === 'OpenVibe.Video'), 'the home says what the site is (JSON-LD)');
         assert.ok(r.text.includes('/c/201'));
         assert.ok(!r.text.includes('/v/102'), 'the unlisted VOD is not in a list');
@@ -336,7 +344,7 @@ function countOccurrences(haystack, needle) {
         assert.ok(/<video class="ovv-player" data-ov-player controls /.test(r.text), 'the video takes the network player');
         assert.ok(/<link rel="stylesheet" href="\/shared\/player\.css\?v=[0-9a-f]+">/.test(r.text) && /<script src="\/shared\/player\.js\?v=[0-9a-f]+" defer><\/script>/.test(r.text), 'player.css and player.js load');
         assert.ok(r.text.includes('data-ovv-view="https://openvibe.live/api/views/vod/101"'), 'playback counts a view on Live');
-        const ld = [...r.text.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])).find((x) => x['@type'] === 'VideoObject');
+        const ld = graphOf(r.text).find((x) => x['@type'] === 'VideoObject');
         assert.ok(ld, 'a VideoObject');
         assert.strictEqual(ld.url, 'https://openvibe.video/v/101');
         assert.strictEqual(ld.name, 'A public recording');
@@ -345,6 +353,8 @@ function countOccurrences(haystack, needle) {
         assert.deepStrictEqual(ld.thumbnailUrl, ['https://openvibe.media/t/101.jpg']);
         assert.strictEqual(ld.contentUrl, 'https://openvibe.media/v/101?raw=1', 'Media answers bots a page without ?raw=1');
         assert.deepStrictEqual(ld.author, { '@type': 'Person', name: 'Streamer', url: 'https://openvibe.video/@streamer' });
+        assert.deepStrictEqual(ld.creator, ld.author);
+        assert.strictEqual(ld.isLiveBroadcast, undefined, 'recordings are not live broadcasts');
         assert.ok(Array.isArray(ld.hasPart) && ld.hasPart.length >= 1 && ld.hasPart.every((c) => c['@type'] === 'Clip' && Number.isInteger(c.startOffset) && c.url.startsWith('https://openvibe.video/v/101?t=')), 'chapters as key moments');
         assert.match(r.text, /<meta property="og:image" content="https:\/\/openvibe\.media\/t\/101\.jpg"/, 'the thumbnail is the share image');
         assert.ok(r.text.includes('data-ovv-hls="https://openvibe.media/o/med_101/master.m3u8"'), 'the timeline playlist');
@@ -367,8 +377,11 @@ function countOccurrences(haystack, needle) {
         const r = await getVideo('/c/201');
         assert.strictEqual(r.status, 200);
         assert.ok(r.text.includes('data-ovv-view="https://openvibe.live/api/views/clip/201"'), 'playback counts a clip view on Live');
-        const cld = [...r.text.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])).find((x) => x['@type'] === 'VideoObject');
+        const cld = graphOf(r.text).find((x) => x['@type'] === 'VideoObject');
         assert.ok(cld && cld.url === 'https://openvibe.video/c/201', 'a clip VideoObject');
+        assert.deepStrictEqual(cld.creator, cld.author);
+        assert.strictEqual(cld.creator.url, 'https://openvibe.video/@clipper');
+        assert.strictEqual(cld.isLiveBroadcast, undefined);
         assert.deepStrictEqual(cld.isPartOf, { '@type': 'VideoObject', url: 'https://openvibe.video/v/101' }, 'part of its recording');
         assert.strictEqual(cld.duration, 'PT10S');
         assert.ok(r.text.includes('src="https://openvibe.media/c/201"'), 'the clip playback url');
@@ -462,7 +475,7 @@ function countOccurrences(haystack, needle) {
         assert.ok(!r.text.includes('not-a-category'), 'an unknown category is not shown');
         assert.ok(r.text.includes('href="/@streamer"') && r.text.includes('3 recordings'), 'a channel with its count');
         assert.ok(!r.text.includes('bad name!') && !r.text.includes('href="/@once"'), 'a bad name and a one-recording channel are left out');
-        const ld = [...r.text.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap((m) => [].concat(JSON.parse(m[1])));
+        const ld = graphOf(r.text);
         const faq = ld.find((x) => x['@type'] === 'FAQPage');
         assert.ok(faq && faq.mainEntity.length >= 5, 'FAQPage structured data');
         const shown = [...r.text.matchAll(/<summary>([^<]*)<\/summary>/g)].map((m) => m[1].replace(/&#39;/g, "'"));
@@ -556,6 +569,7 @@ function countOccurrences(haystack, needle) {
     await check('the sitemap carries a video entry for each listed recording and clip', async () => {
         const map = (await getVideo('/sitemap.xml')).text;
         assert.ok(map.includes('xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"'));
+        assert.ok(!map.includes('<video:live>'), 'recordings and clips are not currently live');
         assert.ok(map.includes('<loc>https://openvibe.video/v/101</loc><lastmod>2026-10-12</lastmod><video:video><video:thumbnail_loc>https://openvibe.media/t/101.jpg</video:thumbnail_loc>'
             + '<video:title>A public recording</video:title><video:description>A public stream</video:description>'
             + '<video:content_loc>https://openvibe.media/v/101?raw=1</video:content_loc><video:duration>45</video:duration><video:view_count>100</video:view_count>'

@@ -45,6 +45,11 @@ function hasTwin(path) {
 /** o: title, description, body (html), config, path, index, noindex, viewer, private, crumbs [{label, href}], scripts [rel],
  *     player (true: the network's video player, openvibe-shared player.js/css, on video[data-ov-player]),
  *     jsonLd (structured data for the page), image (its share image, an https URL), ogType */
+function oneGraph(nodes) {
+    if (!nodes || ![].concat(nodes).length) return undefined;
+    return { '@context': 'https://schema.org', '@graph': [].concat(nodes).map(({ '@context': _context, ...node }) => node) };
+}
+
 function renderPage(o) {
     // The front page's title says what the site is (search results show it; at most 60 characters).
     const title = o.title || (o.path === '/' ? `${SITE_NAME}: upload, record and watch, with AI captions` : SITE_NAME);
@@ -80,7 +85,7 @@ ${render(o.body)}
         description: o.description || `${SITE_NAME} — ${TAGLINE}`,
         canonical,
         robots: o.noindex ? 'noindex' : (o.index ? 'index, follow' : 'noindex, nofollow'),
-        ...(o.jsonLd ? { jsonLd: o.jsonLd } : {}),
+        ...(o.jsonLd ? { jsonLd: oneGraph(o.jsonLd) } : {}),
         ...(o.image ? { image: o.image, imageAlt: title } : {}),
         ...(o.ogType ? { type: o.ogType } : {}),
         home: '/',

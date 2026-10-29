@@ -280,7 +280,12 @@ function videoLd({ base, path, item, title, description, chapterList, partOf }) 
             duration: isoDuration(item.duration_seconds), contentUrl: crawlFile(fileOf(item)) || undefined, embedUrl: pageUrl,
         }),
         ...(item.view_count != null ? { interactionStatistic: { '@type': 'InteractionCounter', interactionType: 'https://schema.org/WatchAction', userInteractionCount: Number(item.view_count) || 0 } } : {}),
-        ...(channel ? { author: { '@type': 'Person', name: channel, ...(item.username ? { url: `${base}/@${item.username}` } : {}) } } : {}),
+        author: channel && item.username
+            ? { '@type': 'Person', name: channel, url: `${base}/@${item.username}` }
+            : { '@type': 'Organization', name: 'OpenVibe.Video', url: `${base}/` },
+        creator: channel && item.username
+            ? { '@type': 'Person', name: channel, url: `${base}/@${item.username}` }
+            : { '@type': 'Organization', name: 'OpenVibe.Video', url: `${base}/` },
         publisher: { '@type': 'Organization', name: 'OpenVibe', url: 'https://openvibe.network' },
         ...(parts.length ? { hasPart: parts } : {}),
         ...(partOf ? { isPartOf: { '@type': 'VideoObject', url: `${base}${partOf}` } } : {}),
