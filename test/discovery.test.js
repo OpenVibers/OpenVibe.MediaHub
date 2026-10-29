@@ -7,6 +7,7 @@
  */
 const assert = require('assert');
 const fs = require('fs');
+const http = require('http');
 const path = require('path');
 const { boot, check, done } = require('./helpers/boot');
 
@@ -14,9 +15,45 @@ const STATUS_UPDATED = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'ST
 // llms.txt names the public machine endpoints on purpose, so only sign-in and the API are private there.
 const PRIVATE = ['/auth/', '/api/'];
 
+/** A GET with a chosen Host, through node's http: fetch() silently drops a Host header, and this app routes on it. */
+function onHost(base, p, host) {
+    const u = new URL(base);
+    return new Promise((resolve, reject) => {
+        http.get({ host: u.hostname, port: u.port, path: p, headers: { host } }, (res) => {
+            let body = '';
+            res.setEncoding('utf8');
+            res.on('data', (d) => { body += d; });
+            res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text: body }));
+        }).on('error', reject);
+    });
+}
+
 (async () => {
     const t = await boot();
     try {
+        await check('security.txt: RFC 9116 on every host, canonical to that host', async () => {
+            // The drive host, then the two product hosts that share this app, each with its own Canonical.
+            for (const site of ['openvibe.download', 'openvibe.video', 'openvibe.pics']) {
+                const r = await onHost(t.base, '/.well-known/security.txt', site);
+                const where = site;
+                assert.strictEqual(r.status, 200, `${where} answers security.txt`);
+                assert.strictEqual(r.headers['content-type'], 'text/plain; charset=utf-8', `${where} is text/plain; charset=utf-8`);
+                assert.strictEqual(r.headers['cache-control'], 'public, max-age=86400', `${where} is cached for a day`);
+                const fields = new Map();
+                for (const line of r.text.split('\n')) if (line.trim()) {
+                    const m = line.match(/^([A-Za-z-]+): (.+)$/);
+                    assert.ok(m, `${where}: every line is "Name: value" (got "${line}")`);
+                    fields.set(m[1], m[2]);
+                }
+                for (const key of ['Contact', 'Expires', 'Preferred-Languages', 'Canonical', 'Policy']) assert.ok(fields.has(key), `${where} names ${key}`);
+                assert.strictEqual(fields.get('Contact'), 'mailto:security@openvibe.network');
+                assert.ok(Date.parse(fields.get('Expires')) > Date.now(), `${where}: Expires is in the future`);
+                const canonical = new URL(fields.get('Canonical'));
+                assert.strictEqual(canonical.host, site, `${where}: Canonical is the site's own host`);
+                assert.strictEqual(canonical.pathname, '/.well-known/security.txt');
+            }
+        });
+
         await check('robots.txt: 200 text/plain, sign-in and the API disallowed, the public pages crawlable, sitemap named', async () => {
             const r = await t.get('/robots.txt');
             assert.strictEqual(r.status, 200);

@@ -23,6 +23,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const cache = require('openvibe-shared/cache-policy');
+const securityTxt = require('../http/security-txt');
 const seo = require('openvibe-shared/seo');
 const ovServe = require('openvibe-shared/serve');
 const frame = require('openvibe-shared/frame');
@@ -577,6 +578,8 @@ ${row.state === 'hidden' ? html`<button class="ovp-btn" name="action" value="res
     // The indexable pages: the home, the update log and the rules. No picture or album is ever listed.
     r.get('/sitemap.xml', (_req, res) => res.type('application/xml').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 }))
         .send(seo.sitemapXml(['/', '/updates', ...legal.PATHS].map((p) => ({ loc: `${base}${p}` })))));
+    // RFC 9116, canonical to this host (openvibe.pics).
+    r.get('/.well-known/security.txt', securityTxt.handler(base));
     r.get('/llms.txt', (_req, res) => res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(seo.llmsTxt({
         name: SITE_NAME,
         summary: 'Picture hosting on the OpenVibe network: upload a picture, get a link to share or embed, albums, any size or format.',
