@@ -16,6 +16,7 @@ const appIcon = require('openvibe-shared/app-icon');
 const ovServe = require('openvibe-shared/serve');
 const shell = require('openvibe-shared/shell');
 const cache = require('openvibe-shared/cache-policy');
+const seo = require('openvibe-shared/seo');
 const { html, raw, esc, render } = require('../render/html');
 
 const NETWORK_URL = 'https://openvibe.network';
@@ -32,6 +33,14 @@ function assetVersion(rel) {
     return v;
 }
 const asset = (rel) => `/${rel}?v=${assetVersion(rel)}`;
+
+// The pages with a Markdown twin (openvibe-shared/agent-layer): the home and the watch pages of a
+// recording and a clip. The others (search, categories, an account's playlists) have none.
+const TWIN_PATH_RE = /^\/(?:v|c)\/\d+$/;
+function hasTwin(path) {
+    const p = String(path || '/').split('?')[0].replace(/\/+$/, '') || '/';
+    return p === '/' || TWIN_PATH_RE.test(p);
+}
 
 /** o: title, description, body (html), config, path, index, noindex, viewer, private, crumbs [{label, href}], scripts [rel],
  *     player (true: the network's video player, openvibe-shared player.js/css, on video[data-ov-player]),
@@ -75,6 +84,9 @@ ${render(o.body)}
         ...(o.image ? { image: o.image, imageAlt: title } : {}),
         ...(o.ogType ? { type: o.ogType } : {}),
         home: '/',
+        // The pages with a twin name it, so a reader (or an agent) finds the Markdown of this page.
+        agentLayer: hasTwin(pathNow),
+        llms: '/llms.txt',
         navLinks: NAV_LINKS,
         navbar: {
             service: 'media-hub',
@@ -117,6 +129,11 @@ const GUEST_HTML = 'public, max-age=0, must-revalidate';
 function send(res, status, o) {
     if (!res.get('Cache-Control')) res.set('Cache-Control', o.cache || (o.private ? cache.htmlHeaders({ private: true }) : GUEST_HTML));
     res.set('Vary', 'Host');
+    // A page with a twin names it in the Link header, the same way the twin names the page.
+    if (hasTwin(o.path)) {
+        const canonical = `${String(o.baseUrl).replace(/\/+$/, '')}${String(o.path || '/').split('?')[0]}`;
+        res.set('Link', seo.linkHeaderTags(canonical, '/llms.txt').header);
+    }
     res.status(status).type('html').send(renderPage(o));
 }
 
