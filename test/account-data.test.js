@@ -8,7 +8,10 @@
  * and the confirmation it was sent (test/helpers/mocks.js).
  */
 const assert = require('assert');
+const { uncovered } = require('openvibe-sdk/account-data');
 const { signDeliveryHeaders } = require('openvibe-sdk/events');
+const { TABLES } = require('../server/account');
+const { testDb } = require('./helpers/db');
 const { boot, check, done } = require('./helpers/boot');
 const { SAME, bytes, upload, share } = require('./helpers/drive');
 
@@ -17,6 +20,20 @@ const EXPORT = 'exp_01JABCDEFGHJKMNPQRSTVWXYZ0';
 const DELETION = 'del_01JABCDEFGHJKMNPQRSTVWXYZ0';
 
 (async () => {
+    await check('every table that names a person is covered or exempted with a reason', async () => {
+        const d = await testDb();
+        try {
+            const missing = await uncovered(d.db, {
+                tables: TABLES,
+                exempt: {
+                    account_data_events: 'the ledger of requests itself: which export and deletion MediaHub applied',
+                    pics_blocklist: 'staff\'s record of pictures taken down, not the person\'s data',
+                },
+            });
+            assert.deepStrictEqual(missing, [], `a table with a person column is neither covered nor exempted: ${missing.join(', ')}`);
+        } finally { await d.close(); }
+    });
+
     const t = await boot({ env: { MEDIAHUB_EVENTS_SECRET: SECRET } });
     const kim = t.network.addUser('kim');
     const sam = t.network.addUser('sam');
