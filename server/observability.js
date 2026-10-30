@@ -14,7 +14,7 @@
 const { jwksStatus } = require('openvibe-sdk/auth');
 const { createReadiness } = require('openvibe-shared/ready');
 
-function createServiceReadiness({ s, config, valkey = null, release = null }) {
+function createServiceReadiness({ s, config, valkey = null, release = null, sso = null }) {
     return createReadiness({
         service: 'media-hub',
         release,
@@ -37,7 +37,17 @@ function createServiceReadiness({ s, config, valkey = null, release = null }) {
                     return { ok: true, detail: { keys: first.keys, failures: first.failures, stale: first.stale, fetched_at: first.fetchedAt } };
                 },
             },
-            { name: 'oauth_client', required: false, check: () => (config.oauth.clientSecret ? true : 'OV_OAUTH_CLIENT_SECRET unset: sign-in and Media calls cannot complete') },
+            {
+                name: 'oauth_client', required: true,
+                check: async () => {
+                    if (!config.oauth.clientSecret) return 'OV_OAUTH_CLIENT_SECRET unset: sign-in and Media calls cannot complete';
+                    if (!sso) return true;
+                    // 'invalid': the Network refuses this client, so a deploy with a wrong secret fails at once.
+                    // 'unknown' (the Network did not answer the probe) leaves readiness alone.
+                    const client = await sso.client.checkClient();
+                    return client === 'invalid' ? 'the Network refuses this OAuth client: check OV_OAUTH_CLIENT_ID / OV_OAUTH_CLIENT_SECRET' : true;
+                },
+            },
         ],
     });
 }
