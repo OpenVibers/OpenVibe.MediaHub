@@ -125,7 +125,8 @@ function jwk(k, kid) { return { ...k.export({ format: 'jwk' }), use: 'sig', alg:
         assert.ok(!/127\.0\.0\.1|\.well-known\/jwks|ECONNREFUSED|fetch failed/i.test(readyText),
             `/api/ready leaks the JWKS URL or the fetch error: ${readyText.slice(0, 400)}`);
         const me = await t.get('/auth/me', { cookie: `media-hub_at=${token}` });
-        assert.strictEqual(me.status, 401, `an unverifiable session token is 401: ${me.status} ${me.text.slice(0, 200)}`);
+        assert.strictEqual(me.status, 200, `an unverifiable session token is signed out: ${me.status} ${me.text.slice(0, 200)}`);
+        assert.strictEqual(me.json().user, null);
         assert.ok(!/127\.0\.0\.1|\.well-known\/jwks|ECONNREFUSED|fetch failed/i.test(me.text),
             `the sign-in answer leaks the JWKS URL or the fetch error: ${me.text.slice(0, 300)}`);
         await t.close();
@@ -137,7 +138,8 @@ function jwk(k, kid) { return { ...k.export({ format: 'jwk' }), use: 'sig', alg:
         // Signed by the Network, but exp is an hour in the past: the SDK's Math.floor(now / 1000) must see it.
         const expired = t.network.userToken(u, { ttl: -3600 });
         const me = await t.get('/auth/me', { cookie: `media-hub_at=${expired}` });
-        assert.strictEqual(me.status, 401, `an expired cookie is not a session: ${me.status} ${me.text.slice(0, 200)}`);
+        assert.strictEqual(me.status, 200, `an expired cookie is signed out: ${me.status} ${me.text.slice(0, 200)}`);
+        assert.strictEqual(me.json().user, null, 'an expired cookie is not a session');
         const page = await t.get('/', { cookie: `media-hub_at=${expired}` });
         assert.ok(page.status < 400, `a page still renders: ${page.status}`);
         assert.ok(!page.text.includes('expired-demo'), 'the expired token signed nobody in');
