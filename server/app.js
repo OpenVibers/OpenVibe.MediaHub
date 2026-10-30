@@ -202,7 +202,7 @@ async function createApp(opts = {}) {
 
     // ── Machine endpoints ───────────────────────────────────
     app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'openvibe-media-hub', version: VERSION }));
-    const readiness = createServiceReadiness({ s, config, release: release.release, valkey });
+    const readiness = createServiceReadiness({ s, config, release: release.release, valkey, sso });
     app.get('/api/ready', readiness.handler);
 
     // ── Account export and deletion (ADR-033) ───────────────

@@ -24,7 +24,8 @@ const { signJwt } = require('./helpers/mocks');
     await check('a FedCM assertion is not a session (it signs nobody in)', async () => {
         const cookie = `media-hub_at=${fedcm()}`;
         const me = await s.get('/auth/me', { cookie });
-        assert.strictEqual(me.status, 401, 'an assertion for another site is not a session here');
+        assert.strictEqual(me.status, 200, 'a signed-out answer, not an error');
+        assert.strictEqual(JSON.parse(me.text).user, null, 'an assertion for another site is not a session here');
         const page = await s.get('/', { cookie });
         assert.ok(!page.text.includes(`Signed in as <strong>${staff.username}`), 'the page shows nobody signed in');
     });
@@ -32,16 +33,20 @@ const { signJwt } = require('./helpers/mocks');
     await check('an app token is not a session', async () => {
         const token = signJwt({ iss: s.network.url, sub: `app:${APP}`, actor_type: 'app', aud: ['openvibe.network'], cap: ['x.y.z'], subject_id: staff.subject, iat: now(), exp: now() + 300 }, s.network.privatePem);
         const me = await s.get('/auth/me', { cookie: `media-hub_at=${token}` });
-        assert.strictEqual(me.status, 401);
+        assert.strictEqual(me.status, 200);
+        assert.strictEqual(JSON.parse(me.text).user, null);
     });
 
-    await check('/auth/me: a guest is signed out (200 { user: null }); a session cookie that fails is 401', async () => {
+    await check('/auth/me: a guest and a session that fails are both 200 { user: null } (the SDK shape)', async () => {
         const guest = await s.get('/auth/me');
         assert.strictEqual(guest.status, 200, 'no session cookie at all: not an error');
         assert.deepStrictEqual(JSON.parse(guest.text), { user: null });
         assert.strictEqual(guest.headers.get('cache-control'), 'private, no-store');
-        assert.strictEqual((await s.get('/auth/me', { cookie: 'media-hub_at=garbage' })).status, 401, 'a present but invalid access cookie');
-        assert.strictEqual((await s.get('/auth/me', { cookie: 'media-hub_rt=stale' })).status, 401, 'a refresh cookie alone is a session that did not resolve');
+        for (const cookie of ['media-hub_at=garbage', 'media-hub_rt=stale']) {
+            const r = await s.get('/auth/me', { cookie });
+            assert.strictEqual(r.status, 200, `${cookie}: a signed-out answer, not an error`);
+            assert.strictEqual(JSON.parse(r.text).user, null, `${cookie} signs nobody in`);
+        }
         assert.strictEqual((await s.get('/auth/me', { as: staff })).status, 200);
     });
 
@@ -62,8 +67,9 @@ const { signJwt } = require('./helpers/mocks');
     await check('a quiet sign-in from a video page comes back to that page, not the home page', async () => {
         const r = await s.get(`/auth/login?silent=1&next=${encodeURIComponent('https://openvibe.video/v/5902')}`);
         assert.strictEqual(r.status, 302);
-        const flow = decodeURIComponent((String(r.headers.get('set-cookie') || '').match(/media-hub_oauth=([^;]+)/) || [])[1] || '');
-        assert.strictEqual(JSON.parse(flow).next, '/v/5902');
+        const nextCookie = r.headers.getSetCookie().find((c) => c.startsWith('ov_oauth_next='));
+        assert.ok(nextCookie, 'the page the person was on is remembered for the callback');
+        assert.strictEqual(decodeURIComponent(nextCookie.split(';')[0].slice('ov_oauth_next='.length)), '/v/5902');
     });
 
     await check('signing out sends no Clear-Site-Data (Chrome holds such an answer until its cache is cleared: phones hung, 2026-10-28)', async () => {
