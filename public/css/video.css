@@ -602,3 +602,14 @@ html.ov-motion .ovv-stat.is-live .ovv-dot { animation: ovv-pulse 1.6s ease-out i
   .ovv-hero .ovv-stats > li { flex: 0 0 auto; width: 132px; }
   .ovv-fold > summary span { display: none; }
 }
+
+/* Touch screens (2026-10-30, the owner: "scrolling here or finger drag doesn't work"): a list inside the page never
+   traps a finger. The companion grows with its content; chapters flow in the page; the transcript and the chat replay
+   (long and live) stay a bounded box no taller than 60% of the screen, and at either end the drag goes on to the page
+   (overscroll-behavior auto, not contain). With a mouse nothing changes. */
+@media (pointer: coarse), (max-width: 1000px) {
+  .ovv-companion--tabs, .ovv-companion--one { height: auto; }
+  .ovv-tp-body { overscroll-behavior-y: auto; }
+  .ovv-chapter-list, .ovv-chapters ol { max-height: none; overflow: visible; }
+  .ovv-transcript-body, .ovv-chat-body { max-height: min(60vh, 26rem); max-height: min(60svh, 26rem); }
+}
