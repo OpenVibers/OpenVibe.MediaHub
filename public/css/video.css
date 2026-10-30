@@ -607,12 +607,12 @@ html.ov-motion .ovv-stat.is-live .ovv-dot { animation: ovv-pulse 1.6s ease-out i
    "see all" link reach 44 px with a vertical-only hit area. */
 @media (pointer: coarse) {
   .ovv-btn { min-height: 44px; }
-  .ovv-section-head a, .ovv-card-title a { position: relative; }
-  /* The title's box clips what overflows it, so the hit area is made room inside it: the padding grows the clip
-     box by the same 12 px the margins take back, and nothing on the page moves. */
-  .ovv-card-title { padding-block: 13px; margin-block: -13px; }
+  .ovv-section-head a { position: relative; }
   .ovv-section-head a::after { content: ''; position: absolute; left: 0; right: 0; top: -11px; bottom: -11px; }
-  .ovv-card-title a::after { content: ''; position: absolute; left: 0; right: 0; top: -13px; bottom: -13px; }
+  /* A title is two lines at most, and the clamp that says so lives on the heading: on the link itself the link is the
+     whole 44 px box, and a wrapped title still ends in an ellipsis. */
+  .ovv-card-title { display: block; overflow: visible; }
+  .ovv-card-title a { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; min-height: 44px; }
 }
 /* Touch screens (2026-10-30, the owner: "scrolling here or finger drag doesn't work"): a list inside the page never
    traps a finger. The companion grows with its content; chapters flow in the page; the transcript and the chat replay
