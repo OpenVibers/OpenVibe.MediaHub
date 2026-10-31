@@ -28,6 +28,7 @@ const contracts = require('openvibe-contracts');
 const { asyncRouter } = require('../http/router');
 const { sameOrigin } = require('../http/principal');
 const store = require('./store');
+const contentLabels = require('../labels');
 
 function createPicsApi(ctx) {
     const { config, s, principal, limits } = ctx;
@@ -98,7 +99,10 @@ function createPicsApi(ctx) {
         const row = await loadOwn(req, res);
         if (!row) return undefined;
         const b = req.body || {};
-        return res.json(pics.toWire(await pics.edit(row, { title: b.title, description: b.description, alt: b.alt }), { owner: true }));
+        // L1: the uploader labels the picture; a suggestion they confirm leaves `suggested`. A label never hides it.
+        const nextLabels = b.labels !== undefined ? contentLabels.parseLabels(b.labels) : undefined;
+        if (nextLabels === null) return problem(req, res, 422, 'pics.labels_invalid', `labels must be a list of: ${contentLabels.LABELS.join(', ')}`);
+        return res.json(pics.toWire(await pics.edit(row, { title: b.title, description: b.description, alt: b.alt, labels: nextLabels }), { owner: true }));
     });
 
     r.post('/images/:slug/describe', person, limits.budget('pics.image.describe'), async (req, res) => {

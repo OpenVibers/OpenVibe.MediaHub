@@ -183,6 +183,7 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
         deleteVod: (token, id) => asPerson(token, 'DELETE', `/api/vods/${id}`),
         setClipTitle: (token, id, title) => asPerson(token, 'PUT', `/api/clips/${id}/title`, { title }),
         setClipVisibility: (token, id, visibility) => asPerson(token, 'PUT', `/api/clips/${id}/visibility`, { visibility }),
+        setClipLabels: (token, id, labels) => asPerson(token, 'PUT', `/api/clips/${id}/labels`, { labels }),
         deleteClip: (token, id) => asPerson(token, 'DELETE', `/api/clips/${id}`),
         /** A clip of a recording, cut by Media: { vod_id, start_time, end_time, title } → { clip } (Live's rules and limits). */
         createClip: (token, fields, viewerIp) => asPerson(token, 'POST', '/api/vods/clips', fields, { viewerIp }),

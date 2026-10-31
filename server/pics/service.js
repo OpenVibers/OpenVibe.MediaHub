@@ -23,6 +23,7 @@
 const crypto = require('crypto');
 const images = require('./images');
 const store = require('./store');
+const contentLabels = require('../labels');
 const { isStaff } = require('../drive/staff');
 
 const SLUG_ALPHABET = '23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -130,7 +131,7 @@ function createPics({ s, media, config, log = console, events = null }) {
         return { ok: true, image: row, ...(deleteKey ? { deleteKey } : {}) };
     }
 
-    async function edit(row, { title, description, alt }) {
+    async function edit(row, { title, description, alt, labels: nextLabels }) {
         // Alt text the uploader changes is theirs; an AI draft left as it was stays labelled as AI's.
         const altNow = alt !== undefined ? cleanLine(alt, LIMITS.alt) : undefined;
         const altPatch = altNow === undefined || altNow === (row.alt || '') ? {} : { alt: altNow, alt_source: altNow ? 'person' : null };
@@ -138,6 +139,8 @@ function createPics({ s, media, config, log = console, events = null }) {
             ...(title !== undefined ? { title: cleanLine(title, LIMITS.title) } : {}),
             ...(description !== undefined ? { description: cleanText(description, LIMITS.description) } : {}),
             ...altPatch,
+            // L1: the uploader sets the labels; a suggestion they confirm leaves `suggested`. A label never hides it.
+            ...(nextLabels !== undefined ? { content_labels: contentLabels.confirmed(row.content_labels, nextLabels) } : {}),
         });
     }
 
@@ -245,6 +248,8 @@ function createPics({ s, media, config, log = console, events = null }) {
         width: Number(row.width), height: Number(row.height), bytes: Number(row.bytes), animated: Boolean(row.animated),
         alt: row.alt || '', alt_source: row.alt_source || null,
         ai: row.ai_described_at ? { caption: row.ai_caption || null, tags: tagsOf(row), described_at: row.ai_described_at } : null,
+        // L1 labels: `{ labels, suggested }` (common.content-labels@1). A suggestion is shown, never applied.
+        content_labels: contentLabels.labelsOf(row),
         state: row.state, created_at: row.created_at, links: links(row),
         ...(owner ? { report_count: Number(row.report_count) } : {}),
     });
