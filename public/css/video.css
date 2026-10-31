@@ -601,7 +601,7 @@ html.ov-motion .ovv-stat.is-live .ovv-dot { animation: ovv-pulse 1.6s ease-out i
 @media (prefers-reduced-motion: reduce) { .ovv-stat { transition: none; } .ovv-stat:hover { transform: none; } }
 
 /* The home on phones (2026-10-29): a taste and a door. Each video list is one row that scrolls sideways (every video is
-   still there), eight channels show, the figures are one strip, and how it works folds under its heading. */
+   still there), every channel shows, the figures are one strip, and how it works starts open. */
 .ovv-fold { border: 1px solid var(--border, #1f2d47); border-radius: 14px; background: var(--bg-card, #131c2e); }
 .ovv-fold > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 52px; padding: 0 16px; cursor: pointer; list-style: none; }
 .ovv-fold > summary::-webkit-details-marker { display: none; }
@@ -613,11 +613,12 @@ html.ov-motion .ovv-stat.is-live .ovv-dot { animation: ovv-pulse 1.6s ease-out i
   .ovv-row .ovv-grid { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 16px; scrollbar-width: none; gap: 12px; margin-left: -16px; margin-right: -16px; padding: 0 16px 4px; }
   .ovv-row .ovv-grid::-webkit-scrollbar { display: none; }
   .ovv-row .ovv-grid > * { flex: 0 0 46%; min-width: 0; scroll-snap-align: start; }
-  #channels .ovv-people > li:nth-child(n+9) { display: none; }
+  .ovv-people { display: flex; flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 16px; scrollbar-width: none; gap: 10px; margin-left: -16px; margin-right: -16px; padding: 0 16px 4px; }
+  .ovv-people::-webkit-scrollbar { display: none; }
+  .ovv-people > li { flex: 0 0 76%; min-width: 0; scroll-snap-align: start; }
   .ovv-hero .ovv-stats { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 8px; margin-left: -16px; margin-right: -16px; padding: 0 16px 2px; }
   .ovv-hero .ovv-stats::-webkit-scrollbar { display: none; }
   .ovv-hero .ovv-stats > li { flex: 0 0 auto; width: 132px; }
-  .ovv-fold > summary span { display: none; }
 }
 
 /* Fingers, not pointers (2026-10-29): the hero's buttons are 44 px tall, and a card's title link and a section's
