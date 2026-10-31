@@ -4,6 +4,15 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
 
 ## Unreleased
 
+- OpenVibe.Pics says in writing what it does with a picture (2026-10-30, the market research): three policy pages —
+  `/exif` (the metadata — the GPS position, the camera, the time it was taken — is taken out by us, and the file you
+  upload is not kept), `/content-policy` (what is not allowed, how a rule is enforced, and what this site does not
+  do) and `/ai-training` (we do not train on the pictures you upload; the one thing that asks a model is the alt text
+  you ask for, and it keeps a hash, not the picture). Every number on them comes from the service's own
+  configuration, and where the code cannot promise something the page says so: the stripping happens after your file
+  arrives, and a promise about AI is not a lock. The home says in one line who removes the metadata, and a picture's
+  page shows its links side by side — the file itself, Markdown, BBCode and HTML — copyable without an account.
+
 - The watch pages say what the video is (2026-10-30, the market research): under the title, the kind — a stream
   recording, a clip or an upload — with the day it was streamed (Live's own stream time), its length and its views.
   Every word comes from the item's own fields; a fact Live does not give is left out, not guessed. A clip credits the

@@ -142,7 +142,10 @@ function multipart(fields, file) {
             const page = await t.get(`/i/${slug}`, { headers: PICS });
             assert.strictEqual(page.status, 200);
             assert.ok(page.text.includes('The coast'));
-            assert.ok(page.text.includes(`value="https://openvibe.pics${direct}"`));
+            assert.ok(page.text.includes(`https://openvibe.pics${direct}`), 'the direct link is on the page');
+            assert.ok(page.text.includes('No account needed'), 'the copy panel says no account is needed');
+            assert.ok(page.text.includes('[img]https://openvibe.pics'), 'the BBCode snippet is on the page');
+            assert.ok(page.text.includes('data-ovk-copy'), 'the links have a copy button (the kit)');
             assert.ok(page.text.includes('noindex'));
             assert.ok(page.text.includes(`content="https://openvibe.pics${direct}"`), 'og:image is the picture');
             assert.ok(page.text.includes('Report this picture'));

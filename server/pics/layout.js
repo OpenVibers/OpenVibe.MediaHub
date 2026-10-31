@@ -14,6 +14,7 @@ const path = require('path');
 const appIcon = require('openvibe-shared/app-icon');
 const shell = require('openvibe-shared/shell');
 const cache = require('openvibe-shared/cache-policy');
+const ovServe = require('openvibe-shared/serve');
 const { html, raw, esc, render } = require('../render/html');
 
 const NETWORK_URL = 'https://openvibe.network';
@@ -32,7 +33,8 @@ function assetVersion(rel) {
 const asset = (rel) => `/${rel}?v=${assetVersion(rel)}`;
 
 /** o: title, description, body (html), baseUrl, path, index, noindex, viewer, private, crumbs [{label, href}], scripts [rel],
- *     jsonLd (structured data for the page), image (its share image, an https URL), ogType */
+ *     styles [shared file], sharedScripts [shared file], jsonLd (structured data for the page), image (its share image, an
+ *     https URL), ogType */
 function renderPage(o) {
     // The front page's title says what the site is (search results show it; at most 60 characters).
     const title = o.title || (o.path === '/' ? `${SITE_NAME}: share pictures, fast and open` : SITE_NAME);
@@ -47,7 +49,9 @@ function renderPage(o) {
 ${appIcon.headTags({ site: 'media-hub' })}
 <link rel="stylesheet" href="${asset('css/app.css')}">
 <link rel="stylesheet" href="${asset('css/pics.css')}">
-${(o.scripts || []).map((rel) => `<script src="${asset(rel)}" defer></script>`).join('\n')}`;
+${(o.styles || []).map((rel) => `<link rel="stylesheet" href="${ovServe.url(rel)}">`).join('\n')}
+${(o.scripts || []).map((rel) => `<script src="${asset(rel)}" defer></script>`).join('\n')}
+${(o.sharedScripts || []).map((rel) => `<script src="${ovServe.url(rel)}" defer></script>`).join('\n')}`;
     const account = signedIn
         ? html`Signed in as <strong>${viewer.displayName || viewer.username || 'you'}</strong> · <a href="/auth/logout?next=${encodeURIComponent(pathNow)}">Sign out</a>`
         : html`<a href="/auth/login?next=${encodeURIComponent(pathNow)}">Sign in with OpenVibe</a>`;
