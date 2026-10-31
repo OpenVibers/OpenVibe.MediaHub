@@ -6,7 +6,7 @@
  * nobody but its uploader and staff (server/pics/service.js decides who).
  */
 
-const IMAGE_COLS = ['title', 'description', 'state', 'report_count', 'last_viewed_at', 'thumb_object_id', 'alt', 'alt_source', 'ai_caption', 'ai_tags', 'ai_described_at'];
+const IMAGE_COLS = ['title', 'description', 'state', 'report_count', 'last_viewed_at', 'thumb_object_id', 'alt', 'alt_source', 'ai_caption', 'ai_tags', 'ai_described_at', 'content_labels'];
 
 const imageBySlug = (s, slug) => s.db.maybe('SELECT * FROM pics_images WHERE slug = $1', [slug]);
 const imageById = (s, id) => s.db.maybe('SELECT * FROM pics_images WHERE id = $1', [id]);

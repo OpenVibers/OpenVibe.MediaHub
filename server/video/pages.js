@@ -37,6 +37,7 @@ const { createLiveClient, LiveRefusedError } = require('./live-client');
 const { createChatClient } = require('./chat-client');
 const { createSearchReads, CATEGORIES, isCategory } = require('./search-reads');
 const rules = require('../drive/rules');
+const contentLabels = require('../labels');
 /** 2147483648 → "2 GB" (the drive's formatBytes, without a trailing ".0"). */
 const formatBytes = (b) => rules.formatBytes(b).replace(/\.0 /, ' ');
 const { createVideoApiRoutes } = require('./api');
@@ -1394,7 +1395,10 @@ ${up.html}
         if (!title || title.length > 200) return { error: 'A title is 1 to 200 characters.' };
         if (kind === 'vod' && description.length > 2000) return { error: 'A description is at most 2,000 characters.' };
         if (!VISIBILITIES.includes(visibility)) return { error: 'Choose public, unlisted or private.' };
-        return { title, description, visibility };
+        // L1: the creator labels the recording. Repeated form fields arrive as an array; absent keeps what it has.
+        const labels = b.labels === undefined ? undefined : contentLabels.parseLabels([].concat(b.labels));
+        if (labels === null) return { error: 'Choose the labels from the list.' };
+        return { title, description, visibility, labels };
     }
     const fieldError = (req, res, text, back) => page(req, res, {
         title: 'Not saved', cache: cache.htmlHeaders({ private: true }),
@@ -1431,7 +1435,7 @@ ${up.html}
         const f = ownerFields(req.body || {}, 'vod');
         if (f.error) return fieldError(req, res, f.error, back);
         try {
-            await asPerson(req, res, (token) => live.updateVod(token, id, { title: f.title, description: f.description, visibility: f.visibility }));
+            await asPerson(req, res, (token) => live.updateVod(token, id, { title: f.title, description: f.description, visibility: f.visibility, ...(f.labels !== undefined ? { labels: f.labels } : {}) }));
         } catch (err) { return ownerRefused(req, res, err, back); }
         live.forget('vod', id);
         return res.redirect(303, `${back}?saved=1`);
@@ -1468,6 +1472,7 @@ ${up.html}
         try {
             if (f.title !== String(current.title || '')) await asPerson(req, res, (token) => live.setClipTitle(token, id, f.title));
             if (f.visibility !== String(current.visibility || '')) await asPerson(req, res, (token) => live.setClipVisibility(token, id, f.visibility));
+            if (f.labels !== undefined) await asPerson(req, res, (token) => live.setClipLabels(token, id, f.labels));
         } catch (err) { live.forget('clip', id); return ownerRefused(req, res, err, back); }
         live.forget('clip', id);
         return res.redirect(303, `${back}?saved=1`);
