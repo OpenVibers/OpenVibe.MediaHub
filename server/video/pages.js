@@ -30,7 +30,6 @@ const { asyncRouter } = require('../http/router');
 const { sameOrigin } = require('../http/principal');
 const { html, raw, notice } = require('../render/html');
 // A recording's or clip's AI overview comes from Live, which filters it; read through the same filter here too.
-const { noLooks } = require('openvibe-sdk/no-looks');
 const frame = require('openvibe-shared/frame');
 const { send, asset, assetVersion, SITE_NAME } = require('./layout');
 const { createLiveClient, LiveRefusedError } = require('./live-client');
@@ -1147,7 +1146,7 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
             if (req.query.list) q.set('list', String(req.query.list));
             return res.redirect(301, `/v/${rec.vod_id}${q.toString() ? `?${q}` : ''}`);
         }
-        if (vod && vod.ai_overview) vod.ai_overview = noLooks(vod.ai_overview).trim() || null;
+        if (vod && vod.ai_overview) vod.ai_overview = String(vod.ai_overview).trim() || null;
         const manageable = mayManage(req, 'vod', vod);
         const clips = Array.isArray(data.clips) ? data.clips.filter((c) => c && c.visibility !== 'private') : [];
 
@@ -1286,7 +1285,7 @@ ${clips.length ? html`<section class="ovv-panel ovv-clips" aria-labelledby="h-cl
         }
         if (!data || !data.clip) return notFound(req, res);
         const clip = data.clip;
-        if (clip && clip.ai_overview) clip.ai_overview = noLooks(clip.ai_overview).trim() || null;
+        if (clip && clip.ai_overview) clip.ai_overview = String(clip.ai_overview).trim() || null;
         const manageable = mayManage(req, 'clip', clip);
 
         // The comment thread, the playlist form, up next and the recording this clip was cut from are asked together.
