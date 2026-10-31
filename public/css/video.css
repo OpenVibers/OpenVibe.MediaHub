@@ -225,7 +225,9 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-dl-label { font-size: .92rem; font-weight: 700; }
 .ovv-dl-about { font-size: .78rem; color: var(--ovv-dim); overflow-wrap: anywhere; }
 .ovv-dl-formats { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
-.ovv-dl-format { display: inline-flex; align-items: center; min-height: 30px; padding: 2px 10px; border-radius: 8px; border: 1px solid var(--ovv-line-strong); color: inherit !important; font-size: .78rem; font-weight: 700; letter-spacing: .3px; text-decoration: none; }
+.ovv-dl-format { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 30px; padding: 2px 10px; border-radius: 8px; border: 1px solid var(--ovv-line-strong); color: inherit !important; font-size: .78rem; font-weight: 700; letter-spacing: .3px; text-decoration: none; }
+/* Each format says what it is for, under its name: the menu reads without hovering (a phone has no hover). */
+.ovv-dl-format small { font-size: .66rem; font-weight: 500; letter-spacing: 0; opacity: .85; }
 .ovv-dl-format:hover, .ovv-dl-format:focus-visible { border-color: var(--ovv-accent); background: var(--bg-hover, #1c2a44); }
 .ovv-dl-format--main { border-color: var(--accent-strong, #2563eb); background: var(--accent-strong, #2563eb); color: var(--on-accent-strong, #fff) !important; }
 .ovv-dl-format--main:hover, .ovv-dl-format--main:focus-visible { background: var(--accent-dark, #1d4ed8); border-color: var(--accent-light, #60a5fa); }
@@ -337,6 +339,18 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .ovv-btn--icon { width: 38px; padding: 0; justify-content: center; }
 .ovv-btn[hidden] { display: none; }
+
+/* What the watch page is showing (the market outcomes, 2026-10-30): the kind of video under its title, the day it was
+   streamed or published, its length and its views. Every word comes from the item's own fields. */
+.ovv-what { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 10px; font-size: .88rem; color: var(--ovv-dim); }
+.ovv-what-kind { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border: 1px solid var(--ovv-line-strong); border-radius: 999px; color: var(--ovv-faint); font-size: .78rem; font-weight: 700; white-space: nowrap; }
+.ovv-what-facts { overflow-wrap: anywhere; }
+/* A clip's credit: the recording it was cut from, and a link back to it. */
+.ovv-source { margin: 0 0 10px; font-size: .88rem; color: var(--ovv-dim); overflow-wrap: anywhere; }
+.ovv-source i { color: var(--ovv-faint); }
+/* The share box: the page's own link, and a link to the moment it is playing (a moment, not a clip). */
+.ovv-share-url { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--ovv-line-strong); border-radius: 8px; background: var(--bg-tertiary, #16223a); color: inherit; font-size: .82rem; }
+.ovv-share-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
 
 /* A button that opens a small menu or form (Save, Clip, More): a <details>; video.js closes it on a click elsewhere. */
 .ovv-pop { position: relative; }
@@ -458,6 +472,9 @@ a.ovv-channel-name:hover { text-decoration: underline; }
   /* Less space before the footer: the page's own bottom and the footer's top margin made a band of nothing. */
   .ovv-page { padding-bottom: 20px; }
   .ovv-pop-panel, .ovv-save[open] > .ovv-save-form, .ovv-more-menu .ovv-pop-panel { position: fixed; top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 82vh; max-height: 82dvh; overflow-y: auto; border-radius: 16px; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+  /* The sheet sits above the app bar (the shared navbar sets --ovnav-appbar-h to its height), so the sheet's own
+     buttons are not behind the bar at the bottom of the screen. */
+  .ovv-pop-panel, .ovv-save[open] > .ovv-save-form, .ovv-more-menu .ovv-pop-panel { bottom: calc(8px + var(--ovnav-appbar-h, 0px)); }
   .ovv-pop--js[open]::before { content: ''; position: fixed; inset: 0; z-index: 39; background: rgba(0, 0, 0, .55); }
   .ovv-head .ovv-title { font-size: 1.2rem; }
 }

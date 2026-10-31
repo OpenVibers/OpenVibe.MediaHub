@@ -4,6 +4,15 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
 
 ## Unreleased
 
+- The watch pages say what the video is (2026-10-30, the market research): under the title, the kind — a stream
+  recording, a clip or an upload — with the day it was streamed (Live's own stream time), its length and its views.
+  Every word comes from the item's own fields; a fact Live does not give is left out, not guessed. A clip credits the
+  recording it was cut from and links back to it, at the moment the clip starts; a recording that is not public any
+  more is named as such. The share box writes the page's own link out (a plain link, and `?t=125` to open the video at
+  2:05 — a moment, not a clip: nothing is stored). Every export says what it is for (TXT to read, SRT for editors, VTT
+  for web players, JSON for programs, CSV for spreadsheets) and the transcript says it was written by AI, and can be
+  wrong. The menus on a phone open above the app bar, so their buttons are not behind it.
+
 - openvibe.video's search basics (2026-10-20). A watch page nobody wrote about gets a description of its own (who,
   how long, when, its first words) instead of the site tagline. A recording under two minutes with nothing written
   about it is noindex and out of the sitemap: 118 of 785 were under a minute, mostly test streams. The sitemap lists
