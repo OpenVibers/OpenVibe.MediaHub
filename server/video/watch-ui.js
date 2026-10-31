@@ -202,7 +202,7 @@ function companion({ kind, id, chat, chapters, transcript, long }) {
             key: 'transcript', tab: 'Transcript', title: 'Transcript', count: transcript.length,
             note: 'Written by AI from the audio — it can be wrong',
             search: true,
-            body: html`<div class="ovv-tp-body ovv-transcript-body" data-ovv-transcript>${transcript.map((s) => html`<p class="ovv-line" data-ovv-at="${Math.floor(s.start)}"><button type="button" class="ovv-seek" data-ovv-seek="${s.start}" title="Play from here">${clockOf(s.start, long)}</button> <span>${s.text}</span></p>`)}<p class="ovv-tp-empty" hidden data-ovv-search-empty>No line has that.</p></div>`,
+            body: html`<div class="ovv-tp-body ovv-transcript-body" data-ovv-transcript data-ov-transcript>${transcript.map((s) => html`<p class="ovv-line" data-ovv-at="${Math.floor(s.start)}" data-ov-start="${s.start}"><button type="button" class="ovv-seek" data-ovv-seek="${s.start}" title="Play from here">${clockOf(s.start, long)}</button> <span>${s.text}</span></p>`)}<p class="ovv-tp-empty" hidden data-ovv-search-empty>No line has that.</p></div>`,
         });
     }
     if (!tabs.length) return null;

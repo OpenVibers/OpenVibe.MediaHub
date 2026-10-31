@@ -51,6 +51,17 @@ function startLive() {
         file_path: '/data/vods/vod-live-107.mp4', username: 'streamer', display_name: 'Streamer', view_count: 1,
         is_recording: true, ai_overview: '', ai_transcript_json: null,
     };
+    // An audio-only recording (a browser broadcast with no camera): its picture is the avatar card, and the player
+    // shows the stage instead of a black frame (R4).
+    const audioVod = {
+        id: 110, title: 'A microphone on a dark night', description: '', duration_seconds: 600,
+        created_at: '2026-10-30T22:00:00.000Z', thumbnail_url: 'https://openvibe.media/t/vod-110-1.jpg',
+        playback_url: 'https://openvibe.media/v/110', visibility: 'public', audio_only: true,
+        username: 'moosely', display_name: 'Moosely', avatar_url: 'https://openvibe.network/avatar/moosely',
+        view_count: 3, is_recording: false, ai_overview: 'A talk about microphones.',
+        ai_transcript_json: [{ start: 0, end: 4, text: 'Welcome to the microphone show.' }, { start: 4, end: 9, text: 'Tonight the room is quiet.' }],
+        transcript_status: 'done', stream_id: 1010,
+    };
     const unlistedVod = {
         id: 102, title: 'An unlisted recording', description: '', duration_seconds: 20,
         created_at: '2026-10-11T10:00:00.000Z', thumbnail_url: null,
@@ -163,7 +174,8 @@ function startLive() {
         if (p === '/api/vods') {
             const username = url.searchParams.get('username');
             if (!username) return json(200, { vods: [vodListItem], total: 812, hasMore: true });
-            if (username === 'streamer') return json(200, { vods: [vodListItem], total: 1, hasMore: false });
+            if (username === 'streamer') return json(200, { vods: [vodListItem, { ...audioVod, audio_only: true }], total: 2, hasMore: false });
+            if (username === 'moosely') return json(200, { vods: [{ ...audioVod, audio_only: true }], total: 1, hasMore: false });
             return json(200, { vods: [], total: 0, hasMore: false });
         }
         if (p === '/api/clips') {
@@ -194,6 +206,7 @@ function startLive() {
             if (vodDetail[1] === '105') return json(200, { vod: hlsFirstVod, clips: [] });
             if (vodDetail[1] === '107') return json(200, { vod: recordingVod, clips: [] });
             if (vodDetail[1] === '108') return json(200, { vod: { ...recordingVod, id: 108, file_path: '/data/vods/vod-live-108.webm', playback_url: 'https://openvibe.media/v/108' }, clips: [] });
+            if (vodDetail[1] === '110') return json(200, { vod: audioVod, clips: [] });
             return json(404, { error: 'not found' });
         }
         const clipDetail = /^\/api\/clips\/(\d+)$/.exec(p);
@@ -371,6 +384,23 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('Discuss on OpenVibe.Community'));
         assert.ok(r.text.includes('data-ovv-chapter'));
         assert.ok(r.text.includes('data-ovv-seek'));
+    });
+
+    await check('an audio-only VOD asks the player for the avatar stage, and its card says Audio', async () => {
+        const r = await getVideo('/v/110');
+        assert.strictEqual(r.status, 200);
+        const video = /<video class="ovv-player"[^>]*>/.exec(r.text)[0];
+        assert.ok(video.includes('data-ov-audio-only'), video);
+        assert.ok(video.includes('data-ov-avatar="https://openvibe.network/avatar/moosely"'), video);
+        assert.ok(video.includes('data-ov-title="A microphone on a dark night"'), video);
+        assert.ok(video.includes('data-ov-artist="Moosely"'), video);
+        assert.ok(video.includes('crossorigin="anonymous"'), 'the analyser may read the sound');
+        assert.ok(r.text.includes('data-ov-transcript'), 'the transcript is marked for the current-line highlight');
+        assert.match(r.text, /data-ov-start="0"/);
+        assert.ok(r.text.includes('A talk about microphones.'));
+        const channel = await getVideo('/@moosely');
+        assert.strictEqual(channel.status, 200);
+        assert.match(channel.text, /class="ovv-tag ovv-tag--audio"[^>]*><i class="fa-solid fa-microphone"[^>]*><\/i> Audio<\/span>/, 'the audio-only card says Audio');
     });
 
     await check('the clip watch page attributes its maker and links the full recording', async () => {
