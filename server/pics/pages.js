@@ -275,7 +275,7 @@ ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><
 <section class="ovp-section" aria-labelledby="h-policies"><h2 id="h-policies">What we promise, in writing</h2><div class="ovp-features">
 <div class="ovp-feature"><h3><a href="/exif">What happens to your picture</a></h3><p>The metadata — the GPS position, the camera, the time it was taken — is taken out by us before anyone sees the picture, and the file you uploaded is not kept.</p></div>
 <div class="ovp-feature"><h3><a href="/content-policy">What you may put here</a></h3><p>What is not allowed, how a rule is enforced, and what this site does not do: no feed, no counts, no adverts.</p></div>
-<div class="ovp-feature"><h3><a href="/ai-training">Pictures and AI</a></h3><p>We do not train on the pictures you upload. One thing asks a model, and only when you ask for it.</p></div>
+<div class="ovp-feature"><h3><a href="/ai-training">Pictures and AI</a></h3><p>We don't train AI on your content. If that ever changes, it'll be your choice, and it starts off.</p></div>
 </div></section>
 <section class="ovp-section" aria-labelledby="h-more"><h2 id="h-more">More on OpenVibe</h2><ul class="ovp-more" role="list">
 <li><a href="https://openvibe.chat/"><strong>OpenVibe.Chat</strong><span>Send pictures in rooms and servers: they go up to OpenVibe.Pics.</span></a></li>
