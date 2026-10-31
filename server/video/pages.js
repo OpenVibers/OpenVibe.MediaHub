@@ -104,6 +104,17 @@ function posterAttr(url) {
 }
 
 /**
+ * An audio-only item (a broadcast with no camera, Media#240/R4): the shared player shows its avatar and level ring
+ * instead of a black frame. The avatar and title ride on the element as data attributes; crossorigin is what lets the
+ * player's Web Audio analyser read the sound (Media serves public playback with Access-Control-Allow-Origin).
+ */
+function audioAttrs(item, artist) {
+    if (!item || !item.audio_only) return '';
+    const avatar = httpsUrl(item.avatar_url);
+    return html` data-ov-audio-only${avatar ? html` data-ov-avatar="${avatar}"` : ''}${item.title ? html` data-ov-title="${item.title}"` : ''}${artist ? html` data-ov-artist="${artist}"` : ''} crossorigin="anonymous"`;
+}
+
+/**
  * An item's playable file. Live's `file_url` is always the file; its `playback_url` is the HLS playlist when Media has
  * one (Live T4 step 5), so it is only the fallback for answers from before `file_url` existed.
  */
@@ -508,7 +519,7 @@ function card(o) {
     const channel = o.channel ? html`<a href="${o.channelHref}">@${o.channel}</a>` : null;
     const icon = o.live ? 'fa-tower-broadcast' : (o.kind === 'clip' ? 'fa-scissors' : 'fa-video');
     return html`<article class="ovv-card">
-<a class="ovv-card-media" href="${o.href}" tabindex="-1" aria-hidden="true">${o.thumb ? thumbImg(o.thumb, CARD_SIZES) : html`<span class="ovv-card-placeholder"><i class="fa-solid ${icon}"></i></span>`}${o.duration ? html`<span class="ovv-dur">${o.duration}</span>` : ''}${o.badge ? html`<span class="ovv-tag${o.live ? ' ovv-tag--live' : ''}">${o.badge}</span>` : ''}</a>
+<a class="ovv-card-media" href="${o.href}" tabindex="-1" aria-hidden="true">${o.thumb ? thumbImg(o.thumb, CARD_SIZES) : html`<span class="ovv-card-placeholder"><i class="fa-solid ${icon}"></i></span>`}${o.duration ? html`<span class="ovv-dur">${o.duration}</span>` : ''}${o.audio ? html`<span class="ovv-tag ovv-tag--audio"><i class="fa-solid fa-microphone" aria-hidden="true"></i> Audio</span>` : ''}${o.badge ? html`<span class="ovv-tag${o.live ? ' ovv-tag--live' : ''}">${o.badge}</span>` : ''}</a>
 <div class="ovv-card-body">
 <h3 class="ovv-card-title"><a href="${o.href}">${o.title}</a></h3>
 ${meta([channel, o.extra || null, o.views ? viewsLabel(o.views) : null, o.date ? html`<time datetime="${o.iso}">${o.date}</time>` : null])}
@@ -530,6 +541,7 @@ function feedCard(item, { views = false } = {}) {
         views: views ? item.views : null,
         date: dateLabel(item.created_at) || null,
         iso: item.created_at || null,
+        audio: !!item.audio_only,
     });
 }
 
@@ -541,6 +553,7 @@ function vodCard(v) {
         duration: v.duration_seconds != null ? durationLabel(v.duration_seconds) : null,
         date: dateLabel(v.created_at) || null,
         iso: v.created_at || null,
+        audio: !!v.audio_only,
     });
 }
 
@@ -555,6 +568,7 @@ function clipCard(c) {
         duration: dur != null ? durationLabel(dur) : null,
         date: dateLabel(c.created_at) || null,
         iso: c.created_at || null,
+        audio: !!c.audio_only,
     });
 }
 
@@ -782,6 +796,7 @@ ${visibilityChoices(item.visibility || 'public')}
             channel: info.username || info.display_name || null,
             duration: info.duration_seconds != null ? info.duration_seconds : info.duration,
             icon: kind === 'clip' ? 'fa-scissors' : 'fa-video',
+            audio: !!info.audio_only,
         };
     }
 
@@ -1239,7 +1254,7 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
 <div class="ovv-col ovv-col--main">
 <div class="ovv-stage">
 ${savedNotice(req)}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this recording.', 'info') : ''}
-<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(vod.thumbnail_url))}${shapeAttr} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video>${pipsTag(pips)}</div>
+<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(vod.thumbnail_url))}${shapeAttr}${audioAttrs(vod, channelName)} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video>${pipsTag(pips)}</div>
 <div class="ovv-head">
 <h1 class="ovv-title">${vod.title || 'Stream recording'}</h1>
 ${what}
@@ -1362,7 +1377,7 @@ ${clips.length ? html`<section class="ovv-panel ovv-clips" aria-labelledby="h-cl
 <div class="ovv-stage">
 ${savedNotice(req)}${req.query.made === '1' ? notice('Your clip was made. It is credited to you on OpenVibe.Live and here.', 'ok') : ''}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this clip.', 'info') : ''}
 ${cutting ? html`<div class="ovv-player-wrap ovv-cutting" role="status" data-ovv-reload="8"><p><i class="fa-solid fa-scissors" aria-hidden="true"></i> This clip is being cut. It plays here in a moment; the page checks again by itself.</p></div>`
-        : html`<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(clip.thumbnail_url))} src="${fileOf(clip) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>`}
+        : html`<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(clip.thumbnail_url))}${audioAttrs(clip, clip.source_streamer_display_name || clip.source_streamer_username || clip.display_name || clip.username)} src="${fileOf(clip) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>`}
 <div class="ovv-head">
 <h1 class="ovv-title">${clip.title || 'Clip'}</h1>
 ${what}
@@ -1630,7 +1645,7 @@ ${rows.length ? html`<ul class="ovv-playlist-list">${rows.map(playlistRow)}</ul>
             const { href, thumb, title, channel, duration: dur } = info;
             listLd.push({ '@type': 'ListItem', position: listLd.length + 1, url: `${base}${href}`, name: String(title).slice(0, 110) });
             rows.push(html`<li class="ovv-item-row">
-<a class="ovv-item-media" href="${href}" tabindex="-1" aria-hidden="true">${thumb ? thumbImg(thumb, '132px') : html`<span class="ovv-card-placeholder"><i class="fa-solid ${info.icon}"></i></span>`}${dur != null ? html`<span class="ovv-dur">${durationLabel(dur)}</span>` : ''}</a>
+<a class="ovv-item-media" href="${href}" tabindex="-1" aria-hidden="true">${thumb ? thumbImg(thumb, '132px') : html`<span class="ovv-card-placeholder"><i class="fa-solid ${info.icon}"></i></span>`}${dur != null ? html`<span class="ovv-dur">${durationLabel(dur)}</span>` : ''}${info.audio ? html`<span class="ovv-tag ovv-tag--audio"><i class="fa-solid fa-microphone" aria-hidden="true"></i> Audio</span>` : ''}</a>
 <div class="ovv-playlist-main"><a class="ovv-item-title" href="${href}">${title}</a>${channel ? html`<span class="ovv-meta">@${channel}</span>` : ''}</div>
 ${isOwner ? itemControls(pl.id, it) : ''}
 </li>`);
