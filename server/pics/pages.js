@@ -10,6 +10,7 @@
  *   /i/<slug>/thumb.webp   its 640-pixel thumbnail
  *   /mine, /albums         your pictures and albums;  /a/<slug> an album
  *   /staff                 the report queue (Network admin and global_mod): restore, hide, take down
+ *   /exif /content-policy /ai-training   the policy pages (server/pics/policy.js): the metadata, the content rules, AI
  *   /api/v1/…              the API (server/pics/api.js)
  *   /robots.txt /llms.txt /terms /privacy /dmca /updates
  *
@@ -37,6 +38,8 @@ const { send, assetVersion, SITE_NAME } = require('./layout');
 const store = require('./store');
 const { createPicsApi } = require('./api');
 const { createPicVariants } = require('./variants');
+const kit = require('openvibe-shared/kit');
+const { PATHS: POLICY_PATHS, policyPage } = require('./policy');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 const FILE_CACHE = 'public, max-age=600, s-maxage=600';
@@ -208,7 +211,7 @@ function createPicsRoutes(ctx) {
     const homeFaq = () => [
         { q: 'Is OpenVibe.Pics free?', a: `Yes. A free OpenVibe account can upload ${cfg.imagesPerDay} pictures a day, each up to ${sizeText(cfg.maxImageBytes)}, and keep up to ${sizeText(cfg.quotaBytes)}.` },
         { q: 'Who can see my pictures?', a: 'Only people you give the link to. Pictures are never listed, ranked or shown to search engines, and you can delete one at any time.' },
-        { q: 'What is removed from my pictures?', a: 'Everything hidden in the file: the GPS position, the camera\'s serial number and the rest of its metadata. Every picture is decoded and saved again before anyone sees it.' },
+        { q: 'What is removed from my pictures?', a: 'Everything hidden in the file: the GPS position, the camera and the rest of its metadata. Your picture is decoded and saved again without any of it before anyone sees it, and the file you uploaded is not kept.' },
         { q: 'Which files can I upload?', a: `${FORMAT_NAMES}, animated GIF and WebP included. SVG and other formats are refused, so nothing is ever served as it was uploaded.` },
         { q: 'Can I get a different size or format?', a: `Yes. Every picture has links at ${variants.LADDER.join(', ')} pixels wide as WebP, AVIF, JPEG or PNG, made when first asked for.` },
         { q: 'What is not allowed?', a: 'Anything illegal, sexual content shared without consent, harassment, other people\'s private information, and spam. Every picture has a Report form, a child-safety report hides it at once, and copyright owners can use the DMCA page.' },
@@ -231,9 +234,10 @@ function createPicsRoutes(ctx) {
             scripts: canUpload ? ['js/pics.js'] : [],
             body: html`<header class="ovp-hero"><p class="ovp-eyebrow">${SITE_NAME}</p>
 <h1>Share pictures. <span class="ovp-accent">Fast, open, yours.</span></h1>
-<p class="ovp-lede">Drop a picture, get a link to share or embed anywhere: on a forum, in a chat, on your site. No feed to scroll, and nothing about you hidden in the file.</p></header>
+<p class="ovp-lede">Drop a picture, get a link to share or embed anywhere: on a forum, in a chat, on your site. No feed to scroll, no counts to chase, and nothing about you hidden in the file.</p></header>
 ${canUpload ? uploadForm(req) : html`<section class="ovp-drop ovp-drop--signin"><div class="ovp-drop-inner"><p class="ovp-drop-title">Sign in to upload</p><p class="ovp-drop-hint">Your OpenVibe account keeps your pictures and albums together, so you can delete them whenever you like.</p><p>${signInLink('/')}</p></div></section>`}
 ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><div class="ovp-section-head"><h2 id="h-latest">Your latest pictures</h2><a href="/mine">All of them</a></div>${grid(mine, 'Nothing yet: your uploads show up here.')}</section>` : ''}
+<p class="ovp-note">The hidden data is removed by us: your picture arrives with its GPS position, its camera and the time it was taken, and we take all of it out before anyone sees the picture. <a href="/exif">How that works</a>.</p>
 <section class="ovp-section" aria-labelledby="h-how"><h2 id="h-how">How it works</h2><ol class="ovp-steps">
 <li><h3>Drop a picture</h3><p>Choose, drag or paste ${FORMAT_NAMES}, up to ${sizeText(cfg.maxImageBytes)}. Several at once works too.</p></li>
 <li><h3>Get your links</h3><p>A page to share, a direct link, and Markdown, BBCode and HTML ready to copy.</p></li>
@@ -268,6 +272,11 @@ ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><
 <tr><th scope="row">Storage</th><td>${sizeText(cfg.quotaBytes)}</td>${cfg.anonymous ? html`<td>Kept ${cfg.anonymousIdleDays} days after the last view</td>` : ''}</tr>
 </tbody></table></div></section>
 <section class="ovp-section" aria-labelledby="h-faq"><h2 id="h-faq">Questions</h2><div class="faq">${faq.map((f) => html`<details><summary>${f.q}</summary><p>${f.a}</p></details>`)}</div></section>
+<section class="ovp-section" aria-labelledby="h-policies"><h2 id="h-policies">What we promise, in writing</h2><div class="ovp-features">
+<div class="ovp-feature"><h3><a href="/exif">What happens to your picture</a></h3><p>The metadata — the GPS position, the camera, the time it was taken — is taken out by us before anyone sees the picture, and the file you uploaded is not kept.</p></div>
+<div class="ovp-feature"><h3><a href="/content-policy">What you may put here</a></h3><p>What is not allowed, how a rule is enforced, and what this site does not do: no feed, no counts, no adverts.</p></div>
+<div class="ovp-feature"><h3><a href="/ai-training">Pictures and AI</a></h3><p>We do not train on the pictures you upload. One thing asks a model, and only when you ask for it.</p></div>
+</div></section>
 <section class="ovp-section" aria-labelledby="h-more"><h2 id="h-more">More on OpenVibe</h2><ul class="ovp-more" role="list">
 <li><a href="https://openvibe.chat/"><strong>OpenVibe.Chat</strong><span>Send pictures in rooms and servers: they go up to OpenVibe.Pics.</span></a></li>
 <li><a href="${config.video.url}/"><strong>OpenVibe.Video</strong><span>Upload videos with AI captions and chapters.</span></a></li>
@@ -310,6 +319,9 @@ ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><
     function copyRow(label, value, id) {
         return html`<div class="ovp-copy"><label for="${id}">${label}</label><div class="ovp-copy-row"><input id="${id}" type="text" readonly value="${value}" spellcheck="false"><button class="ovp-btn" type="button" data-copy="${id}">Copy</button></div></div>`;
     }
+    /** One link of a picture, in the copy panel: its name, what it is for, and the text to copy (the OpenVibe Kit's
+     * snippet, with a copy button in its corner; without JavaScript the text is there to select and copy by hand). */
+    const linkCard = (title, note, code, id) => html`<div class="ovp-link-card"><h3>${title}</h3><p class="ovp-link-note">${note}</p>${raw(kit.snippet({ code, id }))}</div>`;
 
     async function picturePage(req, res, row, { deleteKey = null, fresh = false, message = null, tone = 'ok' } = {}, status = 200) {
         const who = whoOf(req);
@@ -323,7 +335,7 @@ ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><
             title, noindex: true,
             description: row.description || `${title}: a picture on ${SITE_NAME}.`,
             image: hidden ? undefined : L.direct, ogType: 'article',
-            scripts: ['js/pics.js'],
+            scripts: ['js/pics.js'], styles: ['kit.css'], sharedScripts: ['kit-web.js'],
             private: deleteKey ? true : undefined,
             body: html`${message ? notice(message, tone) : ''}${fresh || req.query.new ? notice('Uploaded. Copy a link below to share it.', 'ok') : ''}
 ${deleteKey ? html`<div class="notice warn" role="status"><b>Keep this delete link.</b> It is the only way to delete this picture, and it is shown only now:<br><code class="ovp-key">${base}/i/${row.slug}/delete?key=${deleteKey}</code></div>` : ''}
@@ -336,7 +348,14 @@ ${row.description ? html`<p class="ovp-desc">${row.description}</p>` : ''}
 ${row.ai_caption && row.alt_source === 'ai' ? html`<p class="ovp-ai"><span class="ovp-ai-label">Described by AI</span> ${row.ai_caption}</p>` : ''}
 </article>
 <section class="ovp-share" aria-labelledby="h-share"><h2 id="h-share">Share and embed</h2>
-${copyRow('Link to this page', L.page, 'c-page')}${copyRow('Direct link (for <img> and forums)', L.direct, 'c-direct')}${copyRow('Markdown', L.markdown, 'c-md')}${copyRow('BBCode (forums)', L.bbcode, 'c-bb')}${copyRow('HTML', L.html, 'c-html')}
+<p class="ovp-share-lede">No account needed: anyone with the link can open this picture and copy these. The direct link is the picture itself, at full size — no page around it.</p>
+<div class="ovp-link-grid">
+${linkCard('Direct link', 'The picture itself, full size.', L.direct, `snip-direct-${row.slug}`)}
+${linkCard('Markdown', 'For a chat or a post.', L.markdown, `snip-md-${row.slug}`)}
+${linkCard('BBCode', 'For a forum.', L.bbcode, `snip-bb-${row.slug}`)}
+${linkCard('HTML', 'For a page of your own.', L.html, `snip-html-${row.slug}`)}
+</div>
+<p class="muted">The <a href="${L.page}">page of this picture</a> shows it with its details, and carries the report form.</p>
 </section>
 ${!hidden && variants.widthsFor(row).length ? html`<section class="ovp-section ovp-sizes" aria-labelledby="h-sizes"><h2 id="h-sizes">Resize and convert</h2>
 <p class="muted">The same picture at another width or in another format, each a link of its own${row.animated ? ' (WebP keeps the animation; the others take its first frame)' : ''}.</p>
@@ -572,19 +591,39 @@ ${row.state === 'hidden' ? html`<button class="ovp-btn" name="action" value="res
         return res.redirect(303, `/staff?state=${row.state === 'active' ? 'reported' : 'hidden'}`);
     });
 
+    // ── The policy pages ────────────────────────────────────
+    // What happens to a picture's hidden data, what may be put on the site, and what we do with pictures and AI.
+    // Each page is built from the service's own configuration (server/pics/policy.js), so every number on them is one
+    // the code enforces.
+    for (const kind of ['exif', 'content-policy', 'ai-training']) {
+        const spec = policyPage(kind, { cfg, reasons: pics.REASONS, reasonText: pics.REASON_TEXT });
+        r.get(spec.path, (req, res) => page(req, res, {
+            index: true, title: spec.title, description: spec.description,
+            styles: ['kit.css'], sharedScripts: ['kit-web.js'],
+            body: raw(`<div class="ovp-policy">${spec.body}</div>`),
+        }));
+    }
+
     // ── Discovery, legal, update log ────────────────────────
     r.get('/robots.txt', (_req, res) => res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 }))
         .send(`# openvibe.pics: pictures are unlisted; only the home page is for search engines.\n${seo.robotsTxt({ sitemaps: [`${base}/sitemap.xml`], disallow: ['/i/', '/a/', '/mine', '/albums', '/staff', '/api/', '/auth/', '/upload'] })}`));
-    // The indexable pages: the home, the update log and the rules. No picture or album is ever listed.
+    // The indexable pages: the home, the update log, the rules and the policy pages. No picture or album is ever listed.
     r.get('/sitemap.xml', (_req, res) => res.type('application/xml').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 }))
-        .send(seo.sitemapXml(['/', '/updates', ...legal.PATHS].map((p) => ({ loc: `${base}${p}` })))));
+        .send(seo.sitemapXml(['/', '/updates', ...legal.PATHS, ...POLICY_PATHS].map((p) => ({ loc: `${base}${p}` })))));
     // RFC 9116, canonical to this host (openvibe.pics).
     r.get('/.well-known/security.txt', securityTxt.handler(base));
     r.get('/llms.txt', (_req, res) => res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(seo.llmsTxt({
         name: SITE_NAME,
         summary: 'Picture hosting on the OpenVibe network: upload a picture, get a link to share or embed, albums, any size or format.',
         details: 'Pictures are unlisted (reachable only by their link). Each one is re-encoded with its metadata removed, and can be had resized and converted at /i/<slug>/w/<320|640|1280|1920|2560>.<webp|avif|jpg|png>. Alt text: the uploader writes it or asks OpenVibe.AI for a draft (POST /api/v1/images/<slug>/describe). API: POST /api/v1/images with the picture as the body (an OpenVibe sign-in token as a Bearer).',
-        sections: [{ title: 'Start here', links: [{ title: SITE_NAME, url: `${base}/` }, { title: 'Terms', url: `${base}/terms` }, { title: 'DMCA', url: `${base}/dmca` }] }],
+        sections: [
+            { title: 'Start here', links: [{ title: SITE_NAME, url: `${base}/` }, { title: 'Terms', url: `${base}/terms` }, { title: 'DMCA', url: `${base}/dmca` }] },
+            { title: 'Policies', links: [
+                { title: 'What happens to your picture', url: `${base}/exif` },
+                { title: 'What you may put here', url: `${base}/content-policy` },
+                { title: 'Pictures and AI', url: `${base}/ai-training` },
+            ] },
+        ],
     })));
     r.get('/updates', (req, res) => page(req, res, {
         index: true, title: 'What shipped on OpenVibe.Pics', description: 'Every change deployed to OpenVibe.Pics, newest first.',

@@ -59,6 +59,9 @@
 .ovp-progress { height: 6px; border-radius: 999px; background: var(--bg-tertiary, #16223a); overflow: hidden; }
 .ovp-progress span { display: block; height: 100%; width: 0; background: var(--ovp-pink); transition: width .15s linear; }
 .ovp-result .ovp-copy-row input { font-size: .82rem; }
+/* The links of a picture that has just been uploaded: the file itself and the snippets, side by side. */
+.ovp-result-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 8px 14px; margin-top: 4px; }
+.ovp-result-note { margin: 2px 0 0; color: var(--ovp-dim); font-size: .85rem; }
 
 /* Sections, grids */
 .ovp-section { margin-top: 2.2rem; }
@@ -94,8 +97,17 @@
 .ovp-desc { max-width: 70ch; white-space: pre-line; overflow-wrap: anywhere; }
 .ovp-ai { max-width: 70ch; margin: 8px 0 0; color: var(--ovp-dim); overflow-wrap: anywhere; }
 .ovp-ai-label { display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--ovp-pink) 45%, var(--ovp-line-strong)); color: var(--ovp-accent-text); font-size: .74rem; font-weight: 700; vertical-align: 1px; }
-.ovp-share { margin-top: 1.6rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 10px 16px; }
-.ovp-share h2 { grid-column: 1 / -1; margin-bottom: 0; }
+.ovp-share { margin-top: 1.6rem; }
+.ovp-share h2 { margin-bottom: 0; }
+.ovp-share-lede { margin: -.25rem 0 .9rem; max-width: 70ch; color: var(--ovp-dim); }
+/* The copy panel: the links of a picture side by side, each one a snippet to copy. */
+.ovp-link-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 12px; }
+.ovp-link-grid > * { min-width: 0; }
+.ovp-link-card { display: grid; gap: 6px; align-content: start; min-width: 0; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--ovp-line); background: var(--ovp-card); }
+.ovp-link-card h3 { margin: 0; font-size: .95rem; }
+.ovp-link-note { margin: 0; color: var(--ovp-dim); font-size: .85rem; }
+/* A long URL in a snippet wraps instead of pushing the page sideways (the site's own "pre code" rule does not wrap). */
+.ovp-link-card .ovk-snip > pre > code { font-size: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ovp-copy { display: grid; gap: 4px; min-width: 0; }
 .ovp-copy label { font-size: .8rem; font-weight: 700; color: var(--ovp-dim); }
 .ovp-copy-row { display: flex; gap: 6px; min-width: 0; }
@@ -155,6 +167,7 @@
 
 /* Home: how it works, the links, the API, the limits, the rest of the network */
 .ovp-section-lede { margin: -.25rem 0 .9rem; max-width: 70ch; color: var(--ovp-dim); }
+.ovp-note { margin: 1rem 0 0; max-width: 70ch; color: var(--ovp-dim); font-size: .92rem; }
 .ovp-steps { list-style: none; counter-reset: ovp-step; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
 .ovp-steps li { counter-increment: ovp-step; padding: 16px 18px; border-radius: 14px; border: 1px solid var(--ovp-line); background: var(--ovp-card); }
 .ovp-steps li::before { content: counter(ovp-step); display: inline-grid; place-items: center; width: 28px; height: 28px; margin-bottom: .5rem; border-radius: 50%; background: var(--ovp-pink); color: var(--ovp-on-pink); font-weight: 800; font-size: .9rem; }
@@ -166,6 +179,7 @@
 .ovp-links dd { margin: 0; min-width: 0; }
 .ovp-links code, .ovp-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; overflow-wrap: anywhere; }
 .ovp-code { margin: 0; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--ovp-line); background: var(--bg-secondary, #0f1729); overflow-x: auto; white-space: pre; overflow-wrap: normal; }
+.ovp-code code { font-size: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ovp-table-wrap { overflow-x: auto; max-width: 640px; }
 .ovp-limits { min-width: 0; width: 100%; }
 .ovp-limits th, .ovp-limits td { text-align: left; padding: 8px 12px; white-space: normal; }
@@ -174,3 +188,20 @@
 .ovp-more a:hover, .ovp-more a:focus-visible { border-color: var(--ovp-pink); }
 .ovp-more span { font-size: .88rem; color: var(--ovp-dim); }
 @media (max-width: 640px) { .ovp-links > div { grid-template-columns: minmax(0, 1fr); } }
+
+/* The policy pages (server/pics/policy.js): the OpenVibe Kit's own pieces, in one column that fits a phone.
+   The kit's head draws its own bleed, so it is kept inside the column here. */
+.ovp-policy { max-width: 860px; margin: 0 auto; }
+.ovp-policy .ovk-head { margin-left: 0; margin-right: 0; }
+.ovp-policy-body { padding: 0 14px 14px; }
+.ovp-policy-body > p { margin: 0 0 10px; color: var(--ovp-dim); }
+.ovp-policy-body > p:last-child { margin-bottom: 0; }
+.ovp-policy .ovk-fold-body > p { margin: 0 0 10px; color: var(--ovp-dim); }
+.ovp-policy .ovk-fold-body > p:last-child { margin-bottom: 0; }
+.ovp-policy .ovk-notice { margin: 12px 0; }
+.ovp-policy .ovk-row-sub { color: var(--ovp-dim); }
+/* The kit's part labels are .74rem (11.84px); a phone wants 12px or more. */
+.ovp-policy .ovk-section.ovk-section > h2 { font-size: .78rem; }
+/* The kit's rows are one line each; on a policy page the whole sentence has to show. */
+.ovp-policy .ovk-row-sub > span:first-child,
+.ovp-policy .ovk-row-top strong { white-space: normal; overflow: visible; text-overflow: clip; }

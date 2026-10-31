@@ -57,7 +57,10 @@
         var id = 'up-' + (++seq);
         var field = el('input', { id: id, type: 'text', readonly: '', spellcheck: 'false', 'aria-label': label });
         field.value = value;
-        return el('div', { className: 'ovp-copy-row' }, [field, el('button', { className: 'ovp-btn', type: 'button', 'data-copy': id, text: 'Copy' })]);
+        return el('div', { className: 'ovp-copy' }, [
+            el('label', { for: id, text: label }),
+            el('div', { className: 'ovp-copy-row' }, [field, el('button', { className: 'ovp-btn', type: 'button', 'data-copy': id, text: 'Copy' })]),
+        ]);
     }
 
     function row(file) {
@@ -92,8 +95,15 @@
                     var name = r.main.querySelector('.ovp-result-name');
                     name.textContent = '';
                     name.appendChild(el('a', { href: body.links.page, text: body.title || 'Your picture' }));
-                    r.main.appendChild(copyRow('Link to the picture’s page', body.links.page));
-                    r.main.appendChild(copyRow('Direct link', body.links.direct));
+                    // The links of the new picture, side by side: the file itself, and the snippets to embed it.
+                    var links = body.links;
+                    var box = el('div', { className: 'ovp-result-links' });
+                    box.appendChild(copyRow('Direct link (the picture itself)', links.direct || ''));
+                    if (links.markdown) box.appendChild(copyRow('Markdown', links.markdown));
+                    if (links.bbcode) box.appendChild(copyRow('BBCode (forums)', links.bbcode));
+                    if (links.html) box.appendChild(copyRow('HTML', links.html));
+                    r.main.appendChild(box);
+                    r.main.appendChild(el('p', { className: 'ovp-result-note', text: 'Anyone with the link can open it — no account needed.' }));
                     if (body.delete_url) r.main.appendChild(el('div', { className: 'ovp-result-error', text: 'Keep this delete link, shown only now: ' + body.delete_url }));
                 } else if (xhr.status === 401) {
                     fail(r, 'Sign in with OpenVibe to upload.');
