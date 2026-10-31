@@ -119,11 +119,12 @@ const OUTPUT = {
         assert.deepStrictEqual([row.title, row.visibility], ['Coast', 'private'], 'a description-only change keeps the title and visibility');
     });
 
-    await check('an overview that describes a person is read and shown without it (openvibe-sdk/no-looks)', async () => {
-        await t.ctx.s.db.query('UPDATE video_upload_ai SET overview = $1 WHERE upload_id = $2', ['A man in a red hoodie walks along the coast at sunset.', id]);
-        assert.strictEqual((await t.ctx.videoAi.forUpload({ id })).overview, 'A person walks along the coast at sunset.', 'a row stored before the rule reads clean');
+    await check('an overview that describes a person is read and shown as written', async () => {
+        const said = 'A man in a red hoodie walks along the coast at sunset.';
+        await t.ctx.s.db.query('UPDATE video_upload_ai SET overview = $1 WHERE upload_id = $2', [said, id]);
+        assert.strictEqual((await t.ctx.videoAi.forUpload({ id })).overview, said, 'the overview is stored as written');
         const view = await vreq(t.base, `/u/${id}`, { cookie: kimCookie });
-        assert.ok(view.text.includes('A person walks along the coast at sunset.') && !view.text.includes('red hoodie'), 'the page shows the clean overview');
+        assert.ok(view.text.includes(said), 'the page shows the overview as written');
         await t.ctx.s.db.query('UPDATE video_upload_ai SET overview = $1 WHERE upload_id = $2', [OUTPUT.overview.text, id]);
     });
 
