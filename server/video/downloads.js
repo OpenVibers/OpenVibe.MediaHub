@@ -191,9 +191,10 @@ const FORMAT_HELP = {
 };
 const CHAPTER_TXT_HELP = 'Times and titles, ready to paste into a YouTube description';
 
-/** One row of the menu: an icon, what it is (and a line about it), and a link per format. */
+/** One row of the menu: an icon, what it is (and a line about it), and a link per format. Each format says what it is
+ *  for under its name, so the menu reads without hovering (a phone has no hover). */
 function row({ icon, label, about, links }) {
-    return html`<li class="ovv-dl-row"><i class="${icon}" aria-hidden="true"></i><span class="ovv-dl-what"><span class="ovv-dl-label">${label}</span>${about ? html`<span class="ovv-dl-about">${about}</span>` : ''}</span><span class="ovv-dl-formats">${links.map((l) => html`<a class="ovv-dl-format${l.main ? ' ovv-dl-format--main' : ''}" href="${l.href}" download rel="nofollow" title="${l.help || FORMAT_HELP[l.ext] || ''}" aria-label="${label}: ${l.text || l.ext.toUpperCase()} (${l.help || FORMAT_HELP[l.ext] || ''})">${l.text || l.ext.toUpperCase()}</a>`)}</span></li>`;
+    return html`<li class="ovv-dl-row"><i class="${icon}" aria-hidden="true"></i><span class="ovv-dl-what"><span class="ovv-dl-label">${label}</span>${about ? html`<span class="ovv-dl-about">${about}</span>` : ''}</span><span class="ovv-dl-formats">${links.map((l) => html`<a class="ovv-dl-format${l.main ? ' ovv-dl-format--main' : ''}" href="${l.href}" download rel="nofollow" title="${l.help || FORMAT_HELP[l.ext] || ''}" aria-label="${label}: ${l.text || l.ext.toUpperCase()} (${l.help || FORMAT_HELP[l.ext] || ''})"><span>${l.text || l.ext.toUpperCase()}</span>${l.purpose ? html`<small>${l.purpose}</small>` : ''}</a>`)}</span></li>`;
 }
 
 /** "570.7 MB" for a byte count (null when unknown). */
@@ -239,9 +240,19 @@ function downloadMenu({ kind, id, item, has }) {
         const ext = videoExt(item);
         rows.push(row({ icon: 'fa-solid fa-film', label: 'Video', about: [kind === 'clip' ? 'The clip' : 'The whole recording', size].filter(Boolean).join(' · '), links: [{ href: `${at}/video`, ext, main: true }] }));
     }
-    if (has.transcript) rows.push(row({ icon: 'fa-solid fa-closed-captioning', label: 'Transcript', about: `${has.transcript} lines, by AI`, links: ['txt', 'srt', 'vtt', 'json'].map((ext) => ({ href: `${at}/transcript.${ext}`, ext })) }));
-    if (has.chat) rows.push(row({ icon: 'fa-solid fa-comments', label: 'Chat replay', about: `${has.chat} messages`, links: ['txt', 'csv', 'json'].map((ext) => ({ href: `${at}/chat.${ext}`, ext })) }));
-    if (has.chapters) rows.push(row({ icon: 'fa-solid fa-list-ol', label: 'Chapters', about: `${has.chapters} chapters`, links: [{ href: `${at}/chapters.txt`, ext: 'txt', help: CHAPTER_TXT_HELP }, { href: `${at}/chapters.vtt`, ext: 'vtt' }, { href: `${at}/chapters.json`, ext: 'json' }] }));
+    if (has.transcript) rows.push(row({ icon: 'fa-solid fa-closed-captioning', label: 'Transcript', about: `${has.transcript} lines, written by AI`, links: [
+        { href: `${at}/transcript.txt`, ext: 'txt', purpose: 'to read' },
+        { href: `${at}/transcript.srt`, ext: 'srt', purpose: 'for editors' },
+        { href: `${at}/transcript.vtt`, ext: 'vtt', purpose: 'for web players' },
+        { href: `${at}/transcript.json`, ext: 'json', purpose: 'for programs' }] }));
+    if (has.chat) rows.push(row({ icon: 'fa-solid fa-comments', label: 'Chat replay', about: `${has.chat} messages`, links: [
+        { href: `${at}/chat.txt`, ext: 'txt', purpose: 'to read' },
+        { href: `${at}/chat.csv`, ext: 'csv', purpose: 'for spreadsheets' },
+        { href: `${at}/chat.json`, ext: 'json', purpose: 'for programs' }] }));
+    if (has.chapters) rows.push(row({ icon: 'fa-solid fa-list-ol', label: 'Chapters', about: `${has.chapters} chapters, made by AI`, links: [
+        { href: `${at}/chapters.txt`, ext: 'txt', purpose: 'to paste', help: CHAPTER_TXT_HELP },
+        { href: `${at}/chapters.vtt`, ext: 'vtt', purpose: 'for players' },
+        { href: `${at}/chapters.json`, ext: 'json', purpose: 'for programs' }] }));
     if (item.thumbnail_url) rows.push(row({ icon: 'fa-regular fa-image', label: 'Cover picture', about: null, links: [{ href: `${at}/thumbnail`, ext: 'jpg', text: 'Image' }] }));
     rows.push(row({ icon: 'fa-solid fa-circle-info', label: 'Details', about: 'Title, channel, dates, summary', links: [{ href: `${at}/info.json`, ext: 'json' }] }));
     const everything = html`<li class="ovv-dl-row ovv-dl-row--all"><i class="fa-solid fa-file-zipper" aria-hidden="true"></i><span class="ovv-dl-what"><span class="ovv-dl-label">Everything</span><span class="ovv-dl-about">All of the above but the video, in one .zip</span></span><span class="ovv-dl-formats"><a class="ovv-dl-format ovv-dl-format--main" href="${at}/all.zip" download rel="nofollow" title="${FORMAT_HELP.zip}" aria-label="Everything: ZIP (${FORMAT_HELP.zip})">ZIP</a></span></li>`;
@@ -249,7 +260,7 @@ function downloadMenu({ kind, id, item, has }) {
 <div class="ovv-dl-menu" role="group" aria-label="Download this ${kind === 'clip' ? 'clip' : 'recording'}">
 <div class="ovv-dl-head"><span>Download this ${kind === 'clip' ? 'clip' : 'recording'}</span><button type="button" class="ovv-dl-close" data-ovv-dl-close aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>
 <ul class="ovv-dl-list">${rows}${everything}</ul>
-<p class="ovv-dl-hint">Hover or long-press a format to see what it is for.</p>
+<p class="ovv-dl-hint">Every format says what it is for.</p>
 </div></details>`;
 }
 

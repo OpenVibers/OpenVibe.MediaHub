@@ -131,7 +131,7 @@ function createUploadApi({ ctx, config }) {
 
 /** The pages; `h` carries the video site's helpers (page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, cards). */
 function mountUploadPages(r, h) {
-    const { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt, playlistForm, upNext } = h;
+    const { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt, playlistForm, upNext, whatItIs, sharePanel } = h;
     const up = ctx.videoUploads;
     const cfg = ctx.config.videoUploads;
     const whoOf = (req) => ({ requester: signedIn(req) ? ownerOf(req) : null, staff: isStaff(req) });
@@ -246,7 +246,14 @@ ${fresh.map((x) => html`<tr><td><a href="/u/${x.id}">${x.title}</a></td><td>${st
         if (ready && !own) await up.view(row);
         const listed = ready && row.state === 'active' && row.visibility === 'public';
         const channel = row.owner_username;
-        const metaParts = [row.ready_at ? html`<time datetime="${row.ready_at}">${dateLabel(row.ready_at)}</time>` : null, row.duration_seconds ? durationLabel(row.duration_seconds) : null, `${Number(row.views) || 0} views`].filter(Boolean);
+        // What this video is (the market outcomes): an upload, the day it was uploaded, how long it is, how many people
+        // watched it. The channel is in the byline under the title.
+        const what = whatItIs({
+            kind: 'upload',
+            publishedAt: row.created_at,
+            durationSeconds: row.duration_seconds,
+            views: Number(row.views) || 0,
+        });
         const thumb = httpsUrl(row.thumbnail_url);
         if (row.status === 'processing') res.set('Refresh', '15');   // the page reloads itself until Media is done
         // Playlists (kind upload, by seq): a ready video anyone else may watch can be saved, and ?list= plays the next one.
@@ -279,11 +286,12 @@ ${ready && vod ? html`<div class="ovv-player-wrap"><video class="ovv-player" dat
             : row.status === 'failed' ? html`<p>This upload could not be processed. ${row.error || ''}</p>`
                 : html`<p>The upload stopped before the end (${row.parts_received} of ${row.parts_expected} parts). Upload the file again from <a href="/upload">Upload</a>.</p>`}</div>`}
 <h1 class="ovv-title">${row.title}</h1>
+${what}
 <div class="ovv-byline">
 ${channel ? html`<a class="ovv-avatar" href="/@${channel}" aria-hidden="true" tabindex="-1">${channel.slice(0, 1).toUpperCase()}${/^[A-Za-z0-9_]{1,32}$/.test(channel) ? html`<img src="${ctx.config.networkUrl}/avatar/${channel}" alt="" loading="lazy">` : ''}</a>` : ''}
 <div class="ovv-byline-text">${channel ? html`<a class="ovv-channel-name" href="/@${channel}">@${channel}</a>` : ''}
-${metaParts.length ? html`<span class="ovv-meta">${metaParts.map((p, i) => (i === 0 ? p : [html` · `, p]))}</span>` : ''}</div>
-${saveForm ? html`<div class="ovv-byline-actions">${saveForm}</div>` : ''}
+</div>
+${saveForm || sharePanel ? html`<div class="ovv-byline-actions">${saveForm}${sharePanel ? sharePanel({ url: `${ctx.config.video.url}/u/${row.id}`, id: row.id, at: Number(req.query.t) || null }) : ''}</div>` : ''}
 </div>
 ${row.description ? html`<section class="ovv-panel ovv-description"><p>${row.description}</p></section>` : ''}
 ${aiDone && ai.overview ? html`<section class="ovv-panel" aria-labelledby="h-ai"><h2 id="h-ai">About this video</h2><p>${ai.overview}</p><p class="ovv-fine">Written by AI from the video's sound and pictures (OpenVibe.AI, run on OpenVibe's own servers).</p>

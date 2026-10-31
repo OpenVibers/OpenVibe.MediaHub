@@ -11,6 +11,11 @@
  *   companion({ … })    chat replay, chapters and the transcript as one panel beside the player, as tabs (video.js
  *                       turns them on; without it the three are listed one after another, each with its heading)
  *
+ *   whatItIs({ … })    the one line under a watch page's title that says what the video is: a stream recording, a clip
+ *                       or an upload, when it was streamed or published, how long it is and how many people watched
+ *   sharePanel({ … })  the share box: the page's own link, and a link to the moment it is playing (no clip, nothing
+ *                       stored)
+ *
  * Times read the way a player shows them (1:57, or 1:02:05 in a video an hour or longer), not 00:01:57.
  */
 const { html } = require('../render/html');
@@ -22,6 +27,103 @@ function clockOf(seconds, long = false) {
     const m = Math.floor((n % 3600) / 60);
     const s = String(n % 60).padStart(2, '0');
     return h || long ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+}
+
+/** 31 → "31 seconds", 754 → "13 minutes", 7500 → "2 hours 5 minutes". */
+function lengthWords(s) {
+    const n = Math.max(0, Math.round(Number(s) || 0));
+    if (!n) return '';
+    const plural = (v, unit) => `${v} ${unit}${v === 1 ? '' : 's'}`;
+    if (n < 60) return plural(n, 'second');
+    if (n < 3600) return plural(Math.round(n / 60), 'minute');
+    const h = Math.floor(n / 3600);
+    const m = Math.round((n % 3600) / 60);
+    return m ? `${plural(h, 'hour')} ${plural(m, 'minute')}` : plural(h, 'hour');
+}
+
+/** "Oct 12, 2026" for a date (a Date, an ISO string or Live's own time), in the server's timezone. */
+function dayLabel(v) {
+    if (!v) return '';
+    const d = v instanceof Date ? v : new Date(String(v));
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/**
+ * A stream's own time (Live's 'YYYY-MM-DD HH:MM:SS', which is UTC) as a Date. Anything with a timezone marker in it is
+ * read as it is. Null when there is no time.
+ */
+function streamDate(v) {
+    const s = String(v == null ? '' : v).trim();
+    if (!s) return null;
+    const iso = /[TtZz]/.test(s) ? s : `${s.replace(' ', 'T')}Z`;
+    const t = Date.parse(iso);
+    return Number.isFinite(t) ? new Date(t) : null;
+}
+
+/** What a kind of video is called on the page. */
+const KINDS = {
+    recording: { icon: 'fa-solid fa-tower-broadcast', label: 'Stream recording' },
+    clip: { icon: 'fa-solid fa-scissors', label: 'Clip' },
+    upload: { icon: 'fa-solid fa-upload', label: 'Upload' },
+};
+
+/**
+ * The one line under a watch page's title that says what the video is: the kind (a stream recording, a clip or an
+ * upload), when it was streamed or published, how long it is and how many people watched it.
+ *
+ * Every word comes from the item's own fields: the date is the stream's own start (a recording) or the moment the
+ * item was made (a clip, an upload), the length is the file's, the views are the count Live keeps. A fact that is
+ * not there is left out rather than guessed.
+ *
+ *   kind: 'recording' | 'clip' | 'upload'
+ *   streamedAt: when it was streamed (a recording, or a clip's source recording)
+ *   publishedAt: when it was published or cut (the item's own created_at)
+ */
+function whatItIs({ kind, label = null, streamedAt = null, publishedAt = null, durationSeconds = null, views = null }) {
+    const k = KINDS[kind] || KINDS.recording;
+    const facts = [];
+    const streamed = streamedAt ? dayLabel(streamedAt) : '';
+    if (streamed) facts.push(html`Streamed on <time datetime="${isoOf(streamedAt)}">${streamed}</time>`);
+    else if (publishedAt) {
+        const day = dayLabel(publishedAt);
+        if (day) facts.push(html`${kind === 'upload' ? 'Uploaded' : kind === 'clip' ? 'Cut' : 'Published'} on <time datetime="${isoOf(publishedAt)}">${day}</time>`);
+    }
+    const len = lengthWords(durationSeconds);
+    if (len) facts.push(len);
+    const v = Number(views);
+    if (Number.isSafeInteger(v) && v > 0) facts.push(`${v.toLocaleString('en-US')} ${v === 1 ? 'view' : 'views'}`);
+    return html`<p class="ovv-what"><span class="ovv-what-kind"><i class="${k.icon}" aria-hidden="true"></i> ${label || k.label}</span>${facts.length ? html`<span class="ovv-what-facts">${facts.map((f, i) => (i === 0 ? f : [html` · `, f]))}</span>` : ''}</p>`;
+}
+
+/** A date as the value of a <time> element's datetime. */
+function isoOf(v) {
+    if (v instanceof Date) return Number.isNaN(v.getTime()) ? '' : v.toISOString();
+    return String(v == null ? '' : v);
+}
+
+/**
+ * The share box: the page's own link, and a link to the moment the video is playing. The link is written out in a
+ * field, so it can be copied without JavaScript; the buttons (copy, copy at this moment) appear when JavaScript is
+ * there. Nothing is stored and no clip is made: it is the page's address with a time on it.
+ *
+ *   url: the page's own address (with ?t= when the page was opened at a moment)
+ *   at: the moment in the video the page was opened at (seconds), or null
+ */
+function sharePanel({ url, id, at = null, what = 'video' }) {
+    const field = `ovv-share-${id}`;
+    const withTime = at != null && Number(at) > 0 ? `${url}?t=${Math.floor(Number(at))}` : url;
+    return html`<details class="ovv-pop ovv-share" data-ovv-menu><summary class="ovv-btn" title="Share a link to this ${what}"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Share</summary>
+<div class="ovv-pop-panel" role="group" aria-label="Share this ${what}">
+<p class="ovv-pop-title">Share this ${what}</p>
+<label class="sr-only" for="${field}">The link to this video</label>
+<input class="ovv-share-url" id="${field}" type="text" readonly value="${withTime}">
+<p class="ovv-fine">A plain link: it opens this page. Put <code>?t=125</code> on the end and the video opens at 2:05 — a moment, not a clip: nothing is stored and nothing is cut.</p>
+<p class="ovv-share-buttons">
+<button type="button" class="ovv-btn ovv-btn--small" hidden data-ovv-share="${url}" data-ovv-share-field="${field}">Copy the link</button>
+<button type="button" class="ovv-btn ovv-btn--small" hidden data-ovv-share-at="${url}" data-ovv-share-field="${field}">Copy the link at this moment</button>
+</p>
+</div></details>`;
 }
 
 /** A button of the action row that opens a menu or a small form. `body` is the panel's content (html). */
@@ -98,7 +200,7 @@ function companion({ kind, id, chat, chapters, transcript, long }) {
     if (transcript && transcript.length) {
         tabs.push({
             key: 'transcript', tab: 'Transcript', title: 'Transcript', count: transcript.length,
-            note: 'Written by AI from the audio',
+            note: 'Written by AI from the audio — it can be wrong',
             search: true,
             body: html`<div class="ovv-tp-body ovv-transcript-body" data-ovv-transcript>${transcript.map((s) => html`<p class="ovv-line" data-ovv-at="${Math.floor(s.start)}"><button type="button" class="ovv-seek" data-ovv-seek="${s.start}" title="Play from here">${clockOf(s.start, long)}</button> <span>${s.text}</span></p>`)}<p class="ovv-tp-empty" hidden data-ovv-search-empty>No line has that.</p></div>`,
         });
@@ -115,4 +217,4 @@ ${t.body}
 </section>`;
 }
 
-module.exports = { clockOf, actionMenu, menuLinks, cornerMenu, downloadsFor, companion };
+module.exports = { clockOf, lengthWords, dayLabel, streamDate, whatItIs, sharePanel, actionMenu, menuLinks, cornerMenu, downloadsFor, companion };
