@@ -75,7 +75,7 @@ button.sc-btn.sc-primary { border: 0; }
    stay tables. Nothing is left out and nothing scrolls sideways. */
 @media (max-width: 640px) {
     .table-wrap:has(> table thead th:nth-child(3)) { overflow: visible; }
-    .table-wrap > table:has(thead th:nth-child(3)) { display: block; }
+    .table-wrap > table:has(thead th:nth-child(3)) { display: block; min-width: 0; }
     .table-wrap > table:has(thead th:nth-child(3)) thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     .table-wrap > table:has(thead th:nth-child(3)) tbody { display: grid; gap: 10px; }
     .table-wrap > table:has(thead th:nth-child(3)) tr { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--border, #1f2d47); border-radius: 14px; background: var(--bg-card, var(--bg-secondary, #101828)); }
