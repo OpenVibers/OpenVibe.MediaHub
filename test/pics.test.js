@@ -82,7 +82,7 @@ function multipart(fields, file) {
             assert.match(home, /<title>OpenVibe\.Pics: share and embed pictures with a link<\/title>/);
             const sections = ['How it works', 'The links a picture gets', 'Upload from your own app', 'What a free account gets', 'Questions', 'More on OpenVibe'];
             assert.deepStrictEqual(sections.filter((h) => !home.includes(`>${h}</h2>`)), [], 'every section is there');
-            assert.ok(home.includes('<td>20 MB</td>') && home.includes('<td>200</td>') && home.includes('<td>5 GB</td>'), 'the limits are the configured ones');
+            assert.ok(/<td[^>]*>20 MB<\/td>/.test(home) && /<td[^>]*>200<\/td>/.test(home) && /<td[^>]*>5 GB<\/td>/.test(home), 'the limits are the configured ones');
             assert.ok(home.includes('/api/v1/images \\\n  -H "Authorization: Bearer $OPENVIBE_TOKEN" \\\n'), 'the curl sample keeps its line breaks');
             const ld = [...home.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap((m) => [].concat(JSON.parse(m[1])));
             const faq = ld.find((x) => x['@type'] === 'FAQPage');
