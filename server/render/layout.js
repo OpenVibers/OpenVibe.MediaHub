@@ -97,8 +97,6 @@ ${appIcon.headTags({ site: 'media-hub' })}
 <link rel="stylesheet" href="${asset('css/app.css')}">
 ${(o.styles || []).map((name) => `<link rel="stylesheet" href="${esc(ovServe.url(name))}">`).join('\n')}
 ${render(scripts)}
-<!-- The OpenVibe glyphs draw every fa- icon here (no Font Awesome since 2026-11-01). -->
-<script id="ov-glyphs-loader" src="${ovServe.url('ov-glyphs.js')}" defer></script>
 <meta name="ov-boost" content="media-hub@${esc(RELEASE)}">
 <script src="${ovServe.url('boost.js')}" data-main="#main" defer></script>`,
         body: `<a class="skip" href="#main">Skip to content</a>
