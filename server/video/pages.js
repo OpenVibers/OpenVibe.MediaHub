@@ -959,6 +959,7 @@ ${visibilityChoices(item.visibility || 'public')}
             description,
             jsonLd: [
                 seo.jsonLd.website({ name: 'OpenVibe.Video', url: base, description }),
+                seo.jsonLd.organization(),
                 seo.jsonLd.webPage({ name: 'OpenVibe.Video', url: `${base}/`, description, siteUrl: base }),
                 ...(listed.length ? [seo.jsonLd.itemList('Latest stream recordings on OpenVibe.Video', listed, { url: `${base}/` })] : []),
                 seo.jsonLd.faq(faq),
