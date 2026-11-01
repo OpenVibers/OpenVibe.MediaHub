@@ -641,3 +641,6 @@ html.ov-motion .ovv-stat.is-live .ovv-dot { animation: ovv-pulse 1.6s ease-out i
   .ovv-chapter-list, .ovv-chapters ol { max-height: none; overflow: visible; }
   .ovv-transcript-body, .ovv-chat-body { max-height: min(60vh, 26rem); max-height: min(60svh, 26rem); }
 }
+/* A sign-in prompt: the sentence, then the button under it (phone sweep, 2026-11-01). */
+.notice.signin-prompt { display: grid; gap: 12px; justify-items: start; }
+.notice.signin-prompt p { margin: 0; }

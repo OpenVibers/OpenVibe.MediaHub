@@ -606,7 +606,7 @@ function createVideoRoutes(ctx) {
 
     const signedIn = (req) => Boolean(req.viewer && req.viewer.kind === 'user' && req.viewer.subject);
     const ownerOf = (req) => `user:${req.viewer.subject}`;
-    const signInPrompt = (what, next) => html`<div class="notice">${what} <a href="/auth/login?next=${encodeURIComponent(next)}">Sign in with OpenVibe</a>.</div>`;
+    const signInPrompt = (what, next) => html`<div class="notice signin-prompt"><p>${what}</p><p><a class="ovv-btn ovv-btn--primary" href="/auth/login?next=${encodeURIComponent(next)}">Sign in with OpenVibe</a></p></div>`;
     const mustSignIn = (back, why) => (req, res, next) => (signedIn(req) ? next() : page(req, res, {
         title: 'Sign in',
         body: html`<h1>Sign in first</h1>${signInPrompt(why, back === 'here' ? req.originalUrl : back)}`,
