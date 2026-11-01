@@ -64,7 +64,8 @@ function renderPage(o) {
 ${appIcon.headTags({ site: 'media-hub' })}
 <link rel="stylesheet" href="${asset('css/app.css')}">
 <link rel="stylesheet" href="${asset('css/video.css')}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+<!-- The OpenVibe glyphs draw every fa- icon here (no Font Awesome since 2026-11-01). -->
+<script id="ov-glyphs-loader" src="${ovServe.url('ov-glyphs.js')}" defer></script>
 ${o.player ? `<link rel="stylesheet" href="${ovServe.url('player.css')}">\n<script src="${ovServe.url('player.js')}" defer></script>\n` : ''}${(o.scripts || []).map((rel) => `<script src="${asset(rel)}" defer></script>`).join('\n')}`;
     const account = signedIn
         ? html`Signed in as <strong>${viewer.displayName || viewer.username || 'you'}</strong> · <a href="/auth/logout?next=${encodeURIComponent(pathNow)}">Sign out</a>`
