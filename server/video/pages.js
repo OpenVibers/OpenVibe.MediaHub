@@ -514,11 +514,27 @@ function viewsLabel(n) {
     return `${v.toLocaleString('en-US')} ${v === 1 ? 'view' : 'views'}`;
 }
 
+/** Network's origin for faces (/avatar/:username answers the picture, or a neutral one): set by createVideoRoutes. */
+let faceBase = null;
+
+/**
+ * No picture: the maker's face over a blur of it (as Shared's kit.card and Live's cards show), when the channel is a
+ * username; else the kind's icon.
+ */
+function cardPlaceholder(o, icon) {
+    const name = String(o.channel || '');
+    if (faceBase && /^[A-Za-z0-9_]{1,32}$/.test(name)) {
+        const face = `${faceBase}/avatar/${name}?s=160`;
+        return html`<span class="ovv-card-placeholder ovv-card-who"><img class="ovv-who-bg" src="${face}" alt="" loading="lazy" decoding="async"><img class="ovv-who-face" src="${face}" alt="" loading="lazy" decoding="async"></span>`;
+    }
+    return html`<span class="ovv-card-placeholder"><i class="fa-solid ${icon}"></i></span>`;
+}
+
 function card(o) {
     const channel = o.channel ? html`<a href="${o.channelHref}">@${o.channel}</a>` : null;
     const icon = o.live ? 'fa-tower-broadcast' : (o.kind === 'clip' ? 'fa-scissors' : 'fa-video');
     return html`<article class="ovv-card">
-<a class="ovv-card-media" href="${o.href}" tabindex="-1" aria-hidden="true">${o.thumb ? thumbImg(o.thumb, CARD_SIZES) : html`<span class="ovv-card-placeholder"><i class="fa-solid ${icon}"></i></span>`}${o.duration ? html`<span class="ovv-dur">${o.duration}</span>` : ''}${o.badge ? html`<span class="ovv-tag${o.live ? ' ovv-tag--live' : ''}">${o.badge}</span>` : ''}</a>
+<a class="ovv-card-media" href="${o.href}" tabindex="-1" aria-hidden="true">${o.thumb ? thumbImg(o.thumb, CARD_SIZES) : cardPlaceholder(o, icon)}${o.duration ? html`<span class="ovv-dur">${o.duration}</span>` : ''}${o.badge ? html`<span class="ovv-tag${o.live ? ' ovv-tag--live' : ''}">${o.badge}</span>` : ''}</a>
 <div class="ovv-card-body">
 <h3 class="ovv-card-title"><a href="${o.href}">${o.title}</a></h3>
 ${meta([channel, o.extra || null, o.views ? viewsLabel(o.views) : null, o.date ? html`<time datetime="${o.iso}">${o.date}</time>` : null])}
@@ -572,6 +588,7 @@ const grid = (cards, empty = 'Nothing here yet.') => (cards && cards.length ? ht
 
 function createVideoRoutes(ctx) {
     const { config, log, playlists } = ctx;
+    faceBase = /^https?:\/\//.test(String(config.networkUrl || '')) ? String(config.networkUrl).replace(/\/+$/, '') : null;
 
     // A channel page lists that person's public playlists, which are stored by subject: the username is resolved
     // through Network (identity.subject.resolve) and remembered for ten minutes (an unknown name for one), at most
