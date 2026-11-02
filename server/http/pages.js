@@ -32,6 +32,7 @@ const { pipeline } = require('stream/promises');
 const ovServe = require('openvibe-shared/serve');
 const frame = require('openvibe-shared/frame');
 const showcase = require('openvibe-shared/showcase');
+const kit = require('openvibe-shared/kit');
 const cache = require('openvibe-shared/cache-policy');
 const seo = require('openvibe-shared/seo');
 const { asyncRouter } = require('./router');
@@ -58,6 +59,24 @@ const SAFETY_RULES = [
     'Every download needs a signed-in OpenVibe account, and every share carries the name of the person who made it.',
 ];
 const REPORT_NOTE = 'Every share page has a Report form. Three different people reporting a share — or one report of illegal content — suspends it at once and puts it in front of OpenVibe staff.';
+
+/**
+ * The home's picture (MOTION-1, 2026-11-02: it drew the generic aura): the drive in miniature. A folder and a video in
+ * your files, and the video's share link: who may open it, when it ends, how often it was downloaded, and the button
+ * that takes it back. Every line is something the drive really does.
+ */
+function driveScene() {
+    const ic = (n) => kit.icon(n);
+    return `<div class="dl-scene" aria-hidden="true">
+<div class="dl-files"><div class="dl-files-head"><b>Your files</b><span>25 GB free</span></div>
+<div class="dl-file">${ic('folder')}<span><b>Trip to Lisbon</b><small>12 files</small></span></div>
+<div class="dl-file is-on">${ic('video')}<span><b>holiday-cut.mp4</b><small>1.2 GB</small></span>${ic('link')}</div></div>
+<div class="dl-share"><div class="dl-share-url">${ic('link')}<span>openvibe.download/s/k3x9…</span></div>
+<div class="dl-share-row">${ic('user')}<span>sam, riley</span></div>
+<div class="dl-share-row">${ic('clock')}<span>ends in 7 days</span></div>
+<div class="dl-share-foot"><span>${ic('download')} 3 downloads</span><span class="dl-share-btn">Take back</span></div></div>
+</div>`;
+}
 
 function createPageRoutes(ctx) {
     const { config, s, drive, uploads, media, syncKeys, drops } = ctx;
@@ -175,6 +194,7 @@ ${notice(p && p.detail ? p.detail : 'You are over the limit for this.', 'warn')}
                 ? [{ label: 'Your files', href: '/files', primary: true }, { label: 'Back up a folder', href: '/sync' }]
                 : [{ label: 'Sign in with OpenVibe', href: '/auth/login?next=%2Ffiles', primary: true }, { label: 'How backups work', href: '#sc-back-up-a-folder-from-your-computer' }],
             note: 'Open source. The bytes live in OpenVibe.Media; this service holds the names, the folders and the share links.',
+            aside: { html: driveScene() },
         });
         const faq = homeFaq();
         page(req, res, {

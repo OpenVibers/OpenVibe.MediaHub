@@ -91,3 +91,27 @@ button.sc-btn.sc-primary { border: 0; }
 .ovk-label { display: inline-flex; align-items: center; min-height: 20px; padding: 0 8px; border-radius: 999px; font-size: .7rem; font-weight: 700; letter-spacing: .02em; line-height: 1.2;
   color: var(--text-secondary, #a8b3c7); background: color-mix(in srgb, var(--text-primary, #e6edf7) 7%, transparent); border: 1px solid var(--border, rgba(255,255,255,.1)); }
 .ovk-label--adult { color: var(--warning-text, #fbbf24); border-color: color-mix(in srgb, var(--warning-text, #fbbf24) 45%, transparent); background: color-mix(in srgb, var(--warning-text, #fbbf24) 9%, transparent); }
+
+/* ── The home's picture: the drive in miniature (MOTION-1, 2026-11-02) ─────────────────────────────────────────────
+   Theme tokens only, so it reads in every look; a card for the files and one for the share link, the link card
+   overlapping the files a little, the way the share sheet sits over the list. */
+.dl-scene { position: relative; width: min(100%, 360px); margin: 0 auto; padding-bottom: 8px; }
+.dl-scene svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dl-files, .dl-share { border-radius: 16px; border: 1px solid var(--border, rgba(255, 255, 255, .1)); background: var(--bg-card, #141c2a); box-shadow: 0 12px 30px rgba(0, 0, 0, .22); }
+.dl-files { padding: 14px; display: grid; gap: 8px; }
+.dl-files-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--text-muted, #93a0b4); }
+.dl-files-head b { font-size: 14px; color: var(--text-primary, #e8ecf3); }
+.dl-file { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--bg-secondary, #0f1522); color: var(--text-secondary, #b6c0d2); }
+.dl-file > span { display: grid; gap: 1px; flex: 1; min-width: 0; }
+.dl-file b { font-size: 14px; color: var(--text-primary, #e8ecf3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-file small { font-size: 12px; color: var(--text-muted, #93a0b4); }
+.dl-file.is-on { outline: 2px solid color-mix(in srgb, var(--accent, #3b82f6) 60%, transparent); outline-offset: -2px; }
+.dl-file.is-on > svg:last-child { color: var(--accent, #3b82f6); }
+.dl-share { position: relative; margin: -14px 0 0 auto; width: 82%; padding: 14px; display: grid; gap: 8px; font-size: 13px; color: var(--text-secondary, #b6c0d2); }
+.dl-share-url { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--accent, #3b82f6) 12%, transparent); color: var(--text-primary, #e8ecf3); font: 600 12.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; min-width: 0; }
+.dl-share-url span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-share-row { display: flex; align-items: center; gap: 8px; }
+.dl-share-row svg { color: var(--text-muted, #93a0b4); }
+.dl-share-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px; border-top: 1px solid var(--border, rgba(255, 255, 255, .1)); }
+.dl-share-foot > span:first-child { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted, #93a0b4); }
+.dl-share-btn { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border, rgba(255, 255, 255, .14)); color: var(--text-primary, #e8ecf3); font-weight: 600; font-size: 12.5px; }
