@@ -4,6 +4,24 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
 
 ## Unreleased
 
+- OpenVibe.Pics says in writing what it does with a picture (2026-10-30, the market research): three policy pages —
+  `/exif` (the metadata — the GPS position, the camera, the time it was taken — is taken out by us, and the file you
+  upload is not kept), `/content-policy` (what is not allowed, how a rule is enforced, and what this site does not
+  do) and `/ai-training` (we do not train on the pictures you upload; the one thing that asks a model is the alt text
+  you ask for, and it keeps a hash, not the picture). Every number on them comes from the service's own
+  configuration, and where the code cannot promise something the page says so: the stripping happens after your file
+  arrives, and a promise about AI is not a lock. The home says in one line who removes the metadata, and a picture's
+  page shows its links side by side — the file itself, Markdown, BBCode and HTML — copyable without an account.
+
+- The watch pages say what the video is (2026-10-30, the market research): under the title, the kind — a stream
+  recording, a clip or an upload — with the day it was streamed (Live's own stream time), its length and its views.
+  Every word comes from the item's own fields; a fact Live does not give is left out, not guessed. A clip credits the
+  recording it was cut from and links back to it, at the moment the clip starts; a recording that is not public any
+  more is named as such. The share box writes the page's own link out (a plain link, and `?t=125` to open the video at
+  2:05 — a moment, not a clip: nothing is stored). Every export says what it is for (TXT to read, SRT for editors, VTT
+  for web players, JSON for programs, CSV for spreadsheets) and the transcript says it was written by AI, and can be
+  wrong. The menus on a phone open above the app bar, so their buttons are not behind it.
+
 - openvibe.video's sitemap carries an image entry per video (SEO-17): the same entry that names `<video:video>` also names its thumbnail as `<image:image><image:loc>` — built from the thumbnail the video entry already has, so it is only there when the URL exists and is https. Entries without a thumbnail keep no image, the video entries and the ten-minute cache are unchanged, and openvibe.download's private shares and openvibe.pics (`/i/` is in its robots' disallow) are untouched. `test/video-pages.test.js` pins one image per video entry, the same URL as its `thumbnail_loc`.
 - openvibe.video's search basics (2026-10-20). A watch page nobody wrote about gets a description of its own (who,
   how long, when, its first words) instead of the site tagline. A recording under two minutes with nothing written

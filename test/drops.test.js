@@ -70,7 +70,7 @@ async function drop(t, data, { name = 'notes.bin', token: tokenOverride = null }
         assert.strictEqual(dl.status, 200);
         assert.strictEqual(sha256(dl.buffer), sha256(data), 'the bytes round-trip');
         assert.match(String(dl.headers.get('content-disposition')), /attachment/);
-        assert.ok((await t.get(`/d/${first}`)).text.includes('<td>1</td>'), 'downloads are counted');
+        assert.ok(/<td[^>]*>1<\/td>/.test((await t.get(`/d/${first}`)).text), 'downloads are counted');
     });
 
     await check('the per-address caps and the size cap hold', async () => {

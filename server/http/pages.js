@@ -36,6 +36,7 @@ const cache = require('openvibe-shared/cache-policy');
 const seo = require('openvibe-shared/seo');
 const { asyncRouter } = require('./router');
 const { createDiscoveryRoutes, homeJsonLd, homeDescription } = require('./discovery');
+const { TWIN_PATHS } = require('../drive/agent-pages');
 const { sameOrigin } = require('./principal');
 const { html, raw, table, notice, time, badge } = require('../render/html');
 const { send } = require('../render/layout');
@@ -67,7 +68,8 @@ function createPageRoutes(ctx) {
     // Revalidated on every view, as Video's and Pics' guest pages are (server/video/layout.js GUEST_HTML): Cloudflare drops
     // `Vary`, so a guest copy kept in the browser would hide a sign-in.
     const PUBLIC_CACHE = 'public, max-age=0, must-revalidate';
-    const page = (req, res, o, status = 200) => send(res, status, { viewer: req.viewer, config, path: req.originalUrl, ...o });
+    // The public pages name their Markdown twin (openvibe-shared/agent-layer) in the head; the signed-in pages have none.
+    const page = (req, res, o, status = 200) => send(res, status, { viewer: req.viewer, config, path: req.originalUrl, agentLayer: TWIN_PATHS.has(req.path), ...o });
     const signedIn = (req) => Boolean(req.viewer && req.viewer.kind === 'user' && req.viewer.subject);
     const staffViewer = (req) => isStaff(req.viewer);
     const requesterOf = (req) => `user:${req.viewer.subject}`;

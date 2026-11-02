@@ -1,32 +1,31 @@
 'use strict';
 
 /**
- * Sign-in with OpenVibe.Network: OAuth 2 authorization code with PKCE (S256), as OAuth client `media-hub`.
+ * Sign-in with OpenVibe.Network, on openvibe-sdk/sso (0.73.0) instead of this service's own copy of the OAuth client.
  *
- *   GET  /auth/login      → Network /oauth/authorize?…&code_challenge=…&code_challenge_method=S256
- *                           (?silent=1 adds prompt=none; ?next= a same-site path)
- *   GET  /auth/callback   → state check, server-side code exchange (client secret + code_verifier)
- *   GET  /auth/logout     → clear cookies, revoke the refresh token (best effort)
- *   GET  /auth/me         → { user } for the shared navbar (it cannot read the httpOnly cookie); { user: null } for a guest
+ * OpenVibe.MediaHub serves three hosts under one Network client (`media-hub`): the drive (BASE_URL), OpenVibe.Video and
+ * OpenVibe.Pics. Each host signs in with its own registered callback URI, and cookies are host-only, so each host keeps
+ * its own session. The SDK client is per host for exactly that reason; /auth/me, /auth/logout and the flow stay one
+ * surface.
  *
- * The person's Network access token lives in an httpOnly cookie (media-hub_at) no script can read: with it, a script
- * could act as them. The refresh token (media-hub_rt) is httpOnly too. Neither is ever stored server-side, rendered
- * or logged.
+ *   middleware()          req.viewer (the page renderer's shape), from sso.optionalAuth()
+ *   routes()              the SDK's /auth router (host-dispatched for /login and /callback), plus this site's
+ *                         /auth/me body and the cross-site sign-out guard
+ *   asViewer(req,res,fn)  run a Network call as the person, refreshing once on 401
+ *   tokenGrant(fields)    a token request with this site's client
+ *
+ * The old cookie names (media-hub_at, media-hub_rt) are handed to the SDK as legacyCookies, so nobody is signed out by
+ * the move: they are read as the session until the next sign-in or refresh writes ov_token / ov_refresh and clears them.
  */
-const crypto = require('crypto');
 const express = require('express');
 const cache = require('openvibe-shared/cache-policy');
+const { createSsoClient } = require('openvibe-sdk/sso');
 
 const ACCESS_COOKIE = 'media-hub_at';
 const REFRESH_COOKIE = 'media-hub_rt';
 const HINT_COOKIE = 'ov_sso_hint';
-const FLOW_COOKIE = 'media-hub_oauth';
-
-function pkcePair() {
-    const verifier = crypto.randomBytes(32).toString('base64url');           // 43 characters
-    const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
-    return { verifier, challenge };
-}
+const SDK_ACCESS_COOKIE = 'ov_token';
+const SDK_REFRESH_COOKIE = 'ov_refresh';
 
 /** This service's own origins: the drive (BASE_URL), OpenVibe.Video and OpenVibe.Pics. */
 function ownOrigins(config) {
@@ -40,12 +39,9 @@ function ownOrigins(config) {
 /**
  * Same-site relative paths only (never protocol-relative, never another origin). An absolute URL on one of this
  * service's own origins counts as its path: the shared navbar's silent sign-in sends the whole page address
- * (`next=https://openvibe.video/v/5902`), and until 2026-10-22 that landed on the home page, so a person signed in
- * quietly on a video page found themselves somewhere else and went Back to a signed-out copy of it.
+ * (`next=https://openvibe.video/v/5902`), and until 2026-10-22 that landed on the home page.
  */
 function sanitizeNext(next, config) {
-    // Browsers drop tab and newline characters from a URL and read a backslash as "/": "/<TAB>/evil.com" would
-    // leave the site. A next with any control character or backslash goes home.
     if (typeof next === 'string' && /[\u0000-\u001f\u007f\\]/.test(next)) return '/';
     if (typeof next === 'string' && /^https?:\/\//i.test(next)) {
         let u = null;
@@ -57,78 +53,73 @@ function sanitizeNext(next, config) {
     return next;
 }
 
-function authorizeUrl(config, { state, challenge, silent = false, redirectUri = null }) {
-    const q = new URLSearchParams({
-        response_type: 'code',
-        client_id: config.oauth.clientId,
-        redirect_uri: redirectUri || config.oauth.redirectUri,
-        scope: config.oauth.scope,
-        state,
-        code_challenge: challenge,
-        code_challenge_method: 'S256',
-    });
-    if (silent) q.set('prompt', 'none');
-    return `${config.networkUrl}/oauth/authorize?${q.toString()}`;
+function pkcePair() {
+    const crypto = require('crypto');
+    const verifier = crypto.randomBytes(32).toString('base64url');           // 43 characters
+    const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+    return { verifier, challenge };
+}
+
+/** A host's origin and hostname, or null when it is not a URL. */
+function hostOf(url) {
+    try {
+        const base = String(url).replace(/\/+$/, '');
+        return { base, host: new URL(base).hostname.toLowerCase() };
+    } catch { return null; }
 }
 
 function createSso({ config, keys, fetchImpl = globalThis.fetch, now = () => Date.now(), log = console }) {
-    const cookieBase = () => ({ sameSite: 'lax', secure: config.cookies.secure, httpOnly: true, path: '/' });
-
-    // openvibe.video signs in through the same Network client, but with its own callback URI: the Network
-    // registered https://openvibe.video/auth/callback for client media-hub next to the drive's. Cookies are
-    // host-only (no Domain), so each host keeps its own session.
-    const videoRedirectUri = (() => { try { return `${String(config.video.url).replace(/\/+$/, '')}/auth/callback`; } catch { return null; } })();
-    const videoHostname = (() => { try { return new URL(config.video.url).hostname; } catch { return null; } })();
-    // openvibe.pics likewise (https://openvibe.pics/auth/callback, registered for client media-hub on 2026-10-15).
-    const picsRedirectUri = (() => { try { return `${String(config.pics.url).replace(/\/+$/, '')}/auth/callback`; } catch { return null; } })();
-    const picsHostname = (() => { try { return new URL(config.pics.url).hostname; } catch { return null; } })();
-    const redirectUriFor = (req) => {
-        if (videoRedirectUri && videoHostname && req && req.hostname === videoHostname) return videoRedirectUri;
-        if (picsRedirectUri && picsHostname && req && req.hostname === picsHostname) return picsRedirectUri;
-        return config.oauth.redirectUri;
+    const secure = config.cookies.secure;
+    const shared = {
+        clientId: config.oauth.clientId,
+        clientSecret: config.oauth.clientSecret,
+        networkUrl: config.networkUrl,
+        networkInternalUrl: config.networkInternalUrl,
+        issuer: config.networkIssuer,
+        scope: config.oauth.scope,
+        audience: config.oauth.sessionAudience,
+        secureCookies: secure,
+        httpOnlyAccess: true,
+        legacyCookies: { access: [ACCESS_COOKIE], refresh: [REFRESH_COOKIE] },
+        fetch: fetchImpl,
+        log,
     };
 
+    const sso = createSsoClient({ ...shared, site: 'media-hub', siteName: 'OpenVibe.MediaHub', baseUrl: config.baseUrl, redirectUri: config.oauth.redirectUri });
+    const extraHosts = [];
+    for (const [site, siteName, url] of [['video', 'OpenVibe.Video', config.video && config.video.url], ['pics', 'OpenVibe.Pics', config.pics && config.pics.url]]) {
+        const h = hostOf(url);
+        if (h) extraHosts.push({ host: h.host, sso: createSsoClient({ ...shared, site, siteName, baseUrl: h.base, redirectUri: `${h.base}/auth/callback` }) });
+    }
+    const clientFor = (req) => {
+        const host = String(req.hostname || '').toLowerCase();
+        const picked = extraHosts.find((h) => h.host === host);
+        return picked ? picked.sso : sso;
+    };
+    const routers = new Map();
+    const routerFor = (client) => {
+        if (!routers.has(client)) routers.set(client, client.router(express));
+        return routers.get(client);
+    };
+
+    const cookieBase = (opts) => ({ sameSite: 'lax', secure, httpOnly: true, path: '/', ...opts });
+
     function setSession(res, data) {
-        res.cookie(ACCESS_COOKIE, data.access_token, { ...cookieBase(), maxAge: 24 * 60 * 60 * 1000 });
-        if (data.refresh_token) res.cookie(REFRESH_COOKIE, data.refresh_token, { ...cookieBase(), maxAge: 30 * 24 * 60 * 60 * 1000 });
-        res.cookie(HINT_COOKIE, 'account', { sameSite: 'lax', secure: config.cookies.secure, httpOnly: false, path: '/', maxAge: 365 * 24 * 60 * 60 * 1000 });
+        res.clearCookie(ACCESS_COOKIE, { path: '/' });
+        res.clearCookie(REFRESH_COOKIE, { path: '/' });
+        res.cookie(SDK_ACCESS_COOKIE, data.access_token, cookieBase({ maxAge: 24 * 60 * 60 * 1000 }));
+        if (data.refresh_token) res.cookie(SDK_REFRESH_COOKIE, data.refresh_token, cookieBase({ path: '/auth', maxAge: 30 * 24 * 60 * 60 * 1000 }));
+        res.cookie(HINT_COOKIE, 'account', { sameSite: 'lax', secure, httpOnly: false, path: '/', maxAge: 365 * 24 * 60 * 60 * 1000 });
     }
     function clearSession(res) {
-        res.clearCookie(ACCESS_COOKIE, cookieBase());
-        res.clearCookie(REFRESH_COOKIE, cookieBase());
+        res.clearCookie(ACCESS_COOKIE, { path: '/' });
+        res.clearCookie(REFRESH_COOKIE, { path: '/' });
+        res.clearCookie(SDK_ACCESS_COOKIE, { path: '/' });
+        res.clearCookie(SDK_REFRESH_COOKIE, { path: '/auth' });
     }
-
-    /** POST the Network token endpoint (internal URL). Throws { status, error } on refusal. */
-    async function tokenGrant(fields) {
-        const body = new URLSearchParams({ client_id: config.oauth.clientId, client_secret: config.oauth.clientSecret, ...fields });
-        let res;
-        try {
-            res = await fetchImpl(`${config.networkInternalUrl}/oauth/token`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-                body, signal: AbortSignal.timeout(10_000),
-            });
-        } catch (err) {
-            throw Object.assign(new Error('OpenVibe.Network did not answer'), { status: 502, error: err && err.name === 'TimeoutError' ? 'timeout' : 'unreachable' });
-        }
-        const data = await res.json().catch(() => null);
-        if (!res.ok || !data || !data.access_token) {
-            throw Object.assign(new Error((data && (data.error_description || data.error)) || `token endpoint ${res.status}`),
-                { status: res.status, error: (data && data.error) || 'invalid_grant' });
-        }
-        return data;
-    }
-
-    /**
-     * A OpenVibe.MediaHub session is a Network SESSION token: audience openvibe.network and a person. The Network
-     * signs FedCM assertions (audience = any owned-zone origin that asked), app/service tokens and
-     * internal tokens with the same key and issuer; none of them may become a session here.
-     */
-    async function verifySession(token) {
-        const v = await keys.verifyUser(token, { issuer: config.networkIssuer, audience: config.oauth.sessionAudience, now: now() });
-        const c = v.claims;
-        if (c && (c.typ === 'fedcm' || c.actor_type !== undefined)) return { ok: false, reason: 'not a session token' };
-        return v;
+    function readRefresh(req) {
+        const c = req.cookies || {};
+        return c[SDK_REFRESH_COOKIE] || c[REFRESH_COOKIE] || null;
     }
 
     function viewerFromClaims(claims, token) {
@@ -155,35 +146,26 @@ function createSso({ config, keys, fetchImpl = globalThis.fetch, now = () => Dat
     }
 
     async function doRefresh(req, res) {
-        const rt = req.cookies && req.cookies[REFRESH_COOKIE];
+        const rt = readRefresh(req);
         if (!rt) return null;
         try {
-            const data = await tokenGrant({ grant_type: 'refresh_token', refresh_token: rt });
+            const data = await sso.tokenGrant({ grant_type: 'refresh_token', refresh_token: rt });
             setSession(res, data);
-            const v = await verifySession(data.access_token);
-            return v.ok ? viewerFromClaims(v.claims, data.access_token) : null;
+            const claims = await sso.verify(data.access_token);
+            return claims ? viewerFromClaims(claims, data.access_token) : null;
         } catch (err) {
             if (err.status && err.status < 500) clearSession(res);
             return null;
         }
     }
 
-    /** req.viewer for every page: the signed-in person, refreshed when their token expired. */
+    /** req.viewer for every page: the signed-in person (sso.optionalAuth puts req.user and req.token there). */
     function middleware() {
-        return async (req, res, next) => {
-            req.viewer = { kind: 'anonymous' };
-            const token = req.cookies && req.cookies[ACCESS_COOKIE];
-            if (!token) return next();
-            await keys.ensure();
-            const v = await verifySession(token);
-            if (v.ok) { req.viewer = viewerFromClaims(v.claims, token); return next(); }
-            if (v.expired) {
-                const fresh = await refresh(req, res);
-                if (fresh) { req.viewer = fresh; return next(); }
-            }
-            if (keys.loaded()) clearSession(res);
+        const auth = sso.optionalAuth();
+        return (req, res, next) => auth(req, res, () => {
+            req.viewer = req.user ? viewerFromClaims(req.user, req.token) : { kind: 'anonymous' };
             next();
-        };
+        });
     }
 
     /**
@@ -192,7 +174,7 @@ function createSso({ config, keys, fetchImpl = globalThis.fetch, now = () => Dat
      */
     async function asViewer(req, res, fn) {
         try {
-            return await fn(req.viewer.token);
+            return await fn(req.viewer && req.viewer.token);
         } catch (err) {
             if (!err || err.status !== 401) throw err;
             const fresh = await refresh(req, res);
@@ -202,58 +184,38 @@ function createSso({ config, keys, fetchImpl = globalThis.fetch, now = () => Dat
         }
     }
 
+    // Sign-out ends the session, so another site must not be able to trigger it (a cross-site
+    // <img src=/auth/logout> or link). A same-origin navigation or form, or the address bar
+    // (Sec-Fetch-Site none), signs out directly; anything else gets a confirm button (POST).
+    const sameOriginRequest = (req) => {
+        const site = String(req.get('sec-fetch-site') || '');
+        if (site) return site === 'same-origin' || (site === 'none' && req.method === 'GET');
+        const origin = req.get('origin');
+        if (origin) return origin === `${req.protocol}://${req.get('host')}`;
+        return req.method === 'GET';    // no fetch metadata and no Origin: an old browser navigating
+    };
+
     function routes() {
         const r = express.Router();
-        const flowOpts = () => ({ ...cookieBase(), path: '/auth', maxAge: 10 * 60 * 1000 });
 
-        r.get('/login', (req, res) => {
-            const silent = Boolean(req.query.silent) && req.query.silent !== '0';
-            const state = crypto.randomBytes(16).toString('hex');
-            const { verifier, challenge } = pkcePair();
-            res.cookie(FLOW_COOKIE, JSON.stringify({ state, verifier, next: sanitizeNext(req.query.next, config), silent }), flowOpts());
-            res.set('Cache-Control', cache.htmlHeaders({ private: true }));
-            res.redirect(authorizeUrl(config, { state, challenge, silent, redirectUri: redirectUriFor(req) }));
+        // The shared navbar's silent sign-in sends the whole page address: keep its path before the SDK sees it.
+        r.use((req, _res, next) => {
+            if (req.method === 'GET' && req.path === '/login') {
+                const target = sanitizeNext(req.query.next, config);
+                if (target === '/') delete req.query.next; else req.query.next = target;
+            }
+            next();
         });
 
-        r.get('/callback', async (req, res) => {
+        // The navbar's { user } shape and the no-store header the shared pages expect.
+        r.get('/me', async (req, res) => {
             res.set('Cache-Control', cache.htmlHeaders({ private: true }));
-            let flow = null;
-            try { flow = JSON.parse(req.cookies[FLOW_COOKIE] || 'null'); } catch { flow = null; }
-            res.clearCookie(FLOW_COOKIE, { ...cookieBase(), path: '/auth' });
-            const next = flow ? sanitizeNext(flow.next, config) : '/';
-            const { code, state, error } = req.query;
-            if (error) {
-                if ((flow && flow.silent) || error === 'login_required' || error === 'interaction_required') return res.redirect(next);
-                return res.status(400).type('text/plain').send(`Sign-in was not completed (${String(error).slice(0, 60)}).`);
-            }
-            if (!flow || typeof flow.state !== 'string' || typeof flow.verifier !== 'string' || typeof state !== 'string'
-                || state.length !== flow.state.length || !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(flow.state))) {
-                return res.status(400).type('text/plain').send('Sign-in state did not match. Please try signing in again.');
-            }
-            if (!code) return res.status(400).type('text/plain').send('The Network sent no authorization code.');
-            try {
-                const data = await tokenGrant({ grant_type: 'authorization_code', code: String(code), redirect_uri: redirectUriFor(req), code_verifier: flow.verifier });
-                setSession(res, data);
-                // No Clear-Site-Data here or on sign-out: Chrome holds such an answer (and the cookies it sets) until the
-                // cache is cleared, which on phones left people on the account chooser with no session (2026-10-28).
-                return res.redirect(next);
-            } catch (err) {
-                log.warn('[OpenVibe.MediaHub] sign-in exchange failed:', err.status || '', err.error || '');
-                return res.status(err.status && err.status < 500 ? 400 : 502).type('text/plain')
-                    .send(err.status && err.status < 500 ? 'The Network refused the sign-in code. Please sign in again.' : 'Sign-in failed: OpenVibe.Network did not answer. Please try again.');
-            }
+            const claims = await sso.verify(sso.extractToken(req));
+            if (!claims) return res.json({ user: null });
+            const v = viewerFromClaims(claims, null);
+            return res.json({ user: { username: v.username, display_name: v.displayName, subject_id: v.subject, role: v.role, avatar_url: v.avatarUrl || null, profile_color: v.profileColor || null } });
         });
 
-        // Sign-out ends the session, so another site must not be able to trigger it (a cross-site
-        // <img src=/auth/logout> or link). A same-origin navigation or form, or the address bar
-        // (Sec-Fetch-Site none), signs out directly; anything else gets a confirm button (POST).
-        const sameOriginRequest = (req) => {
-            const site = String(req.get('sec-fetch-site') || '');
-            if (site) return site === 'same-origin' || (site === 'none' && req.method === 'GET');
-            const origin = req.get('origin');
-            if (origin) return origin === `${req.protocol}://${req.get('host')}`;
-            return req.method === 'GET';    // no fetch metadata and no Origin: an old browser navigating
-        };
         r.get('/logout', (req, res, next) => {
             if (sameOriginRequest(req)) return next();
             res.set('Cache-Control', cache.htmlHeaders({ private: true }));
@@ -264,7 +226,7 @@ function createSso({ config, keys, fetchImpl = globalThis.fetch, now = () => Dat
         });
         r.post('/logout', (req, res, next) => (sameOriginRequest(req) ? next() : res.status(403).type('text/plain').send('Sign-out must come from this site.')));
         r.all('/logout', async (req, res) => {
-            const rt = req.cookies && req.cookies[REFRESH_COOKIE];
+            const rt = readRefresh(req);
             if (rt) {
                 fetchImpl(`${config.networkInternalUrl}/oauth/revoke`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -273,25 +235,21 @@ function createSso({ config, keys, fetchImpl = globalThis.fetch, now = () => Dat
                 }).catch(() => {});
             }
             clearSession(res);
-            res.cookie(HINT_COOKIE, 'guest', { sameSite: 'lax', secure: config.cookies.secure, httpOnly: false, path: '/', maxAge: 365 * 24 * 60 * 60 * 1000 });
+            res.cookie(HINT_COOKIE, 'guest', { sameSite: 'lax', secure, httpOnly: false, path: '/', maxAge: 365 * 24 * 60 * 60 * 1000 });
             res.redirect(303, sanitizeNext(req.query.next, config));
         });
 
-        r.get('/me', (req, res) => {
-            res.set('Cache-Control', cache.htmlHeaders({ private: true }));
-            // No session at all (a guest: no access or refresh cookie) is signed out, not an error: the shared
-            // navbar asks this on every page view, and a 401 logged a console error on each (browser check,
-            // OpenVibe.Host). A session cookie that is present but invalid or expired still answers 401.
-            const c = req.cookies || {};
-            if (!c[ACCESS_COOKIE] && !c[REFRESH_COOKIE] && !req.get('authorization')) return res.json({ user: null });
-            const v = req.viewer;
-            if (!v || v.kind !== 'user') return res.status(401).json({ error: 'Not signed in' });
-            res.json({ user: { username: v.username, display_name: v.displayName, subject_id: v.subject, role: v.role, avatar_url: v.avatarUrl || null, profile_color: v.profileColor || null } });
+        // The video and pics hosts sign in with their own callback URI; everything else uses the drive's client.
+        r.use((req, res, next) => {
+            const client = clientFor(req);
+            if (client !== sso && (req.path === '/login' || req.path === '/callback')) return routerFor(client)(req, res, next);
+            next();
         });
+        r.use(routerFor(sso));
         return r;
     }
 
-    return { middleware, routes, asViewer, tokenGrant, pkcePair };
+    return { middleware, routes, asViewer, tokenGrant: sso.tokenGrant, pkcePair, client: sso };
 }
 
-module.exports = { createSso, pkcePair, sanitizeNext, ownOrigins, authorizeUrl, ACCESS_COOKIE, REFRESH_COOKIE };
+module.exports = { createSso, pkcePair, sanitizeNext, ownOrigins, ACCESS_COOKIE, REFRESH_COOKIE };

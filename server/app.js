@@ -120,8 +120,8 @@ async function createApp(opts = {}) {
                 defaultSrc: ["'self'"],
                 // The OpenVibe Frame (theme-loader, navbar, footer) comes from the Network; the inline init is ours.
                 scriptSrc: ["'self'", "'unsafe-inline'", 'https://openvibe.network', 'https://static.cloudflareinsights.com'],
-                styleSrc: ["'self'", "'unsafe-inline'", 'https://openvibe.network', 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com'],
-                fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com', 'https://cdnjs.cloudflare.com'],
+                styleSrc: ["'self'", "'unsafe-inline'", 'https://openvibe.network', 'https://fonts.googleapis.com'],
+                fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
                 // The Video home's live-now cards show OpenVibe.Live's own stream thumbnails (its /api/thumbnails).
                 imgSrc: ["'self'", 'data:', 'https://openvibe.network', 'https://openvibe.media', liveOrigin],
                 // The video player loads its media file from OpenVibe.Media (https://openvibe.media/v|/c), which may
@@ -202,7 +202,7 @@ async function createApp(opts = {}) {
 
     // ── Machine endpoints ───────────────────────────────────
     app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'openvibe-media-hub', version: VERSION }));
-    const readiness = createServiceReadiness({ s, config, release: release.release, valkey });
+    const readiness = createServiceReadiness({ s, config, release: release.release, valkey, sso });
     app.get('/api/ready', readiness.handler);
 
     // ── Account export and deletion (ADR-033) ───────────────
@@ -230,7 +230,32 @@ async function createApp(opts = {}) {
 
     // ── Pages ───────────────────────────────────────────────
     app.use(rateLimit({ windowMs: 60_000, limit: Number(process.env.MEDIAHUB_RATE_LIMIT_PER_MIN) || 300, standardHeaders: true, legacyHeaders: false }));
-    app.use(createPageRoutes(ctx));
+    // The agent layer (openvibe-shared/agent-layer) on the drive host: /.well-known/agent.json and the Markdown twins
+    // of the public pages (the home page, the safety rules and the update log). Before the page routes, so a twin is
+    // the page's own render and never a route of its own; on the drive host only, so the video host never answers
+    // with the drive's manifest.
+    // A twin request and the manifest only: the layer renders every page as a signed-out visitor, and the drive is
+    // mostly one person's pages (their files, their share links). Anything else is the app's own page, which names
+    // its twin in the head itself (server/render/layout.js).
+    const downloadHost = (() => { try { return new URL(config.baseUrl).hostname; } catch { return null; } })();
+    const pageRoutes = createPageRoutes(ctx);
+    if (downloadHost) {
+        const agentRouter = express.Router();
+        require('openvibe-shared/agent-layer').mount(agentRouter, {
+            descriptor: require('./drive/agent-descriptor'),
+            render: require('./drive/agent-pages').createAgentPages({ router: pageRoutes, host: downloadHost }).renderPublicPage,
+        });
+        app.use((req, res, next) => {
+            if (req.hostname !== downloadHost) return next();
+            // The manifest exactly: the rest of /.well-known/ belongs to the app and the host's security.txt.
+            if (req.path === '/.well-known/agent.json') return agentRouter(req, res, next);
+            const p = String(req.path || '');
+            if (p.endsWith('.md') || (req.query && req.query.format === 'markdown')
+                || req.accepts(['html', 'text/markdown']) === 'text/markdown') return agentRouter(req, res, next);
+            return next();
+        });
+    }
+    app.use(pageRoutes);
     app.use((req, res) => send(res, 404, { viewer: req.viewer, config, path: req.originalUrl, title: 'Not found', body: html`<h1>Not found</h1><p>No page here. Try <a href="/">the home page</a> or <a href="/updates">the update log</a>.</p>` }));
 
     // eslint-disable-next-line no-unused-vars

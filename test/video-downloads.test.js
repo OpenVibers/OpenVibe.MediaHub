@@ -148,7 +148,7 @@ function unzip(buf) {
             '/v/6026/download/chapters.txt', '/v/6026/download/chapters.vtt', '/v/6026/download/chapters.json', '/v/6026/download/thumbnail',
             '/v/6026/download/info.json', '/v/6026/download/all.zip']) assert.ok(menu.includes(`href="${href}"`), href);
         assert.ok(menu.includes('The whole recording · 571 MB'), 'the video with its size');
-        assert.ok(menu.includes('2 lines, by AI') && menu.includes('2 messages') && menu.includes('2 chapters'), 'what each holds');
+        assert.ok(menu.includes('2 lines, written by AI') && menu.includes('2 messages') && menu.includes('2 chapters'), 'what each holds');
         assert.ok(/rel="nofollow"/.test(menu) && /download rel/.test(menu), 'download links, not followed by crawlers');
         // Each tab's own download menu sits in its corner (one quiet icon), with Copy for YouTube on the chapters.
         const panel = (key) => { const i = r.text.indexOf(`data-ovv-tp="${key}"`); return r.text.slice(i, r.text.indexOf('</section>', i)); };

@@ -84,6 +84,8 @@ function renderPage(o) {
         siteName: SITE_NAME,
         description: o.description || `${SITE_NAME} — ${TAGLINE}`,
         canonical,
+        // The page names its Markdown twin (openvibe-shared/agent-layer) when it has one.
+        ...(o.agentLayer ? { agentLayer: true, llms: '/llms.txt' } : {}),
         robots: o.index ? 'index, follow' : 'noindex, nofollow',
         jsonLd: (o.jsonLd || []).filter(Boolean),
         home: '/',
