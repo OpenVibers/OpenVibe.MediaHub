@@ -227,6 +227,7 @@ function createPicsRoutes(ctx) {
             description,
             jsonLd: [
                 seo.jsonLd.website({ name: SITE_NAME, url: base, description }),
+                seo.jsonLd.organization(),
                 seo.jsonLd.softwareApp({ name: SITE_NAME, url: base, description, category: 'MultimediaApplication', keywords: 'image hosting, picture sharing, embed images, resize images, convert to WebP, alt text' }),
                 seo.jsonLd.webPage({ name: SITE_NAME, url: `${base}/`, description, siteUrl: base }),
                 seo.jsonLd.faq(faq),

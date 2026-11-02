@@ -6,7 +6,7 @@
   --ovp-pink: #f472b6;
   --ovp-pink-soft: #f9a8d4;
   --ovp-on-pink: #1f0a17;
-  --ovp-accent-text: color-mix(in srgb, var(--ovp-pink) 72%, var(--text-primary, #e6edf7));
+  --ovp-accent-text: color-mix(in srgb, var(--ovp-pink) 60%, var(--text-primary, #e6edf7)); /* 72% was 4.3:1 on white */
   --ovp-card: var(--bg-card, var(--bg-secondary, #101828));
   --ovp-line: var(--border, #1f2d47);
   --ovp-line-strong: var(--border-light, #2c3d5c);
@@ -161,7 +161,7 @@
 .ovp-sizes { overflow-x: auto; }
 .ovp-size-table { border-collapse: collapse; min-width: 320px; font-variant-numeric: tabular-nums; }
 .ovp-size-table th, .ovp-size-table td { padding: 8px 12px; border-bottom: 1px solid var(--border, #1f2d47); text-align: left; white-space: nowrap; }
-.ovp-size-table thead th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint, #7386a3); font-weight: 700; }
+.ovp-size-table thead th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ovp-faint); font-weight: 700; }
 .ovp-size-table tbody th { font-weight: 700; }
 .ovp-size-table a { display: inline-block; min-width: 44px; padding: 4px 0; }
 
