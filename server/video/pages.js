@@ -36,6 +36,7 @@ const { createLiveClient, LiveRefusedError } = require('./live-client');
 const { createChatClient } = require('./chat-client');
 const { createSearchReads, CATEGORIES, isCategory } = require('./search-reads');
 const rules = require('../drive/rules');
+const labelsUi = require('../render/labels-ui');
 /** 2147483648 → "2 GB" (the drive's formatBytes, without a trailing ".0"). */
 const formatBytes = (b) => rules.formatBytes(b).replace(/\.0 /, ' ');
 const { createVideoApiRoutes } = require('./api');
@@ -100,6 +101,16 @@ function posterAttr(url) {
     // background colour from) before the poster arrives. data-ov-ambient: the picture's glow around the player.
     if (/^https:\/\/openvibe\.media\/t\/[^?#\s]+$/.test(url || '')) return html` poster="${`${url}?w=1280&fmt=webp`}" data-ov-thumb="${`${url}?w=32&fmt=webp`}" data-ov-ambient`;
     return url ? html` poster="${url}" data-ov-ambient` : '';
+}
+
+/**
+ * The streamer's face for the player (openvibe-shared 4.90 player.js): a recording with no picture track (a browser
+ * broadcast with no camera, plan R4) shows it in place of a black box. Network's /avatar/:username answers the image
+ * (or a neutral placeholder), so no lookup is needed here.
+ */
+function avatarAttr(username, networkUrl) {
+    const name = String(username || '');
+    return /^[A-Za-z0-9_]{1,32}$/.test(name) && /^https?:\/\//.test(String(networkUrl || '')) ? html` data-ov-avatar="${String(networkUrl).replace(/\/+$/, '')}/avatar/${name}"` : '';
 }
 
 /**
@@ -503,13 +514,32 @@ function viewsLabel(n) {
     return `${v.toLocaleString('en-US')} ${v === 1 ? 'view' : 'views'}`;
 }
 
+/** Network's origin for faces (/avatar/:username answers the picture, or a neutral one): set by createVideoRoutes. */
+let faceBase = null;
+
+/**
+ * No picture: the maker's face over a blur of it (as Shared's kit.card and Live's cards show), when the channel is a
+ * username; else the kind's icon.
+ */
+function cardPlaceholder(o, icon) {
+    const name = String(o.channel || '');
+    if (faceBase && /^[A-Za-z0-9_]{1,32}$/.test(name)) {
+        const face = `${faceBase}/avatar/${name}?s=160`;
+        return html`<span class="ovv-card-placeholder ovv-card-who"><img class="ovv-who-bg" src="${face}" alt="" loading="lazy" decoding="async"><img class="ovv-who-face" src="${face}" alt="" loading="lazy" decoding="async"></span>`;
+    }
+    return html`<span class="ovv-card-placeholder"><i class="fa-solid ${icon}"></i></span>`;
+}
+
 function card(o) {
     const channel = o.channel ? html`<a href="${o.channelHref}">@${o.channel}</a>` : null;
     const icon = o.live ? 'fa-tower-broadcast' : (o.kind === 'clip' ? 'fa-scissors' : 'fa-video');
-    return html`<article class="ovv-card">
-<a class="ovv-card-media" href="${o.href}" tabindex="-1" aria-hidden="true">${o.thumb ? thumbImg(o.thumb, CARD_SIZES) : html`<span class="ovv-card-placeholder"><i class="fa-solid ${icon}"></i></span>`}${o.duration ? html`<span class="ovv-dur">${o.duration}</span>` : ''}${o.badge ? html`<span class="ovv-tag${o.live ? ' ovv-tag--live' : ''}">${o.badge}</span>` : ''}</a>
+    const labels = o.labels || [];
+    const media = html`<a class="ovv-card-media" href="${o.href}" tabindex="-1" aria-hidden="true">${o.thumb ? thumbImg(o.thumb, CARD_SIZES) : cardPlaceholder(o, icon)}${o.duration ? html`<span class="ovv-dur">${o.duration}</span>` : ''}${o.badge ? html`<span class="ovv-tag${o.live ? ' ovv-tag--live' : ''}">${o.badge}</span>` : ''}</a>`;
+    return html`<article class="ovv-card"${labelsUi.attrs(labels, { owner: o.owner || o.channel })}>
+${labels.length ? html`<div class="ovv-card-cover" data-ov-labels-media>${media}</div>` : media}
 <div class="ovv-card-body">
 <h3 class="ovv-card-title"><a href="${o.href}">${o.title}</a></h3>
+${labelsUi.chips(labels)}
 ${meta([channel, o.extra || null, o.views ? viewsLabel(o.views) : null, o.date ? html`<time datetime="${o.iso}">${o.date}</time>` : null])}
 </div>
 </article>`;
@@ -521,6 +551,7 @@ function feedCard(item, { views = false } = {}) {
         href,
         kind: item.kind,
         badge: item.ai ? 'AI clip' : null,
+        labels: labelsUi.inForce(item),
         thumb: httpsUrl(item.thumbnail_url),
         title: item.title || (item.kind === 'clip' ? 'Clip' : 'Stream recording'),
         channel: item.channel && item.channel.username ? item.channel.username : null,
@@ -535,6 +566,8 @@ function feedCard(item, { views = false } = {}) {
 function vodCard(v) {
     return card({
         href: `/v/${v.id}`,
+        labels: labelsUi.inForce(v),
+        owner: v.username || null,
         thumb: httpsUrl(v.thumbnail_url),
         title: v.title || 'Stream recording',
         duration: v.duration_seconds != null ? durationLabel(v.duration_seconds) : null,
@@ -549,6 +582,8 @@ function clipCard(c) {
         href: `/c/${c.id}`,
         kind: 'clip',
         badge: c.auto_generated ? 'AI clip' : null,
+        labels: labelsUi.inForce(c),
+        owner: c.username || null,
         thumb: httpsUrl(c.thumbnail_url),
         title: c.title || 'Clip',
         duration: dur != null ? durationLabel(dur) : null,
@@ -561,6 +596,7 @@ const grid = (cards, empty = 'Nothing here yet.') => (cards && cards.length ? ht
 
 function createVideoRoutes(ctx) {
     const { config, log, playlists } = ctx;
+    faceBase = /^https?:\/\//.test(String(config.networkUrl || '')) ? String(config.networkUrl).replace(/\/+$/, '') : null;
 
     // A channel page lists that person's public playlists, which are stored by subject: the username is resolved
     // through Network (identity.subject.resolve) and remembered for ten minutes (an unknown name for one), at most
@@ -605,7 +641,7 @@ function createVideoRoutes(ctx) {
 
     const signedIn = (req) => Boolean(req.viewer && req.viewer.kind === 'user' && req.viewer.subject);
     const ownerOf = (req) => `user:${req.viewer.subject}`;
-    const signInPrompt = (what, next) => html`<div class="notice">${what} <a href="/auth/login?next=${encodeURIComponent(next)}">Sign in with OpenVibe</a>.</div>`;
+    const signInPrompt = (what, next) => html`<div class="notice signin-prompt"><p>${what}</p><p><a class="ovv-btn ovv-btn--primary" href="/auth/login?next=${encodeURIComponent(next)}">Sign in with OpenVibe</a></p></div>`;
     const mustSignIn = (back, why) => (req, res, next) => (signedIn(req) ? next() : page(req, res, {
         title: 'Sign in',
         body: html`<h1>Sign in first</h1>${signInPrompt(why, back === 'here' ? req.originalUrl : back)}`,
@@ -701,11 +737,12 @@ ${whole ? html`<input type="hidden" name="recording_time" value="1">` : ''}
     function ownerPanel(kind, id, item) {
         const what = kind === 'vod' ? 'recording' : 'clip';
         const action = `/${kind === 'vod' ? 'v' : 'c'}/${id}`;
-        return html`<details class="ovv-panel ovv-owner" id="manage"><summary><h2 id="h-owner"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit this ${what}</h2><span class="ovv-fine">Title, ${kind === 'vod' ? 'description, ' : ''}who can see it, delete</span></summary>
+        return html`<details class="ovv-panel ovv-owner" id="manage"><summary><h2 id="h-owner"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit this ${what}</h2><span class="ovv-fine">Title, ${kind === 'vod' ? 'description, ' : ''}who can see it, labels, delete</span></summary>
 <form class="ovv-owner-form" method="post" action="${action}/manage">
 <label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="200" value="${item.title || ''}" required></label>
 ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textarea name="description" rows="3" maxlength="2000">${item.description || ''}</textarea></label>` : ''}
 ${visibilityChoices(item.visibility || 'public')}
+${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
 <button class="ovv-btn ovv-btn--primary" type="submit">Save changes</button>
 </form>
 <details class="ovv-danger"><summary>Delete this ${what}</summary>
@@ -888,6 +925,7 @@ ${visibilityChoices(item.visibility || 'public')}
                 const started = s.started_at ? new Date(`${String(s.started_at).replace(' ', 'T')}${/[zZ]|[+-]\d\d:?\d\d$/.test(String(s.started_at)) ? '' : 'Z'}`) : null;
                 return card({
                     href: `${livePublic}/@${s.username}`, live: true, badge: 'Live',
+                    labels: labelsUi.inForce(s),
                     thumb: LIVE_THUMB.test(String(s.thumbnail_url || '')) ? httpsUrl(`${livePublic}${s.thumbnail_url}`) : `https://openvibe.media/live/@${s.username}/frame.jpg?w=640`,
                     title: s.title || `${s.display_name || s.username} is live`,
                     channel: s.username, channelHref: `${livePublic}/@${s.username}`,
@@ -958,6 +996,7 @@ ${visibilityChoices(item.visibility || 'public')}
             description,
             jsonLd: [
                 seo.jsonLd.website({ name: 'OpenVibe.Video', url: base, description }),
+                seo.jsonLd.organization(),
                 seo.jsonLd.webPage({ name: 'OpenVibe.Video', url: `${base}/`, description, siteUrl: base }),
                 ...(listed.length ? [seo.jsonLd.itemList('Latest stream recordings on OpenVibe.Video', listed, { url: `${base}/` })] : []),
                 seo.jsonLd.faq(faq),
@@ -1233,14 +1272,16 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
                 image: httpsUrl(vod.thumbnail_url) || undefined, ogType: 'video.other',
             }),
             scripts: ['js/video.js'],
+            ...(manageable ? { localStyles: ['css/labels.css'] } : {}),
             player: true,
             body: html`<div class="ovv-watch ovv-watch--vod">
 <div class="ovv-col ovv-col--main">
 <div class="ovv-stage">
 ${savedNotice(req)}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this recording.', 'info') : ''}
-<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(vod.thumbnail_url))}${shapeAttr} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video>${pipsTag(pips)}</div>
+<div class="ovv-player-wrap"${labelsUi.attrs(labelsUi.inForce(vod), { owner: vod.username, opened: true })}><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(vod.thumbnail_url))}${avatarAttr(vod.username, config.networkUrl)}${shapeAttr} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video>${pipsTag(pips)}</div>
 <div class="ovv-head">
 <h1 class="ovv-title">${vod.title || 'Stream recording'}</h1>
+${labelsUi.chips(labelsUi.inForce(vod))}
 ${what}
 <div class="ovv-head-row">
 <div class="ovv-byline">
@@ -1355,15 +1396,17 @@ ${clips.length ? html`<section class="ovv-panel ovv-clips" aria-labelledby="h-cl
                 image: httpsUrl(clip.thumbnail_url) || undefined, ogType: 'video.other',
             }),
             scripts: ['js/video.js'],
+            ...(manageable ? { localStyles: ['css/labels.css'] } : {}),
             player: true,
             body: html`<div class="ovv-watch ovv-watch--clip">
 <div class="ovv-col ovv-col--main">
 <div class="ovv-stage">
 ${savedNotice(req)}${req.query.made === '1' ? notice('Your clip was made. It is credited to you on OpenVibe.Live and here.', 'ok') : ''}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this clip.', 'info') : ''}
 ${cutting ? html`<div class="ovv-player-wrap ovv-cutting" role="status" data-ovv-reload="8"><p><i class="fa-solid fa-scissors" aria-hidden="true"></i> This clip is being cut. It plays here in a moment; the page checks again by itself.</p></div>`
-        : html`<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(clip.thumbnail_url))} src="${fileOf(clip) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>`}
+        : html`<div class="ovv-player-wrap"${labelsUi.attrs(labelsUi.inForce(clip), { owner: clip.username, opened: true })}><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${avatarAttr(clip.username, config.networkUrl)}${posterAttr(httpsUrl(clip.thumbnail_url))} src="${fileOf(clip) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>`}
 <div class="ovv-head">
 <h1 class="ovv-title">${clip.title || 'Clip'}</h1>
+${labelsUi.chips(labelsUi.inForce(clip))}
 ${what}
 ${clipCredit}
 <div class="ovv-head-row">
@@ -1393,7 +1436,11 @@ ${up.html}
         if (!title || title.length > 200) return { error: 'A title is 1 to 200 characters.' };
         if (kind === 'vod' && description.length > 2000) return { error: 'A description is at most 2,000 characters.' };
         if (!VISIBILITIES.includes(visibility)) return { error: 'Choose public, unlisted or private.' };
-        return { title, description, visibility };
+        // L1: the creator labels the recording. Repeated form fields arrive as an array; a form without the picker keeps
+        // what it has, and the picker with nothing ticked clears them (labels_form).
+        const labels = labelsUi.fromForm(b);
+        if (labels === null) return { error: 'Choose the labels from the list.' };
+        return { title, description, visibility, labels };
     }
     const fieldError = (req, res, text, back) => page(req, res, {
         title: 'Not saved', cache: cache.htmlHeaders({ private: true }),
@@ -1430,7 +1477,7 @@ ${up.html}
         const f = ownerFields(req.body || {}, 'vod');
         if (f.error) return fieldError(req, res, f.error, back);
         try {
-            await asPerson(req, res, (token) => live.updateVod(token, id, { title: f.title, description: f.description, visibility: f.visibility }));
+            await asPerson(req, res, (token) => live.updateVod(token, id, { title: f.title, description: f.description, visibility: f.visibility, ...(f.labels !== undefined ? { labels: f.labels } : {}) }));
         } catch (err) { return ownerRefused(req, res, err, back); }
         live.forget('vod', id);
         return res.redirect(303, `${back}?saved=1`);
@@ -1467,6 +1514,8 @@ ${up.html}
         try {
             if (f.title !== String(current.title || '')) await asPerson(req, res, (token) => live.setClipTitle(token, id, f.title));
             if (f.visibility !== String(current.visibility || '')) await asPerson(req, res, (token) => live.setClipVisibility(token, id, f.visibility));
+            const sameLabels = (x, y) => x.length === y.length && x.every((l) => y.includes(l));
+            if (f.labels !== undefined && !sameLabels(f.labels, labelsUi.inForce(current))) await asPerson(req, res, (token) => live.setClipLabels(token, id, f.labels));
         } catch (err) { live.forget('clip', id); return ownerRefused(req, res, err, back); }
         live.forget('clip', id);
         return res.redirect(303, `${back}?saved=1`);
@@ -1762,7 +1811,9 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
             ...((shelf && shelf.categories) || []).filter((c) => c.count >= 4).map((c) => ({ loc: `${base}/category/${c.slug}` })),
             ...items.map((it) => {
                 const video = sitemapVideo(it);
-                return { loc: `${base}${it.kind === 'clip' ? '/c/' : '/v/'}${Number(it.id)}`, lastmod: day(it.created_at), ...(video ? { videos: [video] } : {}) };
+                // The same thumbnail as an <image:image> on the video's own entry (SEO-17): an image entry needs a URL
+                // this site really serves, and sitemapVideo only builds one from a thumbnail that exists and is https.
+                return { loc: `${base}${it.kind === 'clip' ? '/c/' : '/v/'}${Number(it.id)}`, lastmod: day(it.created_at), ...(video ? { videos: [video], images: [video.thumbnail_loc] } : {}) };
             }),
             ...uploaded.map((x) => ({ loc: `${base}/u/${x.id}`, lastmod: day(x.updated_at) })),
             ...[...channels].map(([u, d]) => ({ loc: `${base}/@${u}`, lastmod: d })),

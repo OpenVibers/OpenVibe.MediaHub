@@ -49,7 +49,7 @@ function renderPage(o) {
 ${appIcon.headTags({ site: 'media-hub' })}
 <link rel="stylesheet" href="${asset('css/app.css')}">
 <link rel="stylesheet" href="${asset('css/pics.css')}">
-${(o.styles || []).map((rel) => `<link rel="stylesheet" href="${ovServe.url(rel)}">`).join('\n')}
+${(o.localStyles || []).map((rel) => `<link rel="stylesheet" href="${asset(rel)}">\n`).join('')}${(o.styles || []).map((rel) => `<link rel="stylesheet" href="${ovServe.url(rel)}">`).join('\n')}
 ${(o.scripts || []).map((rel) => `<script src="${asset(rel)}" defer></script>`).join('\n')}
 ${(o.sharedScripts || []).map((rel) => `<script src="${ovServe.url(rel)}" defer></script>`).join('\n')}`;
     const account = signedIn

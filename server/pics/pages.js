@@ -33,6 +33,7 @@ const { sameOrigin } = require('../http/principal');
 const { boundaryOf, readFormData } = require('../http/form-upload');
 const { formatBytes } = require('../drive/rules');
 const { html, raw, notice, time } = require('../render/html');
+const labelsUi = require('../render/labels-ui');
 const { ACCESS_COOKIE, REFRESH_COOKIE } = require('../auth/sso');
 const { send, assetVersion, SITE_NAME } = require('./layout');
 const store = require('./store');
@@ -184,7 +185,11 @@ function createPicsRoutes(ctx) {
     // ── Pages: forms are urlencoded, uploads multipart ──────
     r.use(express.urlencoded({ extended: false, limit: '64kb' }));
 
-    const thumb = (row) => html`<a class="ovp-tile${row.state !== 'active' ? ' is-hidden' : ''}" href="/i/${row.slug}"><img src="/i/${row.slug}/thumb.webp" alt="${pics.altOf(row)}" loading="lazy" decoding="async" width="${Math.min(Number(row.width), 640)}" height="${Math.round(Math.min(Number(row.width), 640) * Number(row.height) / Math.max(1, Number(row.width)))}">${row.state !== 'active' ? html`<span class="ovp-flag">hidden</span>` : ''}</a>`;
+    const tile = (row) => html`<a class="ovp-tile${row.state !== 'active' ? ' is-hidden' : ''}" href="/i/${row.slug}"><img src="/i/${row.slug}/thumb.webp" alt="${pics.altOf(row)}" loading="lazy" decoding="async" width="${Math.min(Number(row.width), 640)}" height="${Math.round(Math.min(Number(row.width), 640) * Number(row.height) / Math.max(1, Number(row.width)))}">${row.state !== 'active' ? html`<span class="ovp-flag">hidden</span>` : ''}</a>`;
+    const thumb = (row) => {
+        const labels = labelsUi.inForce(row);
+        return labels.length ? html`<div class="ovp-tile-cover"${labelsUi.attrs(labels, { owner: row.owner })}>${tile(row)}</div>` : tile(row);
+    };
     const grid = (rows, empty) => (rows.length ? html`<div class="ovp-grid">${rows.map(thumb)}</div>` : html`<p class="muted">${empty}</p>`);
 
     function uploadForm(req, { compact = false } = {}) {
@@ -227,6 +232,7 @@ function createPicsRoutes(ctx) {
             description,
             jsonLd: [
                 seo.jsonLd.website({ name: SITE_NAME, url: base, description }),
+                seo.jsonLd.organization(),
                 seo.jsonLd.softwareApp({ name: SITE_NAME, url: base, description, category: 'MultimediaApplication', keywords: 'image hosting, picture sharing, embed images, resize images, convert to WebP, alt text' }),
                 seo.jsonLd.webPage({ name: SITE_NAME, url: `${base}/`, description, siteUrl: base }),
                 seo.jsonLd.faq(faq),
@@ -336,13 +342,15 @@ ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><
             description: row.description || `${title}: a picture on ${SITE_NAME}.`,
             image: hidden ? undefined : L.direct, ogType: 'article',
             scripts: ['js/pics.js'], styles: ['kit.css'], sharedScripts: ['kit-web.js'],
+            ...(owner ? { localStyles: ['css/labels.css'] } : {}),
             private: deleteKey ? true : undefined,
             body: html`${message ? notice(message, tone) : ''}${fresh || req.query.new ? notice('Uploaded. Copy a link below to share it.', 'ok') : ''}
 ${deleteKey ? html`<div class="notice warn" role="status"><b>Keep this delete link.</b> It is the only way to delete this picture, and it is shown only now:<br><code class="ovp-key">${base}/i/${row.slug}/delete?key=${deleteKey}</code></div>` : ''}
 ${hidden ? notice(row.state === 'hidden' ? 'This picture is hidden while staff look at reports about it. Only you and staff can see it.' : 'This picture was taken down.', 'warn') : ''}
 <article class="ovp-picture">
 <h1 class="ovp-title">${title}</h1>
-<figure class="ovp-figure"><a href="/i/${row.slug}.${row.ext}"><img src="/i/${row.slug}.${row.ext}" alt="${pics.altOf(row)}" width="${row.width}" height="${row.height}" decoding="async"></a></figure>
+${labelsUi.chips(labelsUi.inForce(row))}
+<figure class="ovp-figure"${labelsUi.attrs(labelsUi.inForce(row), { owner: row.owner, opened: true })}><a href="/i/${row.slug}.${row.ext}"><img src="/i/${row.slug}.${row.ext}" alt="${pics.altOf(row)}" width="${row.width}" height="${row.height}" decoding="async"></a></figure>
 <p class="ovp-meta">${Number(row.width)} × ${Number(row.height)} · ${KIND[row.ext] || row.ext}${row.animated ? ' (animated)' : ''} · ${formatBytes(row.bytes)} · uploaded ${time(row.created_at)}</p>
 ${row.description ? html`<p class="ovp-desc">${row.description}</p>` : ''}
 ${row.ai_caption && row.alt_source === 'ai' ? html`<p class="ovp-ai"><span class="ovp-ai-label">Described by AI</span> ${row.ai_caption}</p>` : ''}
@@ -368,6 +376,7 @@ ${owner ? html`<section class="ovp-section ovp-owner" aria-labelledby="h-yours">
 <label for="e-desc">Description</label><textarea id="e-desc" name="description" rows="3" maxlength="2000">${row.description}</textarea>
 <label for="e-alt">Alt text</label><input id="e-alt" name="alt" type="text" maxlength="160" value="${row.alt || ''}" aria-describedby="e-alt-help">
 <p class="muted" id="e-alt-help">What the picture shows, in one sentence, for people who cannot see it. Screen readers say it, and the embed snippets above carry it.${row.alt_source === 'ai' ? ' This one was written by AI: check it says what you want.' : ''}</p>
+${labelsUi.picker(row, { what: 'the picture', id: 'e-labels' })}
 <p><button class="ovp-btn ovp-btn--primary" type="submit">Save</button></p></form>
 ${describeOn && !hidden ? html`<form class="ovp-form ovp-inline" method="post" action="/i/${row.slug}/describe"><button class="ovp-btn" type="submit">${row.ai_described_at ? 'Write it again with AI' : 'Write alt text with AI'}</button> <span class="muted">Sends this picture to OpenVibe.AI, which may use an outside model provider, to draft alt text, a caption and tags. Nothing of the picture is kept there.</span></form>` : ''}
 ${tagsOf(row).length ? html`<p class="muted">AI tags: ${tagsOf(row).join(', ')}</p>` : ''}
@@ -406,7 +415,9 @@ ${pics.REASONS.map((r) => html`<label class="ovp-radio"><input type="radio" name
         if (!sameSite(req, res, `/i/${req.params.slug}`)) return undefined;
         const row = await ownPicture(req, res);
         if (!row) return undefined;
-        await pics.edit(row, { title: req.body.title, description: req.body.description, alt: req.body.alt });
+        const labels = labelsUi.fromForm(req.body);
+        if (labels === null) return picturePage(req, res, row, { message: 'Choose the labels from the list.', tone: 'warn' }, 422);
+        await pics.edit(row, { title: req.body.title, description: req.body.description, alt: req.body.alt, ...(labels !== undefined ? { labels } : {}) });
         return res.redirect(303, `/i/${row.slug}`);
     });
 

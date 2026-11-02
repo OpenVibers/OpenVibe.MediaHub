@@ -4,6 +4,11 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
 
 ## Unreleased
 
+- Content labels show on openvibe.video and OpenVibe.Pics (2026-11-02, L1). Cards, watch pages and pictures say in
+  words what they carry (Nudity, Strong language, 18+…), and each viewer's own choice on openvibe.network shows,
+  blurs or hides them. A maker always sees their own; on a video's or picture's own page a hide covers it with a
+  "Show" button rather than leaving the page empty. Owners set the labels in the edit forms: AI suggestions are
+  marked and never ticked for them, and ticking nothing clears them. openvibe-shared 4.94.0.
 - OpenVibe.Pics says in writing what it does with a picture (2026-10-30, the market research): three policy pages —
   `/exif` (the metadata — the GPS position, the camera, the time it was taken — is taken out by us, and the file you
   upload is not kept), `/content-policy` (what is not allowed, how a rule is enforced, and what this site does not
@@ -22,6 +27,7 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
   for web players, JSON for programs, CSV for spreadsheets) and the transcript says it was written by AI, and can be
   wrong. The menus on a phone open above the app bar, so their buttons are not behind it.
 
+- openvibe.video's sitemap carries an image entry per video (SEO-17): the same entry that names `<video:video>` also names its thumbnail as `<image:image><image:loc>` — built from the thumbnail the video entry already has, so it is only there when the URL exists and is https. Entries without a thumbnail keep no image, the video entries and the ten-minute cache are unchanged, and openvibe.download's private shares and openvibe.pics (`/i/` is in its robots' disallow) are untouched. `test/video-pages.test.js` pins one image per video entry, the same URL as its `thumbnail_loc`.
 - openvibe.video's search basics (2026-10-20). A watch page nobody wrote about gets a description of its own (who,
   how long, when, its first words) instead of the site tagline. A recording under two minutes with nothing written
   about it is noindex and out of the sitemap: 118 of 785 were under a minute, mostly test streams. The sitemap lists

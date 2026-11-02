@@ -342,6 +342,8 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('data-ovv-video'));
         // The network's player (openvibe-shared player.js/css): marked, and both files load on the page.
         assert.ok(/<video class="ovv-player" data-ov-player controls /.test(r.text), 'the video takes the network player');
+        // The streamer's face for an audio-only recording (openvibe-shared 4.90 player.js, plan R4): Network's avatar URL.
+        assert.match(r.text, /<video class="ovv-player"[^>]* data-ov-avatar="[^"]+\/avatar\/streamer"/, 'the player knows the streamer\'s face');
         assert.ok(/<link rel="stylesheet" href="\/shared\/player\.css\?v=[0-9a-f]+">/.test(r.text) && /<script src="\/shared\/player\.js\?v=[0-9a-f]+" defer><\/script>/.test(r.text), 'player.css and player.js load');
         assert.ok(r.text.includes('data-ovv-view="https://openvibe.live/api/views/vod/101"'), 'playback counts a view on Live');
         const ld = graphOf(r.text).find((x) => x['@type'] === 'VideoObject');
@@ -569,12 +571,25 @@ function countOccurrences(haystack, needle) {
     await check('the sitemap carries a video entry for each listed recording and clip', async () => {
         const map = (await getVideo('/sitemap.xml')).text;
         assert.ok(map.includes('xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"'));
+        assert.ok(map.includes('xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"'));
         assert.ok(!map.includes('<video:live>'), 'recordings and clips are not currently live');
-        assert.ok(map.includes('<loc>https://openvibe.video/v/101</loc><lastmod>2026-10-12</lastmod><video:video><video:thumbnail_loc>https://openvibe.media/t/101.jpg</video:thumbnail_loc>'
+        assert.ok(map.includes('<loc>https://openvibe.video/v/101</loc><lastmod>2026-10-12</lastmod>'
+            + '<image:image><image:loc>https://openvibe.media/t/101.jpg</image:loc></image:image>'
+            + '<video:video><video:thumbnail_loc>https://openvibe.media/t/101.jpg</video:thumbnail_loc>'
             + '<video:title>A public recording</video:title><video:description>A public stream</video:description>'
             + '<video:content_loc>https://openvibe.media/v/101?raw=1</video:content_loc><video:duration>45</video:duration><video:view_count>100</video:view_count>'
             + '<video:publication_date>2026-10-12T10:00:00.000Z</video:publication_date><video:uploader info="https://openvibe.video/@streamer">streamer</video:uploader></video:video></url>'), map);
         assert.ok(map.includes('<loc>https://openvibe.video/c/201</loc><lastmod>2026-10-12</lastmod></url>'), 'a clip without a thumbnail has no video entry');
+        // Every entry with a video thumbnail carries that thumbnail as <image:image> on the same entry (SEO-17), and
+        // an entry with nothing to show carries no image either.
+        const entries = [...map.matchAll(/<url>([\s\S]*?)<\/url>/g)].map((m) => m[1]);
+        assert.ok(entries.some((body) => body.includes('<video:thumbnail_loc>')));
+        for (const body of entries) {
+            const thumb = /<video:thumbnail_loc>([^<]+)<\/video:thumbnail_loc>/.exec(body);
+            const image = /<image:image><image:loc>([^<]+)<\/image:loc><\/image:image>/.exec(body);
+            if (thumb) assert.deepStrictEqual(image && image[1], thumb[1], `the image is the video's own thumbnail: ${body.slice(0, 160)}`);
+            else assert.strictEqual(image, null, `no image without a thumbnail: ${body.slice(0, 160)}`);
+        }
     });
 
     await check('robots.txt and llms.txt answer on the video host', async () => {
