@@ -102,7 +102,7 @@ function policyPage(kind, { cfg, reasons = [], reasonText = {} } = {}) {
             kit.notice({ kind: 'info', text: 'This page describes what the code does. A test uploads a JPEG carrying a camera name and a GPS position, and checks that the picture served back has neither.' }),
             sec('The other policies', rows([
                 kit.row({ href: '/content-policy', title: 'What you may put here', sub: 'The content policy, and what happens when a rule is broken' }),
-                kit.row({ href: '/ai-training', title: 'Pictures and AI', sub: 'We do not train on your uploads; here is the one thing that asks a model' }),
+                kit.row({ href: '/ai-training', title: 'Pictures and AI', sub: "We don't train AI on your content; here is the one thing that asks a model" }),
                 kit.row({ href: '/terms', title: 'Terms of service', sub: 'The rules of the network, in plain language' }),
                 kit.row({ href: '/privacy', title: 'Privacy', sub: 'What this service collects, and why' }),
             ])),
@@ -141,7 +141,7 @@ function policyPage(kind, { cfg, reasons = [], reasonText = {} } = {}) {
             sec('Copyright and the law', pm('A copyright owner can send a notice through the <a href="/dmca">DMCA page</a>, and we take the picture down. The rules of the network itself are in the <a href="/terms">terms of service</a>; what this service collects is in the <a href="/privacy">privacy policy</a>.')),
             sec('The other policies', rows([
                 kit.row({ href: '/exif', title: 'What happens to your picture', sub: 'The metadata: the GPS position, the camera, the time it was taken' }),
-                kit.row({ href: '/ai-training', title: 'Pictures and AI', sub: 'We do not train on your uploads; here is the one thing that asks a model' }),
+                kit.row({ href: '/ai-training', title: 'Pictures and AI', sub: "We don't train AI on your content; here is the one thing that asks a model" }),
             ])),
         ].join('');
         return {
@@ -156,10 +156,10 @@ function policyPage(kind, { cfg, reasons = [], reasonText = {} } = {}) {
         const body = [
             kit.head({
                 title: 'Pictures and AI',
-                sub: 'We do not train on the pictures you upload',
+                sub: "We don't train AI on your content",
                 back: { href: '/', label: 'Home' },
             }),
-            sec('The short answer', pm('We do not train AI models on the pictures people upload here. Nobody at OpenVibe trains on them, and nothing about them is sold. '
+            sec('The short answer', pm("We don't train AI on your content. If that ever changes, it'll be your choice, and it starts off. Nothing about it is sold. "
                 + 'There is exactly one thing on this site that asks a model about a picture, and it only happens when you ask for it.')),
             sec('The one path to a model', rows([
                 kit.row({ title: 'You press “Write alt text with AI”', sub: 'On a picture you own, that sends the picture’s 640-pixel thumbnail to OpenVibe.AI, which may hand it to an outside model provider, and writes back alt text, a caption and a few tags. The draft is marked as AI’s until you change it.' }),

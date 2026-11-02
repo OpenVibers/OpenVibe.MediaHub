@@ -205,3 +205,9 @@
 /* The kit's rows are one line each; on a policy page the whole sentence has to show. */
 .ovp-policy .ovk-row-sub > span:first-child,
 .ovp-policy .ovk-row-top strong { white-space: normal; overflow: visible; text-overflow: clip; }
+
+/* A labelled tile and picture (L1): the cover takes the tile's place in the grid; the chips sit under the title. */
+.ovp-tile-cover { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; }
+.ovp-tile-cover > .ovp-tile { height: 100%; border-radius: inherit; }
+.ovp-title + .ovk-labels { margin: -4px 0 12px; }
+@media (max-width: 640px) { .ovp-tile-cover { border-radius: 8px; } }

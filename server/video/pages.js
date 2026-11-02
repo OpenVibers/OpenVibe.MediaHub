@@ -30,13 +30,13 @@ const { asyncRouter } = require('../http/router');
 const { sameOrigin } = require('../http/principal');
 const { html, raw, notice } = require('../render/html');
 // A recording's or clip's AI overview comes from Live, which filters it; read through the same filter here too.
-const { noLooks } = require('openvibe-sdk/no-looks');
 const frame = require('openvibe-shared/frame');
 const { send, asset, assetVersion, SITE_NAME } = require('./layout');
 const { createLiveClient, LiveRefusedError } = require('./live-client');
 const { createChatClient } = require('./chat-client');
 const { createSearchReads, CATEGORIES, isCategory } = require('./search-reads');
 const rules = require('../drive/rules');
+const labelsUi = require('../render/labels-ui');
 /** 2147483648 → "2 GB" (the drive's formatBytes, without a trailing ".0"). */
 const formatBytes = (b) => rules.formatBytes(b).replace(/\.0 /, ' ');
 const { createVideoApiRoutes } = require('./api');
@@ -533,10 +533,13 @@ function cardPlaceholder(o, icon) {
 function card(o) {
     const channel = o.channel ? html`<a href="${o.channelHref}">@${o.channel}</a>` : null;
     const icon = o.live ? 'fa-tower-broadcast' : (o.kind === 'clip' ? 'fa-scissors' : 'fa-video');
-    return html`<article class="ovv-card">
-<a class="ovv-card-media" href="${o.href}" tabindex="-1" aria-hidden="true">${o.thumb ? thumbImg(o.thumb, CARD_SIZES) : cardPlaceholder(o, icon)}${o.duration ? html`<span class="ovv-dur">${o.duration}</span>` : ''}${o.badge ? html`<span class="ovv-tag${o.live ? ' ovv-tag--live' : ''}">${o.badge}</span>` : ''}</a>
+    const labels = o.labels || [];
+    const media = html`<a class="ovv-card-media" href="${o.href}" tabindex="-1" aria-hidden="true">${o.thumb ? thumbImg(o.thumb, CARD_SIZES) : cardPlaceholder(o, icon)}${o.duration ? html`<span class="ovv-dur">${o.duration}</span>` : ''}${o.badge ? html`<span class="ovv-tag${o.live ? ' ovv-tag--live' : ''}">${o.badge}</span>` : ''}</a>`;
+    return html`<article class="ovv-card"${labelsUi.attrs(labels, { owner: o.owner || o.channel })}>
+${labels.length ? html`<div class="ovv-card-cover" data-ov-labels-media>${media}</div>` : media}
 <div class="ovv-card-body">
 <h3 class="ovv-card-title"><a href="${o.href}">${o.title}</a></h3>
+${labelsUi.chips(labels)}
 ${meta([channel, o.extra || null, o.views ? viewsLabel(o.views) : null, o.date ? html`<time datetime="${o.iso}">${o.date}</time>` : null])}
 </div>
 </article>`;
@@ -549,6 +552,7 @@ function feedCard(item, { views = false } = {}) {
         kind: item.kind,
         // An audio-only recording (Media #241, carried by Live's feed, Live #476) says so before it is opened.
         badge: item.ai ? 'AI clip' : (item.audio_only === true || item.audio_only === 1 ? 'Audio' : null),
+        labels: labelsUi.inForce(item),
         thumb: httpsUrl(item.thumbnail_url),
         title: item.title || (item.kind === 'clip' ? 'Clip' : 'Stream recording'),
         channel: item.channel && item.channel.username ? item.channel.username : null,
@@ -563,6 +567,8 @@ function feedCard(item, { views = false } = {}) {
 function vodCard(v) {
     return card({
         href: `/v/${v.id}`,
+        labels: labelsUi.inForce(v),
+        owner: v.username || null,
         thumb: httpsUrl(v.thumbnail_url),
         title: v.title || 'Stream recording',
         duration: v.duration_seconds != null ? durationLabel(v.duration_seconds) : null,
@@ -577,6 +583,8 @@ function clipCard(c) {
         href: `/c/${c.id}`,
         kind: 'clip',
         badge: c.auto_generated ? 'AI clip' : null,
+        labels: labelsUi.inForce(c),
+        owner: c.username || null,
         thumb: httpsUrl(c.thumbnail_url),
         title: c.title || 'Clip',
         duration: dur != null ? durationLabel(dur) : null,
@@ -730,11 +738,12 @@ ${whole ? html`<input type="hidden" name="recording_time" value="1">` : ''}
     function ownerPanel(kind, id, item) {
         const what = kind === 'vod' ? 'recording' : 'clip';
         const action = `/${kind === 'vod' ? 'v' : 'c'}/${id}`;
-        return html`<details class="ovv-panel ovv-owner" id="manage"><summary><h2 id="h-owner"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit this ${what}</h2><span class="ovv-fine">Title, ${kind === 'vod' ? 'description, ' : ''}who can see it, delete</span></summary>
+        return html`<details class="ovv-panel ovv-owner" id="manage"><summary><h2 id="h-owner"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit this ${what}</h2><span class="ovv-fine">Title, ${kind === 'vod' ? 'description, ' : ''}who can see it, labels, delete</span></summary>
 <form class="ovv-owner-form" method="post" action="${action}/manage">
 <label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="200" value="${item.title || ''}" required></label>
 ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textarea name="description" rows="3" maxlength="2000">${item.description || ''}</textarea></label>` : ''}
 ${visibilityChoices(item.visibility || 'public')}
+${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
 <button class="ovv-btn ovv-btn--primary" type="submit">Save changes</button>
 </form>
 <details class="ovv-danger"><summary>Delete this ${what}</summary>
@@ -917,6 +926,7 @@ ${visibilityChoices(item.visibility || 'public')}
                 const started = s.started_at ? new Date(`${String(s.started_at).replace(' ', 'T')}${/[zZ]|[+-]\d\d:?\d\d$/.test(String(s.started_at)) ? '' : 'Z'}`) : null;
                 return card({
                     href: `${livePublic}/@${s.username}`, live: true, badge: 'Live',
+                    labels: labelsUi.inForce(s),
                     thumb: LIVE_THUMB.test(String(s.thumbnail_url || '')) ? httpsUrl(`${livePublic}${s.thumbnail_url}`) : `https://openvibe.media/live/@${s.username}/frame.jpg?w=640`,
                     title: s.title || `${s.display_name || s.username} is live`,
                     channel: s.username, channelHref: `${livePublic}/@${s.username}`,
@@ -1176,7 +1186,7 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
             if (req.query.list) q.set('list', String(req.query.list));
             return res.redirect(301, `/v/${rec.vod_id}${q.toString() ? `?${q}` : ''}`);
         }
-        if (vod && vod.ai_overview) vod.ai_overview = noLooks(vod.ai_overview).trim() || null;
+        if (vod && vod.ai_overview) vod.ai_overview = String(vod.ai_overview).trim() || null;
         const manageable = mayManage(req, 'vod', vod);
         const clips = Array.isArray(data.clips) ? data.clips.filter((c) => c && c.visibility !== 'private') : [];
 
@@ -1263,14 +1273,16 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
                 image: httpsUrl(vod.thumbnail_url) || undefined, ogType: 'video.other',
             }),
             scripts: ['js/video.js'],
+            ...(manageable ? { localStyles: ['css/labels.css'] } : {}),
             player: true,
             body: html`<div class="ovv-watch ovv-watch--vod">
 <div class="ovv-col ovv-col--main">
 <div class="ovv-stage">
 ${savedNotice(req)}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this recording.', 'info') : ''}
-<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(vod.thumbnail_url))}${avatarAttr(vod.username, config.networkUrl)}${shapeAttr} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video>${pipsTag(pips)}</div>
+<div class="ovv-player-wrap"${labelsUi.attrs(labelsUi.inForce(vod), { owner: vod.username, opened: true })}><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(vod.thumbnail_url))}${avatarAttr(vod.username, config.networkUrl)}${shapeAttr} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video>${pipsTag(pips)}</div>
 <div class="ovv-head">
 <h1 class="ovv-title">${vod.title || 'Stream recording'}</h1>
+${labelsUi.chips(labelsUi.inForce(vod))}
 ${what}
 <div class="ovv-head-row">
 <div class="ovv-byline">
@@ -1315,7 +1327,7 @@ ${clips.length ? html`<section class="ovv-panel ovv-clips" aria-labelledby="h-cl
         }
         if (!data || !data.clip) return notFound(req, res);
         const clip = data.clip;
-        if (clip && clip.ai_overview) clip.ai_overview = noLooks(clip.ai_overview).trim() || null;
+        if (clip && clip.ai_overview) clip.ai_overview = String(clip.ai_overview).trim() || null;
         const manageable = mayManage(req, 'clip', clip);
 
         // The comment thread, the playlist form, up next and the recording this clip was cut from are asked together.
@@ -1385,15 +1397,17 @@ ${clips.length ? html`<section class="ovv-panel ovv-clips" aria-labelledby="h-cl
                 image: httpsUrl(clip.thumbnail_url) || undefined, ogType: 'video.other',
             }),
             scripts: ['js/video.js'],
+            ...(manageable ? { localStyles: ['css/labels.css'] } : {}),
             player: true,
             body: html`<div class="ovv-watch ovv-watch--clip">
 <div class="ovv-col ovv-col--main">
 <div class="ovv-stage">
 ${savedNotice(req)}${req.query.made === '1' ? notice('Your clip was made. It is credited to you on OpenVibe.Live and here.', 'ok') : ''}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this clip.', 'info') : ''}
 ${cutting ? html`<div class="ovv-player-wrap ovv-cutting" role="status" data-ovv-reload="8"><p><i class="fa-solid fa-scissors" aria-hidden="true"></i> This clip is being cut. It plays here in a moment; the page checks again by itself.</p></div>`
-        : html`<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${avatarAttr(clip.username, config.networkUrl)}${posterAttr(httpsUrl(clip.thumbnail_url))} src="${fileOf(clip) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>`}
+        : html`<div class="ovv-player-wrap"${labelsUi.attrs(labelsUi.inForce(clip), { owner: clip.username, opened: true })}><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${avatarAttr(clip.username, config.networkUrl)}${posterAttr(httpsUrl(clip.thumbnail_url))} src="${fileOf(clip) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>`}
 <div class="ovv-head">
 <h1 class="ovv-title">${clip.title || 'Clip'}</h1>
+${labelsUi.chips(labelsUi.inForce(clip))}
 ${what}
 ${clipCredit}
 <div class="ovv-head-row">
@@ -1423,7 +1437,11 @@ ${up.html}
         if (!title || title.length > 200) return { error: 'A title is 1 to 200 characters.' };
         if (kind === 'vod' && description.length > 2000) return { error: 'A description is at most 2,000 characters.' };
         if (!VISIBILITIES.includes(visibility)) return { error: 'Choose public, unlisted or private.' };
-        return { title, description, visibility };
+        // L1: the creator labels the recording. Repeated form fields arrive as an array; a form without the picker keeps
+        // what it has, and the picker with nothing ticked clears them (labels_form).
+        const labels = labelsUi.fromForm(b);
+        if (labels === null) return { error: 'Choose the labels from the list.' };
+        return { title, description, visibility, labels };
     }
     const fieldError = (req, res, text, back) => page(req, res, {
         title: 'Not saved', cache: cache.htmlHeaders({ private: true }),
@@ -1460,7 +1478,7 @@ ${up.html}
         const f = ownerFields(req.body || {}, 'vod');
         if (f.error) return fieldError(req, res, f.error, back);
         try {
-            await asPerson(req, res, (token) => live.updateVod(token, id, { title: f.title, description: f.description, visibility: f.visibility }));
+            await asPerson(req, res, (token) => live.updateVod(token, id, { title: f.title, description: f.description, visibility: f.visibility, ...(f.labels !== undefined ? { labels: f.labels } : {}) }));
         } catch (err) { return ownerRefused(req, res, err, back); }
         live.forget('vod', id);
         return res.redirect(303, `${back}?saved=1`);
@@ -1497,6 +1515,8 @@ ${up.html}
         try {
             if (f.title !== String(current.title || '')) await asPerson(req, res, (token) => live.setClipTitle(token, id, f.title));
             if (f.visibility !== String(current.visibility || '')) await asPerson(req, res, (token) => live.setClipVisibility(token, id, f.visibility));
+            const sameLabels = (x, y) => x.length === y.length && x.every((l) => y.includes(l));
+            if (f.labels !== undefined && !sameLabels(f.labels, labelsUi.inForce(current))) await asPerson(req, res, (token) => live.setClipLabels(token, id, f.labels));
         } catch (err) { live.forget('clip', id); return ownerRefused(req, res, err, back); }
         live.forget('clip', id);
         return res.redirect(303, `${back}?saved=1`);

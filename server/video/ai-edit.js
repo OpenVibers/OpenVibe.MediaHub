@@ -17,9 +17,8 @@
  *   forUpload(row)   the AI row of an upload, parsed (or null)
  */
 const { createServiceTokenClient } = require('openvibe-sdk/auth');
-// Public AI text never describes a person (the owner's rule): the overview is shown, indexed and offered as the
-// description, so it passes the shared filter when stored and when read (rows stored before).
-const { noLooks } = require('openvibe-sdk/no-looks');
+// AI text is stored as written: describing people is fine (owner, 2026-10-31). The overview is shown, indexed and
+// offered as the description.
 
 const MAX_ATTEMPTS = 4;
 const parse = (v, d) => { if (v == null) return d; if (typeof v !== 'string') return v; try { return JSON.parse(v); } catch { return d; } };
@@ -107,7 +106,7 @@ function createAiEdit({ s, media, config, fetchImpl = globalThis.fetch, log = co
                 .map((x) => ({ start: Number(x.start), end: Number(x.end), text: clean(x.text, 500) })).slice(0, 5000);
             return save(ai.upload_id, {
                 status: 'done', run_id: r.id || null, error: null, next_at: null,
-                overview: out.overview && out.overview.text ? (noLooks(clean(out.overview.text, 1500)).trim() || null) : null,
+                overview: out.overview && out.overview.text ? (clean(out.overview.text, 1500).trim() || null) : null,
                 chapters: JSON.stringify(chaptersOf(out.highlights)), segments: JSON.stringify(segments),
                 highlights: JSON.stringify(highlightsOf(out.highlights)),
                 language: out.transcript.language ? clean(out.transcript.language, 8) : null,
@@ -139,7 +138,7 @@ function createAiEdit({ s, media, config, fetchImpl = globalThis.fetch, log = co
         enabled, sweep,
         async forUpload(row) {
             const ai = await s.db.maybe('SELECT * FROM video_upload_ai WHERE upload_id = $1', [row.id]);
-            return ai ? { ...ai, overview: ai.overview ? (noLooks(ai.overview).trim() || null) : ai.overview, chapters: parse(ai.chapters, []), segments: parse(ai.segments, []), highlights: parse(ai.highlights, null) } : null;
+            return ai ? { ...ai, overview: ai.overview ? (String(ai.overview).trim() || null) : ai.overview, chapters: parse(ai.chapters, []), segments: parse(ai.segments, []), highlights: parse(ai.highlights, null) } : null;
         },
     };
 }

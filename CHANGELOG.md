@@ -4,6 +4,11 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
 
 ## Unreleased
 
+- Content labels show on openvibe.video and OpenVibe.Pics (2026-11-02, L1). Cards, watch pages and pictures say in
+  words what they carry (Nudity, Strong language, 18+…), and each viewer's own choice on openvibe.network shows,
+  blurs or hides them. A maker always sees their own; on a video's or picture's own page a hide covers it with a
+  "Show" button rather than leaving the page empty. Owners set the labels in the edit forms: AI suggestions are
+  marked and never ticked for them, and ticking nothing clears them. openvibe-shared 4.94.0.
 - OpenVibe.Pics says in writing what it does with a picture (2026-10-30, the market research): three policy pages —
   `/exif` (the metadata — the GPS position, the camera, the time it was taken — is taken out by us, and the file you
   upload is not kept), `/content-policy` (what is not allowed, how a rule is enforced, and what this site does not
