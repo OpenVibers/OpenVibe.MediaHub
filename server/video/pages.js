@@ -547,7 +547,8 @@ function feedCard(item, { views = false } = {}) {
     return card({
         href,
         kind: item.kind,
-        badge: item.ai ? 'AI clip' : null,
+        // An audio-only recording (Media #241, carried by Live's feed, Live #476) says so before it is opened.
+        badge: item.ai ? 'AI clip' : (item.audio_only === true || item.audio_only === 1 ? 'Audio' : null),
         thumb: httpsUrl(item.thumbnail_url),
         title: item.title || (item.kind === 'clip' ? 'Clip' : 'Stream recording'),
         channel: item.channel && item.channel.username ? item.channel.username : null,
