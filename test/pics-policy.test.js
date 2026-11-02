@@ -79,7 +79,8 @@ const PAGES = ['/exif', '/content-policy', '/ai-training'];
 
         await check('the AI page says we do not train, and that a promise is not a lock', async () => {
             const page = (await t.get('/ai-training', { headers: PICS })).text;
-            assert.ok(page.includes('We do not train AI models on the pictures people upload here'), 'the stance is stated');
+            // The owner's opt-in wording (10-31, consent by opt-in): no training, and any change would be the person's choice, off to start.
+            assert.ok(/We don(&#39;|&#x27;|')t train AI on your content\. If that ever changes, it(&#39;|&#x27;|')ll be your choice, and it starts off\./.test(page), 'the stance is stated');
             assert.ok(page.includes('A promise, not a lock'), 'it says a promise is not a lock');
             assert.ok(page.includes('Write alt text with AI'), 'it names the one path to a model');
             assert.ok(page.includes(`At most ${t.config.pics.aiPerDay} drafts a day`), 'the cap is the configured one');
