@@ -16,6 +16,10 @@ const CACHE_TTL_MS = 60_000;
 // (production, 10-16: 23 "Live did not answer" in 12 h, at random times). A page then shows the last answer, up to
 // this old, instead of "OpenVibe.Live did not answer".
 const STALE_MAX_MS = 30 * 60_000;
+// An answer past its minute but under this age is served at once while it refreshes behind the page: when the minute ran
+// out, the next visitor waited for Live (openvibe.video's home: 0.8–2.3 s to first byte on a miss, 0.15 s on a hit,
+// 2026-11-02). One refresh per URL at a time.
+const SERVE_STALE_MS = 10 * 60_000;
 const CACHE_MAX = 500;
 const USERNAME_RE = /^[A-Za-z0-9_]{1,32}$/;
 
@@ -80,11 +84,20 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
         return value;
     }
 
+    const refreshing = new Map();   // url → the load that refreshes it
     async function getJson(path) {
         const url = `${config.video.liveUrl}${path}`;
         const cached = hit(url);
         if (cached !== undefined) return cached;
+        const entry = cache.get(url);
+        if (entry && Date.now() - entry.at < SERVE_STALE_MS) {
+            if (!refreshing.has(url)) refreshing.set(url, load(url).catch(() => {}).finally(() => refreshing.delete(url)));
+            return entry.value;
+        }
+        return load(url);
+    }
 
+    async function load(url) {
         let res;
         try {
             res = await fetchImpl(url, {
@@ -157,6 +170,8 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
     }
 
     return {
+        /** Every background refresh in flight has finished (tests). */
+        settled: () => Promise.all([...refreshing.values()]),
         forgetItem,
         /** The person's own view of one item (a private one they own or may moderate included); null when Live says 404. */
         async vodAs(token, id) {

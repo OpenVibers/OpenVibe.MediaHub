@@ -34,12 +34,22 @@ const { createLiveClient, LiveUnavailableError } = require('../server/video/live
         now += 5 * 60_000;
         mode = 'timeout';
         assert.deepStrictEqual((await client.feed({ type: 'all', limit: 24 })).items, [{ id: 1 }], 'Live timing out: the last answer');
+        await client.settled();
         mode = '502';
         assert.deepStrictEqual((await client.feed({ type: 'all', limit: 24 })).items, [{ id: 1 }], 'Live failing: the last answer');
+        await client.settled();
         assert.ok(warnings.every((w) => /serving its last answer/.test(w)), 'and the log says so');
 
         mode = 'ok';
+        // Under ten minutes old, the last answer is served at once and refreshed behind the page; the next read has it.
+        assert.deepStrictEqual((await client.feed({ type: 'all', limit: 24 })).items, [{ id: 1 }], 'served at once while it refreshes');
+        await client.settled();
         assert.deepStrictEqual((await client.feed({ type: 'all', limit: 24 })).items, [{ id: calls }], 'Live back: a new answer');
+        const before = calls;
+        now += 2 * 60_000;
+        await Promise.all([client.feed({ type: 'all', limit: 24 }), client.feed({ type: 'all', limit: 24 }), client.feed({ type: 'all', limit: 24 })]);
+        await client.settled();
+        assert.strictEqual(calls, before + 1, 'one refresh for three readers of an expired answer');
 
         now += 31 * 60_000;
         mode = 'timeout';
