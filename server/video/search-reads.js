@@ -12,6 +12,7 @@
  */
 const TIMEOUT_MS = 4000;
 const CACHE_TTL_MS = 5 * 60_000;
+const SERVE_STALE_MS = 60 * 60_000;
 const CACHE_MAX = 200;
 const PAGE = 24;
 
@@ -42,11 +43,22 @@ function createSearchReads({ config, fetchImpl = globalThis.fetch, log = console
     const base = String((config.search && config.search.url) || '').replace(/\/+$/, '');
     const cache = new Map();   // url → { at, value }
 
+    // An answer past its five minutes but under an hour is served at once and refreshed behind the page, one refresh per
+    // URL: the next visitor no longer waits for Search (Video's home at 0.25-0.96 s at the origin on a miss, 11-02).
+    const refreshing = new Map();
     async function getJson(qs) {
         if (!base) return null;
         const url = `${base}/api/v1/search?${qs.toString()}`;
         const entry = cache.get(url);
         if (entry && Date.now() - entry.at < CACHE_TTL_MS) return entry.value;
+        if (entry && Date.now() - entry.at < SERVE_STALE_MS) {
+            if (!refreshing.has(url)) refreshing.set(url, load(url, entry).finally(() => refreshing.delete(url)));
+            return entry.value;
+        }
+        return load(url, entry);
+    }
+
+    async function load(url, entry) {
         try {
             const res = await fetchImpl(url, {
                 method: 'GET', headers: { Accept: 'application/json' }, credentials: 'omit', cache: 'no-store',
@@ -82,6 +94,8 @@ function createSearchReads({ config, fetchImpl = globalThis.fetch, log = console
         }));
 
     return {
+        /** Every background refresh in flight has finished (tests). */
+        settled: () => Promise.all([...refreshing.values()]),
         enabled: Boolean(base),
         KINDS,
         /**
