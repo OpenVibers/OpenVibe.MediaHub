@@ -606,6 +606,12 @@ function countOccurrences(haystack, needle) {
         const llms = await getVideo('/llms.txt');
         assert.strictEqual(llms.status, 200);
         assert.ok(llms.text.includes('# OpenVibe.Video'));
+        // SEO-33: the same, in full.
+        const full = await getVideo('/llms-full.txt');
+        assert.strictEqual(full.status, 200);
+        assert.ok(full.text.startsWith('# OpenVibe.Video'));
+        assert.match(full.text, /## About\n\n### OpenVibe\.Video\n/);
+        assert.ok(full.text.length > 500, `${full.text.length} characters`);
     });
 
     await check('legal pages on the video host name openvibe.video', async () => {

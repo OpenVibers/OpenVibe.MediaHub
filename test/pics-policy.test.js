@@ -103,6 +103,11 @@ const PAGES = ['/exif', '/content-policy', '/ai-training'];
             for (const path of PAGES) assert.ok(map.includes(`<loc>https://openvibe.pics${path}</loc>`), `the sitemap lists ${path}`);
             const llms = (await t.get('/llms.txt', { headers: PICS })).text;
             for (const path of PAGES) assert.ok(llms.includes(`https://openvibe.pics${path}`), `llms.txt names ${path}`);
+            // SEO-33: llms-full.txt answers on the pics host, from the same descriptor.
+            const full = await t.get('/llms-full.txt', { headers: PICS });
+            assert.strictEqual(full.status, 200);
+            assert.match(full.text, /## About\n\n### /);
+            for (const path of PAGES) assert.ok(full.text.includes(`URL: https://openvibe.pics${path}`), `llms-full.txt names ${path}`);
             const robots = (await t.get('/robots.txt', { headers: PICS })).text;
             for (const path of PAGES) assert.ok(!robots.includes(`Disallow: ${path}`), `robots.txt does not block ${path}`);
         });

@@ -1852,15 +1852,16 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
     // RFC 9116, canonical to this host (openvibe.video), not the drive's.
     r.get('/.well-known/security.txt', securityTxt.handler(base));
 
-    r.get('/llms.txt', async (req, res) => {
+    // The site as llms.txt describes it, with the latest recordings and clips (shared by /llms-full.txt, SEO-33).
+    async function llmsSite() {
         const [vods, clips] = await Promise.all([
             live.feed({ type: 'vods', limit: SITEMAP_LIMIT }),
             live.feed({ type: 'clips', limit: SITEMAP_LIMIT }),
         ]);
         const vodItems = (vods && vods.items) || [];
         const clipItems = (clips && clips.items) || [];
-        const links = (items, kind) => items.map((it) => ({ title: it.title || (kind === 'vod' ? 'Recording' : 'Clip'), url: `${base}/${kind === 'vod' ? 'v' : 'c'}/${it.id}` }));
-        return res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(seo.llmsTxt({
+        const links = (items, kind) => items.map((it) => ({ title: it.title || (kind === 'vod' ? 'Recording' : 'Clip'), url: `${base}/${kind === 'vod' ? 'v' : 'c'}/${it.id}`, note: String(it.description || it.ai_summary || it.summary || '').replace(/\s+/g, ' ').trim().slice(0, 600) }));
+        return {
             name: SITE_NAME,
             summary: 'Videos people upload or record in the browser, and stream recordings and clips from OpenVibe.Live, each with a watch page.',
             details: 'AI captions, chapters and a summary are made for uploads (OpenVibe.AI, on OpenVibe\'s own servers) and rendered on the watch pages, as are the AI chapters and captions of stream recordings. The AI cut makes an edited copy of an upload: the pauses cut out, or a highlights reel. Uploading needs a signed-in OpenVibe account; /upload and /record.',
@@ -1869,6 +1870,24 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
                 { title: 'Latest recordings', links: links(vodItems, 'vod') },
                 { title: 'Latest clips', links: links(clipItems, 'clip') },
             ],
+        };
+    }
+    r.get('/llms.txt', async (req, res) => {
+        const d = await llmsSite();
+        // llms.txt stays a list of links: the notes are for /llms-full.txt.
+        const brief = { ...d, sections: d.sections.map((x) => ({ ...x, links: x.links.map(({ note, ...l }) => l) })) };
+        return res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(seo.llmsTxt(brief));
+    });
+    // The same, in full (SEO-33): what the site is, then every recording and clip with what it holds.
+    r.get('/llms-full.txt', async (req, res) => {
+        const d = await llmsSite();
+        return res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(seo.llmsFull({
+            site: d.name, summary: d.summary, base: `${base}/`,
+            sections: [
+                { title: 'About', pages: [{ title: d.name, url: `${base}/`, text: [d.summary, d.details].filter(Boolean).join('\n\n') }] },
+                ...d.sections.map((x) => ({ title: x.title, pages: x.links.map((l) => ({ title: l.title, url: l.url, text: l.note || '' })) })),
+            ],
+            maxBytes: 200000,
         }));
     });
 

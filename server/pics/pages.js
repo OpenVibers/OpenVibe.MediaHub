@@ -623,7 +623,8 @@ ${row.state === 'hidden' ? html`<button class="ovp-btn" name="action" value="res
         .send(seo.sitemapXml(['/', '/updates', ...legal.PATHS, ...POLICY_PATHS].map((p) => ({ loc: `${base}${p}` })))));
     // RFC 9116, canonical to this host (openvibe.pics).
     r.get('/.well-known/security.txt', securityTxt.handler(base));
-    r.get('/llms.txt', (_req, res) => res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(seo.llmsTxt({
+    // The site as llms.txt describes it, shared by /llms.txt and /llms-full.txt (SEO-33).
+    const llmsSite = () => ({
         name: SITE_NAME,
         summary: 'Picture hosting on the OpenVibe network: upload a picture, get a link to share or embed, albums, any size or format.',
         details: 'Pictures are unlisted (reachable only by their link). Each one is re-encoded with its metadata removed, and can be had resized and converted at /i/<slug>/w/<320|640|1280|1920|2560>.<webp|avif|jpg|png>. Alt text: the uploader writes it or asks OpenVibe.AI for a draft (POST /api/v1/images/<slug>/describe). API: POST /api/v1/images with the picture as the body (an OpenVibe sign-in token as a Bearer).',
@@ -635,7 +636,19 @@ ${row.state === 'hidden' ? html`<button class="ovp-btn" name="action" value="res
                 { title: 'Pictures and AI', url: `${base}/ai-training` },
             ] },
         ],
-    })));
+    });
+    r.get('/llms.txt', (_req, res) => res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(seo.llmsTxt(llmsSite())));
+    // The same, in full (SEO-33): what the site is, then every page llms.txt lists with what it holds.
+    r.get('/llms-full.txt', (_req, res) => {
+        const d = llmsSite();
+        res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(seo.llmsFull({
+            site: d.name, summary: d.summary, base: `${base}/`,
+            sections: [
+                { title: 'About', pages: [{ title: d.name, url: `${base}/`, text: [d.summary, Array.isArray(d.details) ? d.details.join('\n') : d.details].filter(Boolean).join('\n\n') }] },
+                ...(d.sections || []).map((x) => ({ title: x.title, pages: (x.links || []).map((l) => ({ title: l.title, url: l.url, text: l.note || '' })) })),
+            ],
+        }));
+    });
     r.get('/updates', (req, res) => page(req, res, {
         index: true, title: 'What shipped on OpenVibe.Pics', description: 'Every change deployed to OpenVibe.Pics, newest first.',
         body: raw(frame.updatesBody({ service: 'media-hub', siteName: SITE_NAME }) + `<script src="${ovServe.url('shipped.js')}" defer></script>`),
