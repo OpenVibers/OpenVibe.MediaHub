@@ -102,7 +102,10 @@ const PAGES = ['/exif', '/content-policy', '/ai-training'];
             const map = (await t.get('/sitemap.xml', { headers: PICS })).text;
             for (const path of PAGES) assert.ok(map.includes(`<loc>https://openvibe.pics${path}</loc>`), `the sitemap lists ${path}`);
             const llms = (await t.get('/llms.txt', { headers: PICS })).text;
-            for (const path of PAGES) assert.ok(llms.includes(`https://openvibe.pics${path}`), `llms.txt names ${path}`);
+            // AGT-5: the site's own pages are linked at their Markdown twins, and the secondary links end in Optional.
+            for (const path of PAGES) assert.ok(llms.includes(`https://openvibe.pics${path}.md`), `llms.txt names ${path}`);
+            assert.ok(llms.includes('](https://openvibe.pics/index.md)'), 'the home link is not its twin');
+            assert.ok(llms.includes('\n## Optional\n'), 'no ## Optional section');
             // SEO-2: the Pics host's own agent manifest.
             const agent = await t.get('/.well-known/agent.json', { headers: PICS });
             assert.strictEqual(agent.status, 200);

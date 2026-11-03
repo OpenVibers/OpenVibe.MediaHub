@@ -606,6 +606,9 @@ function countOccurrences(haystack, needle) {
         const llms = await getVideo('/llms.txt');
         assert.strictEqual(llms.status, 200);
         assert.ok(llms.text.includes('# OpenVibe.Video'));
+        // AGT-5: Video's own pages are linked at their Markdown twins, and the secondary links end in Optional.
+        assert.match(llms.text, /\]\(https:\/\/openvibe\.video\/index\.md\)/, 'the home link is not its twin');
+        assert.ok(llms.text.includes('\n## Optional\n'), 'no ## Optional section');
         // SEO-33: the same, in full.
         const full = await getVideo('/llms-full.txt');
         assert.strictEqual(full.status, 200);
