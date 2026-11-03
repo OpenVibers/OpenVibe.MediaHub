@@ -145,6 +145,14 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         await vreq(t.base, `/u/${id}/manage`, { method: 'POST', cookie: kimCookie, form: { title: 'Coast trip', visibility: 'public' } });
     });
 
+    await check('a short description is kept, and the meta description says what the video is (SEO audit 11-03)', async () => {
+        const page = (await vreq(t.base, `/u/${id}`)).text;
+        const m = page.match(/<meta name="description" content="([^"]*)"/);
+        assert.ok(m, 'a meta description');
+        assert.ok(m[1].startsWith('x. '), `the uploader's own word first (${m[1]})`);
+        assert.ok(m[1].length >= 50 && m[1].length <= 300, `long enough for a search result (${m[1].length})`);
+    });
+
     await check('a child-safety report hides it at once; one report per person; the owner sees why', async () => {
         const r = await vreq(t.base, `/u/${id}/report`, { method: 'POST', cookie: samCookie, form: { reason: 'child_safety', note: 'look at 0:12' } });
         assert.strictEqual(r.status, 303);
