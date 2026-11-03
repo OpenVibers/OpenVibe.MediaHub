@@ -35,6 +35,15 @@ const asset = (rel) => `/${rel}?v=${assetVersion(rel)}`;
 /** o: title, description, body (html), baseUrl, path, index, noindex, viewer, private, crumbs [{label, href}], scripts [rel],
  *     styles [shared file], sharedScripts [shared file], jsonLd (structured data for the page), image (its share image, an
  *     https URL), ogType */
+// A page names its Markdown twin (server/pics/agent-pages.js) when it has one: a public page, answered 200, drawn for
+// someone who is not signed in, without a query.
+function hasTwin(o) {
+    const viewer = o.viewer || { kind: 'anonymous' };
+    const pathNow = String(o.path || '/');
+    return viewer.kind !== 'user' && (o.status == null || o.status === 200) && !pathNow.includes('?')
+        && require('./agent-pages').TWIN_PATH_RE.test(pathNow);
+}
+
 function renderPage(o) {
     // The front page's title says what the site is (search results show it; at most 60 characters).
     const title = o.title || (o.path === '/' ? `${SITE_NAME}: share pictures, fast and open` : SITE_NAME);
@@ -70,6 +79,7 @@ ${render(o.body)}
         siteName: SITE_NAME,
         description: o.description || `${SITE_NAME} — ${TAGLINE}`,
         canonical,
+        ...(hasTwin(o) ? { agentLayer: true, llms: '/llms.txt' } : {}),
         robots: o.noindex ? 'noindex' : (o.index ? 'index, follow' : 'noindex, nofollow'),
         ...(o.jsonLd ? { jsonLd: o.jsonLd } : {}),
         ...(o.image ? { image: o.image, imageAlt: title } : {}),
@@ -103,7 +113,11 @@ const GUEST_HTML = 'public, max-age=0, must-revalidate';
 function send(res, status, o) {
     if (!res.get('Cache-Control')) res.set('Cache-Control', o.cache || (o.private ? cache.htmlHeaders({ private: true }) : GUEST_HTML));
     res.set('Vary', 'Host');
-    res.status(status).type('html').send(renderPage(o));
+    if (hasTwin({ ...o, status })) {
+        const canonical = `${String(o.baseUrl).replace(/\/+$/, '')}${String(o.path || '/')}`;
+        res.set('Link', require('openvibe-shared/agent-layer').linkHeaderTags(canonical, '/llms.txt').header);
+    }
+    res.status(status).type('html').send(renderPage({ ...o, status }));
 }
 
 module.exports = { renderPage, send, asset, assetVersion, SITE_NAME, TAGLINE, raw, html };

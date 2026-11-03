@@ -46,32 +46,36 @@ function captureResponse() {
     };
 }
 
+/** One page of `router`, answered in-process for an anonymous browser on `host`: { html } for a 200 HTML page, else null. */
+async function renderIn(router, host, p, search = '') {
+    const req = anonymousRequest(p, search, host);
+    const res = captureResponse();
+    await new Promise((resolve) => {
+        let settled = false;
+        const finish = () => { if (!settled) { settled = true; resolve(); } };
+        const send = res.send.bind(res);
+        res.send = (body) => { send(body); finish(); return res; };
+        const redirect = res.redirect.bind(res);
+        res.redirect = (code, url) => { redirect(code, url); finish(); return res; };
+        try { router(req, res, () => finish()); } catch { finish(); }
+        const timer = setTimeout(finish, 10000);
+        if (timer.unref) timer.unref();
+    });
+    // A page that is not public (a private recording, a missing item, a redirect) has no twin.
+    if (res.statusCode !== 200 || res.body == null) return null;
+    const html = Buffer.isBuffer(res.body) ? res.body.toString('utf8') : String(res.body);
+    if (!/^text\/html/i.test(String(res.headers['Content-Type'] || ''))) return null;
+    return { html };
+}
+
 function createAgentPages({ router, videoHost }) {
     async function renderPublicPage(path, { query } = {}) {
         const p = String(path || '/').replace(/\/+$/, '') || '/';
         if (p !== '/' && !TWIN_PATH_RE.test(p)) return null;
-        const search = query && query.toString() ? `?${query.toString()}` : '';
-        const req = anonymousRequest(p, search, videoHost);
-        const res = captureResponse();
-        await new Promise((resolve) => {
-            let settled = false;
-            const finish = () => { if (!settled) { settled = true; resolve(); } };
-            const send = res.send.bind(res);
-            res.send = (body) => { send(body); finish(); return res; };
-            const redirect = res.redirect.bind(res);
-            res.redirect = (code, url) => { redirect(code, url); finish(); return res; };
-            try { router(req, res, () => finish()); } catch { finish(); }
-            const timer = setTimeout(finish, 10000);
-            if (timer.unref) timer.unref();
-        });
-        // A page that is not public (a private recording, a missing item, a redirect) has no twin.
-        if (res.statusCode !== 200 || res.body == null) return null;
-        const html = Buffer.isBuffer(res.body) ? res.body.toString('utf8') : String(res.body);
-        if (!/^text\/html/i.test(String(res.headers['Content-Type'] || ''))) return null;
-        return { html };
+        return renderIn(router, videoHost, p, query && query.toString() ? `?${query.toString()}` : '');
     }
 
     return { renderPublicPage };
 }
 
-module.exports = { createAgentPages, TWIN_PATH_RE };
+module.exports = { createAgentPages, TWIN_PATH_RE, renderIn };
