@@ -637,6 +637,9 @@ ${row.state === 'hidden' ? html`<button class="ovp-btn" name="action" value="res
             ] },
         ],
     });
+    // /.well-known/agent.json on the Pics host (SEO-2): its own manifest, not the drive's or the video host's.
+    r.get('/.well-known/agent.json', (_req, res) => res.type('application/json').set('Cache-Control', 'public, max-age=3600')
+        .send(JSON.stringify(require('openvibe-shared/agent-layer').agentManifest(require('./agent-descriptor')))));
     r.get('/llms.txt', (_req, res) => res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(seo.llmsTxt(llmsSite())));
     // The same, in full (SEO-33): what the site is, then every page llms.txt lists with what it holds.
     r.get('/llms-full.txt', (_req, res) => {
