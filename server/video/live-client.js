@@ -241,6 +241,10 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
         vodMemories(id) {
             return getJson(`/api/vods/${id}/memories`);
         },
+        /** What was heard in a VOD, as caption cues in its own time ("[laughter]"; Live's sound-captions.js), or null. */
+        vodSounds(id) {
+            return getJson(`/api/vods/${id}/sounds`);
+        },
         /** A stream's recording parts (Live's history: a broadcaster who reconnected is recorded in parts), or null. */
         streamHistory(streamId) {
             return isId(streamId) ? getJson(`/api/streams/${streamId}/history`) : Promise.resolve(null);

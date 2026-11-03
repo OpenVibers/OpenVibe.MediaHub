@@ -11,7 +11,7 @@
  *   /v/:id                    a VOD watch page (player, AI chapters and captions, its clips)
  *   /c/:id                    a clip watch page
  *   /@:username               a channel's recordings (and clips), newest first
- *   /v/:id/captions.vtt       the AI transcript as WebVTT captions
+ *   /v/:id/captions.vtt       the AI transcript as WebVTT captions, with what was heard ("[laughter]")
  *   /v/:id/chapters.vtt       the AI moments as WebVTT chapters
  *   /v/:id/download/:file     the recording, its transcript, chat replay, chapters, details or all of it as files
  *   /c/:id/download/:file     the clip, its transcript and details (server/video/downloads.js)
@@ -477,6 +477,25 @@ function chapters(mems, durationSeconds) {
         out.push({ offset_seconds: m.offset_seconds, description: title });
     }
     return out;
+}
+
+/**
+ * Live's sound cues (GET /api/vods/:id/sounds, item 151 C15): only bracketed tags like "[laughter]" with finite times
+ * are taken, so nothing but a sound's name can reach the captions from there.
+ */
+function soundCues(list) {
+    if (!Array.isArray(list)) return [];
+    return list.map((c) => {
+        if (!c || typeof c !== 'object') return null;
+        const start = Number(c.start), end = Number(c.end), text = String(c.text == null ? '' : c.text);
+        if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || start < 0) return null;
+        return /^\[[a-z][a-z ]{1,29}\]$/.test(text) ? { start, end, text } : null;
+    }).filter(Boolean).slice(0, 5000);
+}
+
+/** The spoken lines and the sounds, in time order: a sound's cue shows beside the line it falls in. */
+function withSounds(segs, sounds) {
+    return [...segs, ...sounds].sort((a, b) => a.start - b.start || a.end - b.end);
 }
 
 function renderCaptionsVtt(segs) {
@@ -1146,7 +1165,10 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
         if (!data || !data.vod) return notFoundVtt(req, res);
         const segs = transcriptSegments(data.vod);
         if (!segs.length) return notFoundVtt(req, res);
-        return sendVtt(res, renderCaptionsVtt(segs));
+        // What was heard rides along: "[laughter]", "[applause]", "[music]". Live down or an older Live: speech only.
+        let sounds = [];
+        try { const out = await live.vodSounds(id); sounds = soundCues(out && out.cues); } catch { sounds = []; }
+        return sendVtt(res, renderCaptionsVtt(withSounds(segs, sounds)));
     });
 
     r.get('/v/:id/chapters.vtt', async (req, res) => {

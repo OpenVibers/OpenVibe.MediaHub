@@ -172,6 +172,12 @@ function startLive() {
             if (username === 'streamer') return json(200, { clips: [clipListItem], total: 1, hasMore: false });
             return json(200, { clips: [], total: 0, hasMore: false });
         }
+        // What was heard (Live's sound cues, C15): a laugh, and two cues that must never reach the captions.
+        const sounds = /^\/api\/vods\/(\d+)\/sounds$/.exec(p);
+        if (sounds) {
+            if (sounds[1] === '101') return json(200, { cues: [{ start: 1, end: 2.5, text: '[laughter]' }, { start: 3, end: 4, text: '<b>not a tag</b>' }, { start: 5, end: 4, text: '[backwards]' }] });
+            return json(200, { cues: [] });
+        }
         const memories = /^\/api\/vods\/(\d+)\/memories$/.exec(p);
         if (memories) {
             if (memories[1] === '103') return json(404, { error: 'not found' });
@@ -438,11 +444,12 @@ function countOccurrences(haystack, needle) {
         assert.ok(!r.text.includes('No recordings yet'));
     });
 
-    await check('captions.vtt is exact, escaping and collapsing cue text', async () => {
+    await check('captions.vtt is exact, escaping and collapsing cue text, with what was heard in time order', async () => {
         const r = await getVideo('/v/101/captions.vtt');
         assert.strictEqual(r.status, 200);
         assert.ok(String(r.headers['content-type']).includes('text/vtt'));
-        assert.strictEqual(r.text, 'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHi &amp; bye &lt;tag&gt; here\n\n00:00:02.000 --> 00:00:04.000\nSecond line done\n');
+        assert.strictEqual(r.text, 'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHi &amp; bye &lt;tag&gt; here\n\n00:00:01.000 --> 00:00:02.500\n[laughter]\n\n00:00:02.000 --> 00:00:04.000\nSecond line done\n',
+            'the laugh sits between the lines; a cue that is not a bracketed tag, or runs backwards, is dropped');
     });
 
     await check('chapters.vtt runs each moment to the next or the end', async () => {
