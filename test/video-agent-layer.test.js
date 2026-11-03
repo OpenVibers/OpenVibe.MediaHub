@@ -75,6 +75,9 @@ function vreq(base, path, { method = 'GET', cookie, host = 'openvibe.video', acc
         assert.strictEqual(d.llms, 'https://openvibe.video/llms.txt');
         assert.strictEqual(d.sitemap, 'https://openvibe.video/sitemap.xml');
         assert.deepStrictEqual(d.policy.auth, ['none', 'Network OIDC']);
+        // AGT-4: the id rule of the watch pages, as the pages behave (a private or missing id is a 404 below).
+        assert.deepStrictEqual(d.policy.stableIds.map((x) => [x.kind, x.url]), [['recording', 'https://openvibe.video/v/{id}'], ['clip', 'https://openvibe.video/c/{id}']]);
+        assert.ok(d.policy.stableIds.every((x) => /never reused/.test(x.id) && /404/.test(x.gone)));
         const drive = await vreq(t.base, '/.well-known/agent.json', { host: 'openvibe.download' });
         assert.strictEqual(drive.status, 200, 'the drive answers with its own manifest');
         const dd = JSON.parse(drive.text);
@@ -130,6 +133,7 @@ function vreq(base, path, { method = 'GET', cookie, host = 'openvibe.video', acc
         assert.strictEqual((await vreq(t.base, '/v/103.md')).status, 404, 'a private recording is not a twin');
         assert.strictEqual((await vreq(t.base, '/v/999.md')).status, 404, 'nor is a missing one');
         assert.strictEqual((await vreq(t.base, '/v/999')).status, 404, 'and the page is a real 404');
+        assert.strictEqual((await vreq(t.base, '/v/103')).status, 404, 'a private recording\'s page is a 404 to anyone else, as the manifest says');
     });
 
     await live.close();

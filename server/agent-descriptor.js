@@ -13,5 +13,11 @@ module.exports = {
     policy: {
         auth: ['none', 'Network OIDC'],
         rateLimit: 'The public watch pages are not rate-limited by the app; the playlist API is limited to 120 reads a minute and 3,000 an hour per caller',
+        // What an id in a watch page's address is, and that it never changes meaning (AGT-4). The ids are OpenVibe.Media's:
+        // its vods and clips tables number them with a PostgreSQL identity column (migrations/0001_initial.sql).
+        stableIds: [
+            { kind: 'recording', url: 'https://openvibe.video/v/{id}', id: 'OpenVibe.Media\'s recording id, a positive integer from an identity column: never reused or renumbered, even after the recording is deleted', gone: 'a deleted, private or missing recording answers 404, never another recording' },
+            { kind: 'clip', url: 'https://openvibe.video/c/{id}', id: 'OpenVibe.Media\'s clip id, the same kind of integer: never reused or renumbered', gone: 'a deleted, private or missing clip answers 404, never another clip' },
+        ],
     },
 };
