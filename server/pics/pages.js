@@ -627,18 +627,26 @@ ${row.state === 'hidden' ? html`<button class="ovp-btn" name="action" value="res
         .send(seo.sitemapXml(['/', '/updates', ...legal.PATHS, ...POLICY_PATHS].map((p) => ({ loc: `${base}${p}` })))));
     // RFC 9116, canonical to this host (openvibe.pics).
     r.get('/.well-known/security.txt', securityTxt.handler(base));
-    // The site as llms.txt describes it, shared by /llms.txt and /llms-full.txt (SEO-33).
+    // The site as llms.txt describes it, shared by /llms.txt and /llms-full.txt (SEO-33). AGT-5: its own pages are
+    // linked at their Markdown twins; `base` is this host's origin, so other sites' links keep theirs.
     const llmsSite = () => ({
         name: SITE_NAME,
+        markdown: true,
+        base,
         summary: 'Picture hosting on the OpenVibe network: upload a picture, get a link to share or embed, albums, any size or format.',
         details: 'Pictures are unlisted (reachable only by their link). Each one is re-encoded with its metadata removed, and can be had resized and converted at /i/<slug>/w/<320|640|1280|1920|2560>.<webp|avif|jpg|png>. Alt text: the uploader writes it or asks OpenVibe.AI for a draft (POST /api/v1/images/<slug>/describe). API: POST /api/v1/images with the picture as the body (an OpenVibe sign-in token as a Bearer).',
         sections: [
-            { title: 'Start here', links: [{ title: SITE_NAME, url: `${base}/` }, { title: 'Terms', url: `${base}/terms` }, { title: 'DMCA', url: `${base}/dmca` }] },
-            { title: 'Policies', links: [
-                { title: 'What happens to your picture', url: `${base}/exif` },
-                { title: 'What you may put here', url: `${base}/content-policy` },
-                { title: 'Pictures and AI', url: `${base}/ai-training` },
-            ] },
+            { title: 'Start here', links: [{ title: SITE_NAME, url: `${base}/` }] },
+        ],
+        // llmstxt.org's "## Optional": what an agent may skip when it needs a shorter context.
+        optional: [
+            { title: 'What happens to your picture', url: `${base}/exif` },
+            { title: 'What you may put here', url: `${base}/content-policy` },
+            { title: 'Pictures and AI', url: `${base}/ai-training` },
+            { title: 'Terms', url: `${base}/terms` },
+            { title: 'DMCA', url: `${base}/dmca` },
+            { title: 'Sitemap', url: `${base}/sitemap.xml`, note: 'only the home, the update log and the policy pages: no picture or album is ever listed' },
+            { title: 'Full text for language models', url: `${base}/llms-full.txt` },
         ],
     });
     // /.well-known/agent.json on the Pics host (SEO-2): its own manifest, not the drive's or the video host's.
@@ -653,6 +661,8 @@ ${row.state === 'hidden' ? html`<button class="ovp-btn" name="action" value="res
             sections: [
                 { title: 'About', pages: [{ title: d.name, url: `${base}/`, text: [d.summary, Array.isArray(d.details) ? d.details.join('\n') : d.details].filter(Boolean).join('\n\n') }] },
                 ...(d.sections || []).map((x) => ({ title: x.title, pages: (x.links || []).map((l) => ({ title: l.title, url: l.url, text: l.note || '' })) })),
+                // AGT-5: the Optional links are still pages, so the full document names them too.
+                ...((d.optional || []).length ? [{ title: 'Optional', pages: d.optional.map((l) => ({ title: l.title, url: l.url, text: l.note || '' })) }] : []),
             ],
         }));
     });

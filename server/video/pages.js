@@ -1863,12 +1863,21 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
         const links = (items, kind) => items.map((it) => ({ title: it.title || (kind === 'vod' ? 'Recording' : 'Clip'), url: `${base}/${kind === 'vod' ? 'v' : 'c'}/${it.id}`, note: String(it.description || it.ai_summary || it.summary || '').replace(/\s+/g, ' ').trim().slice(0, 600) }));
         return {
             name: SITE_NAME,
+            // AGT-5: each of Video's own pages is linked at its Markdown twin (openvibe-shared 4.108.0 leaves files and
+            // other sites' links as they are). Both /llms.txt and /llms-full.txt read this object.
+            markdown: true,
+            base,
             summary: 'Videos people upload or record in the browser, and stream recordings and clips from OpenVibe.Live, each with a watch page.',
             details: 'AI captions, chapters and a summary are made for uploads (OpenVibe.AI, on OpenVibe\'s own servers) and rendered on the watch pages, as are the AI chapters and captions of stream recordings. The AI cut makes an edited copy of an upload: the pauses cut out, or a highlights reel. Uploading needs a signed-in OpenVibe account; /upload and /record.',
             sections: [
                 { title: 'Start here', links: [{ title: SITE_NAME, url: `${base}/` }] },
                 { title: 'Latest recordings', links: links(vodItems, 'vod') },
                 { title: 'Latest clips', links: links(clipItems, 'clip') },
+            ],
+            // llmstxt.org's "## Optional": what an agent may skip when it needs a shorter context.
+            optional: [
+                { title: 'Sitemap', url: `${base}/sitemap.xml`, note: 'the watch pages Video is the canonical home of' },
+                { title: 'Full text for language models', url: `${base}/llms-full.txt` },
             ],
         };
     }

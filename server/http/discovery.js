@@ -79,6 +79,10 @@ function createDiscoveryRoutes(ctx) {
     r.get('/llms.txt', (_req, res) => {
         res.type('text/plain').set('Cache-Control', TEXT).send(seo.llmsTxt({
             name: SITE_NAME,
+            // AGT-5: each of Download's own pages is linked at its Markdown twin (openvibe-shared 4.108.0 leaves files
+            // and other sites' links as they are). What an agent may skip is in `optional`, written last.
+            markdown: true,
+            base: site,
             summary: 'OpenVibe.Download: a private drive on your OpenVibe account, with share links you control and folder backups.',
             details: 'Upload files to your own drive, share a file or folder with named OpenVibe accounts, anyone signed in, or a public download page (links expire and can be revoked), and keep a folder on your computer backed up with the openvibe-download command (a sync key from /sync). Every page is server-rendered and readable without JavaScript.',
             sections: [
@@ -88,14 +92,15 @@ function createDiscoveryRoutes(ctx) {
                     { title: 'What shipped on OpenVibe.MediaHub', url: abs('/updates') },
                 ] },
                 { title: 'Machine-readable', links: [
-                    { title: 'Sitemap', url: abs('/sitemap.xml') },
-                    { title: 'Full text for language models', url: abs('/llms-full.txt') },
                     { title: 'Release metadata (JSON)', url: abs('/release.json') },
                 ] },
-                { title: 'Elsewhere', links: [
-                    { title: 'OpenVibe.Network', url: 'https://openvibe.network', note: 'accounts, apps and grants' },
-                    { title: 'OpenVibe.Services', url: 'https://openvibe.services', note: 'apps, keys and capability grants' },
-                ] },
+            ],
+            // llmstxt.org's "## Optional": what an agent may skip when it needs a shorter context.
+            optional: [
+                { title: 'Sitemap', url: abs('/sitemap.xml') },
+                { title: 'Full text for language models', url: abs('/llms-full.txt') },
+                { title: 'OpenVibe.Network', url: 'https://openvibe.network', note: 'accounts, apps and grants' },
+                { title: 'OpenVibe.Services', url: 'https://openvibe.services', note: 'apps, keys and capability grants' },
             ],
         }));
     });
