@@ -267,11 +267,19 @@ ${fresh.map((x) => html`<tr><td><a href="/u/${x.id}">${x.title}</a></td><td>${st
         const reel = cutsOn ? await ctx.videoCuts.highlightsPlan(row) : null;
         const original = own && row.edited_from ? await up.byId(row.edited_from) : null;
         if (cutBusy) res.set('Refresh', '15');
+        // The description search results and share cards show: the uploader's own words when they say enough. A short one
+        // ("Wheeeee", SEO audit 11-03) is kept and followed by the AI's overview when there is one, or by who made the
+        // video, when and how long it is, so the snippet says what the page is.
+        const said = String(row.description || '').trim();
+        const { lengthWords, dayLabel } = require('./watch-ui');
+        const madeBy = `A video by @${channel || 'someone'} on OpenVibe.Video${dayLabel(row.created_at) ? `, uploaded ${dayLabel(row.created_at)}` : ''}${lengthWords(row.duration_seconds) ? `, ${lengthWords(row.duration_seconds)} long` : ''}.`;
+        const about = said.length >= 50 ? said.slice(0, 300)
+            : [said ? `${said.replace(/[\s.!?…]+$/u, '')}.` : '', aiDone && ai.overview ? String(ai.overview).trim() : madeBy].filter(Boolean).join(' ').slice(0, 300);
         return page(req, res, {
             index: listed, noindex: !listed,
             ...(listed ? {} : { cache: cache.htmlHeaders({ private: true }) }),
             title: row.title,
-            description: row.description ? row.description.slice(0, 300) : `A video by @${channel || 'someone'} on OpenVibe.Video.`,
+            description: about,
             ...(listed && thumb ? { image: thumb, ogType: 'video.other' } : {}),
             scripts: ready ? ['js/video.js'] : [],
             player: !!(ready && vod),
