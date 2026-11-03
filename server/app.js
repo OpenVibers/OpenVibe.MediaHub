@@ -194,6 +194,21 @@ async function createApp(opts = {}) {
             return next();
         });
     }
+    // The Markdown twins of the pics host's public pages (SEO-1): a twin request only; the manifest stays the pics
+    // routes' own (/.well-known/agent.json in server/pics/pages.js).
+    if (picsHost) {
+        const picsAgent = express.Router();
+        require('openvibe-shared/agent-layer').mount(picsAgent, {
+            descriptor: require('./pics/agent-descriptor'),
+            render: require('./pics/agent-pages').createAgentPages({ router: picsRoutes, host: picsHost }).renderPublicPage,
+        });
+        app.use((req, res, next) => {
+            if (req.hostname !== picsHost || (req.method !== 'GET' && req.method !== 'HEAD')) return next();
+            const p = String(req.path || '');
+            const twin = p.endsWith('.md') || req.query.format === 'markdown' || req.accepts(['html', 'text/markdown']) === 'text/markdown';
+            return twin ? picsAgent(req, res, next) : next();
+        });
+    }
     app.use((req, res, next) => {
         if (videoHost && req.hostname === videoHost) return videoRoutes(req, res, next);
         if (picsHost && req.hostname === picsHost) return picsRoutes(req, res, next);
