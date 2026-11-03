@@ -255,6 +255,7 @@ async function createApp(opts = {}) {
             return next();
         });
     }
+    app.use(require('./link-header').linkHeader());   // SEO-24: the head's twin and llms.txt links, as a Link: header
     app.use(pageRoutes);
     app.use((req, res) => send(res, 404, { viewer: req.viewer, config, path: req.originalUrl, title: 'Not found', body: html`<h1>Not found</h1><p>No page here. Try <a href="/">the home page</a> or <a href="/updates">the update log</a>.</p>` }));
 
