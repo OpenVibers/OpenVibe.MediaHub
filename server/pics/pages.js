@@ -315,7 +315,8 @@ ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><
             const out = await pics.upload(whoOf(req), { buffer: fs.readFileSync(got.file.path), name: got.file.filename }, { title: got.fields.title || '' });
             if (!out.ok) return uploadFailed(req, res, out.detail, out.status);
             if (out.deleteKey) return picturePage(req, res, out.image, { deleteKey: out.deleteKey, fresh: true });
-            return res.redirect(303, `/i/${out.image.slug}?new=1`);
+            if (out.duplicate) return res.redirect(303, `/i/${out.image.slug}?again=1`);
+            return res.redirect(303, `/i/${out.image.slug}?new=1${out.similar ? `&like=${encodeURIComponent(out.similar.slug)}` : ''}`);
         } finally {
             fs.rm(tmp, { force: true }, () => {});
         }
@@ -337,6 +338,9 @@ ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><
         const holding = owner ? await store.albumsHolding(s, row.id) : [];
         const title = row.title || 'Untitled picture';
         const hidden = row.state !== 'active';
+        // ?like=<slug> after an upload: a near-duplicate of one of the person's own pictures (VIS-6). Only a slug of theirs is linked.
+        const likeRow = owner && /^[A-Za-z0-9]{4,16}$/.test(String(req.query.like || '')) ? await store.imageBySlug(s, String(req.query.like)) : null;
+        const likeSlug = likeRow && likeRow.id !== row.id && likeRow.owner === row.owner ? likeRow.slug : null;
         return page(req, res, {
             title, noindex: true,
             description: row.description || `${title}: a picture on ${SITE_NAME}.`,
@@ -344,7 +348,7 @@ ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><
             scripts: ['js/pics.js'], styles: ['kit.css'], sharedScripts: ['kit-web.js'],
             ...(owner ? { localStyles: ['css/labels.css'] } : {}),
             private: deleteKey ? true : undefined,
-            body: html`${message ? notice(message, tone) : ''}${fresh || req.query.new ? notice('Uploaded. Copy a link below to share it.', 'ok') : ''}
+            body: html`${message ? notice(message, tone) : ''}${fresh || req.query.new ? notice('Uploaded. Copy a link below to share it.', 'ok') : ''}${owner && req.query.again ? notice('You had already uploaded this picture: here it is. Nothing was stored twice.', 'info') : ''}${owner && req.query.new && likeSlug ? notice(html`It looks like a picture you uploaded before: <a href="/i/${likeSlug}">that one</a>. If you meant to keep only one, delete the other.`, 'info') : ''}
 ${deleteKey ? html`<div class="notice warn" role="status"><b>Keep this delete link.</b> It is the only way to delete this picture, and it is shown only now:<br><code class="ovp-key">${base}/i/${row.slug}/delete?key=${deleteKey}</code></div>` : ''}
 ${hidden ? notice(row.state === 'hidden' ? 'This picture is hidden while staff look at reports about it. Only you and staff can see it.' : 'This picture was taken down.', 'warn') : ''}
 <article class="ovp-picture">

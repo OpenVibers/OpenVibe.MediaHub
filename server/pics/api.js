@@ -84,7 +84,10 @@ function createPicsApi(ctx) {
         const out = await pics.upload(whoOf(req), { buffer: Buffer.isBuffer(req.body) ? req.body : null, name: header(req, 'x-filename', 200) }, { title: header(req, 'x-title', 200) });
         if (!out.ok) return problem(req, res, out.status, out.code, out.detail);
         res.set('Location', `/api/v1/images/${out.image.slug}`);
-        return res.status(201).json({ ...pics.toWire(out.image, { owner: true }), ...(out.deleteKey ? { delete_key: out.deleteKey, delete_url: `${cfg.url}/i/${out.image.slug}/delete?key=${out.deleteKey}` } : {}) });
+        // The same picture again: 200 with the one the person already has (duplicate: true), nothing stored twice.
+        if (out.duplicate) return res.status(200).json({ ...pics.toWire(out.image, { owner: true }), duplicate: true });
+        return res.status(201).json({ ...pics.toWire(out.image, { owner: true }), ...(out.deleteKey ? { delete_key: out.deleteKey, delete_url: `${cfg.url}/i/${out.image.slug}/delete?key=${out.deleteKey}` } : {}),
+            ...(out.similar ? { similar_to: `${cfg.url}/i/${out.similar.slug}` } : {}) });
     });
 
     r.use(express.json({ limit: '64kb' }));

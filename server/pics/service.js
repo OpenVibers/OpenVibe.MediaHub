@@ -38,6 +38,8 @@ const LIMITS = { title: 120, description: 2000, alt: 160, albumTitle: 120, note:
 // A difference hash this close (of 64 bits) to a blocked one is the same picture, resized, re-compressed or retouched:
 // measured 2026-10-15, such copies of real photos land 0-10 bits away and different photos 23-42.
 const DHASH_DISTANCE = 10;
+// A person's own near-duplicate (a recompress, a resize, a screenshot of it): tighter than the takedown match.
+const OWN_SIMILAR_DISTANCE = 6;
 
 const slug = () => Array.from(crypto.randomBytes(8), (b) => SLUG_ALPHABET[b % SLUG_ALPHABET.length]).join('');
 const cleanLine = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -108,6 +110,12 @@ function createPics({ s, media, config, log = console, events = null }) {
             (log.warn || log.log)(`[OpenVibe.Pics] refused an upload matching a takedown (${hit.reason})`);
             return { ok: false, status: 422, code: 'pics.blocked', detail: 'This picture was taken down from OpenVibe.Pics and cannot be uploaded again.' };
         }
+        // The same picture again, signed in (its exact bytes, or the copy served): the one the person already has, not a
+        // second copy of it (VIS-6). A near-duplicate is stored as asked and named after (`similar`), since an edit may be meant.
+        const own = anonymous ? [] : await store.ownHashes(s, who.requester);
+        const same = own.find((r) => r.source_sha256 === prepared.sourceSha256 || r.sha256 === prepared.sha256);
+        if (same) return { ok: true, image: await store.imageById(s, same.id), duplicate: true };
+        const similar = distinctive(prepared.dhash) ? own.find((r) => images.distance(r.dhash, prepared.dhash) <= OWN_SIMILAR_DISTANCE) : null;
         await store.countUpload(s, uploader, day());
 
         const id = s.newId('pic');
@@ -128,7 +136,7 @@ function createPics({ s, media, config, log = console, events = null }) {
         });
         if (events && !anonymous) await events.pictureUploaded(r);
         return r; });
-        return { ok: true, image: row, ...(deleteKey ? { deleteKey } : {}) };
+        return { ok: true, image: row, ...(deleteKey ? { deleteKey } : {}), ...(similar ? { similar: { id: similar.id, slug: similar.slug } } : {}) };
     }
 
     async function edit(row, { title, description, alt, labels: nextLabels }) {
