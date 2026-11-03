@@ -38,6 +38,11 @@ async function imagesOf(s, owner, { limit = 48, before = null } = {}) {
     return { rows: rows.slice(0, limit), next: rows.length > limit ? rows[limit - 1].id : null };
 }
 
+/** A person's pictures as their hashes, newest first: for "you uploaded this before" (VIS-6). */
+const ownHashes = (s, owner, limit = 2000) => s.db.many(
+    `SELECT id, slug, sha256, source_sha256, dhash, created_at FROM pics_images WHERE owner = $1 AND state = 'active' ORDER BY id DESC LIMIT $2`,
+    [owner, limit]);
+
 const usageOf = async (s, owner) => {
     const r = await s.db.maybe("SELECT count(*)::int AS n, coalesce(sum(bytes), 0)::bigint AS bytes FROM pics_images WHERE owner = $1 AND state <> 'removed'", [owner]);
     return { images: Number(r ? r.n : 0), bytes: Number(r ? r.bytes : 0) };
@@ -120,7 +125,7 @@ const removeFromAlbum = (s, albumId, imageId) => s.db.exec('DELETE FROM pics_alb
 const albumsHolding = (s, imageId) => s.db.many('SELECT a.* FROM pics_album_images ai JOIN pics_albums a ON a.id = ai.album_id WHERE ai.image_id = $1 ORDER BY a.title', [imageId]);
 
 module.exports = {
-    imageBySlug, imageById, insertImage, updateImage, deleteImage, imagesOf, usageOf, countUpload, uploadsToday,
+    imageBySlug, imageById, insertImage, updateImage, deleteImage, imagesOf, ownHashes, usageOf, countUpload, uploadsToday,
     blockedSha, blockedDhashes, block, addReport, reportsFor, staffQueue, staffCounts, idleAnonymous,
     albumBySlug, albumsOf, albumCount, insertAlbum, updateAlbum, deleteAlbum, albumImages, albumImageCount, addToAlbum, removeFromAlbum, albumsHolding,
 };

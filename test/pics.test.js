@@ -181,6 +181,25 @@ function multipart(fields, file) {
             assert.strictEqual(crossApi.json().code, 'request.cross_site');
         });
 
+        await check('the same picture again is the one already there; a near-duplicate is stored and named (VIS-6)', async () => {
+            const objects = t.media.objects.size;
+            const again = await up(kim, jpegWithSecrets, { title: 'Again' });
+            assert.strictEqual(again.status, 200, again.text);
+            assert.deepStrictEqual([again.json().slug, again.json().duplicate, again.json().title], [slug, true, 'The coast'], 'the picture kim already has, unchanged');
+            assert.strictEqual(t.media.objects.size, objects, 'nothing stored twice');
+            const smaller = await sharp(jpegWithSecrets).rotate().resize(600).jpeg({ quality: 70 }).toBuffer();
+            const near = await up(kim, smaller, { title: 'Smaller' });
+            assert.strictEqual(near.status, 201, near.text);
+            assert.strictEqual(near.json().similar_to, `https://openvibe.pics/i/${slug}`, 'named after the one it looks like');
+            const page = await t.get(`/i/${near.json().slug}?new=1&like=${slug}`, { as: kim, headers: PICS });
+            assert.ok(page.text.includes(`It looks like a picture you uploaded before: <a href="/i/${slug}">`), 'the page says so');
+            const stranger = await t.get(`/i/${near.json().slug}?new=1&like=${slug}`, { headers: PICS });
+            assert.ok(!stranger.text.includes('It looks like a picture you uploaded before'), 'only to its owner');
+            const theirs = await up(lee, jpegWithSecrets, { title: 'Lee too' });
+            assert.strictEqual(theirs.status, 201, 'another person\'s copy is theirs');
+            assert.ok(!('duplicate' in theirs.json()));
+        });
+
         await check('only the uploader changes or deletes a picture', async () => {
             assert.strictEqual((await t.get(`/api/v1/images/${slug}`, { as: lee, method: 'PATCH', json: { title: 'mine now' }, headers: SAME })).status, 403);
             assert.strictEqual((await t.get(`/api/v1/images/${slug}`, { as: lee, method: 'DELETE', headers: SAME })).status, 403);
