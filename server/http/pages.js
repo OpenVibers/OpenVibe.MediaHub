@@ -325,6 +325,7 @@ ${shares.length ? html`<ul class="file-list">${shares.map((sh) => html`<li class
         const shares = (await drive.listShares(owner)).filter((sh) => sh.file_id === row.id);
         return page(req, res, {
             title: row.name,
+            styles: ['kit.css'],
             crumbs: [{ label: 'Home', href: '/' }, { label: 'Your files', href: '/files' }, { label: row.name }],
             body: html`<h1>${row.name}</h1>
 ${rules.isPreviewable(row.content_type) ? html`<figure class="file-preview"><img src="/files/${row.id}/preview?w=640" alt="${row.name}" decoding="async"></figure>` : ''}
@@ -604,6 +605,7 @@ ${shares.length ? html`<h3>Its links</h3><ul class="file-list">${shares.map((sh)
             if (!file) return shareGone(req, res, share);
             return page(req, res, {
                 title: `${file.name} · shared by ${share.owner_username || 'an OpenVibe member'}`,
+                styles: ['kit.css'],
                 crumbs: [{ label: 'Home', href: '/' }, { label: 'Shared file' }],
                 body: html`<h1>${file.name}</h1>
 ${notice(`Shared ${share.public ? 'publicly' : 'with you'} by ${share.owner_username ? `@${share.owner_username}` : 'an OpenVibe member'}.`, 'info')}
@@ -618,6 +620,7 @@ ${mine ? '' : reportForm(share)}
         const folder = await drive.ownFolder(share.owner, share.folder_id);
         return page(req, res, {
             title: `${folder ? folder.name : 'A folder'} · shared by ${share.owner_username || 'an OpenVibe member'}`,
+            styles: ['kit.css'],
             crumbs: [{ label: 'Home', href: '/' }, { label: 'Shared folder' }],
             body: html`<h1>${folder ? folder.name : 'A folder'}</h1>
 ${notice(`Shared ${share.public ? 'publicly' : 'with you'} by ${share.owner_username ? `@${share.owner_username}` : 'an OpenVibe member'}.`, 'info')}

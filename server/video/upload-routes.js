@@ -279,6 +279,7 @@ ${fresh.map((x) => html`<tr><td><a href="/u/${x.id}">${x.title}</a></td><td>${st
             index: listed, noindex: !listed,
             ...(listed ? {} : { cache: cache.htmlHeaders({ private: true }) }),
             title: row.title,
+            styles: ['kit.css'],
             description: about,
             ...(listed && thumb ? { image: thumb, ogType: 'video.other' } : {}),
             scripts: ready ? ['js/video.js'] : [],

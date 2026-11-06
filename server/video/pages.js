@@ -1289,6 +1289,7 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
             noindex: unlisted || ownOnly || thin,
             ...(ownOnly ? { cache: cache.htmlHeaders({ private: true }) } : {}),
             title: watchTitle(vod.title || 'Stream recording', vod.username, vod.created_at),
+            styles: ['kit.css'],
             description: about,
             ...(ownOnly || vod.is_recording ? {} : {
                 jsonLd: videoLd({ base, path: `/v/${id}`, item: vod, title: vod.title || 'Stream recording', description: about, chapterList: mems }),
@@ -1413,6 +1414,7 @@ ${clips.length ? html`<section class="ovv-panel ovv-clips" aria-labelledby="h-cl
             noindex: unlisted || ownOnly || aiClip,
             ...(ownOnly ? { cache: cache.htmlHeaders({ private: true }) } : {}),
             title: watchTitle(clip.title || 'Clip', clip.source_streamer_username, clip.created_at),
+            styles: ['kit.css'],
             description: clip.ai_overview || factualDescription('clip', clip),
             ...(ownOnly || aiClip ? {} : {
                 jsonLd: videoLd({ base, path: `/c/${id}`, item: clip, title: clip.title || 'Clip', description: clip.ai_overview || factualDescription('clip', clip) || attribution, partOf: clip.vod_id ? `/v/${clip.vod_id}` : null }),
@@ -1599,6 +1601,7 @@ ${up.html}
         return page(req, res, {
             index: true,
             title: `@${username}`,
+            styles: ['kit.css'],
             description: `Videos, recordings and clips from @${username} on OpenVibe.Video.`,
             body: html`${req.query.deleted === '1' ? notice('Deleted on OpenVibe.Live.', 'ok') : ''}<header class="ovv-channel-head"><span class="ovv-avatar ovv-avatar--big" aria-hidden="true">${username.slice(0, 1).toUpperCase()}<img src="${config.networkUrl}/avatar/${username}" alt="" loading="lazy"></span><div><h1>@${username}</h1><p class="ovv-meta">Recordings and clips from this channel's streams on OpenVibe.Live.</p>${raw(shareButton({ url: `${base}/@${username}`, title: `@${username}`, text: `Videos, recordings and clips from @${username} on OpenVibe.Video.`, image: `${config.networkUrl}/avatar/${username}` }))}</div><a class="ovv-btn" href="${livePublic}/@${username}"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Channel on OpenVibe.Live</a></header>
 ${uploaded.length ? html`<section class="ovv-section" aria-labelledby="h-uploads"><h2 id="h-uploads">Videos</h2>${grid(uploaded.map(uploadCard))}</section>` : ''}
