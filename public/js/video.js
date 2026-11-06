@@ -242,60 +242,6 @@
         if (window.location.hash.length > 1) open(window.location.hash.slice(1));
     }
 
-    // Share: the page's own link, and the link to the moment it is playing. The link is written in a field on the page,
-    // so it can be copied without JavaScript; these buttons (copy, copy at this moment) appear when JavaScript is there.
-    function share(video) {
-        const title = (document.querySelector('.ovv-title') || {}).textContent || document.title;
-        const fieldOf = function (b) {
-            const id = b.getAttribute('data-ovv-share-field');
-            return id ? document.getElementById(id) : null;
-        };
-        const momentUrl = function (url) {
-            try {
-                const u = new URL(url);
-                if (video && video.currentTime > 1 && !video.ended) u.searchParams.set('t', String(Math.floor(video.currentTime)));
-                return u.toString();
-            } catch (e) { return url; }
-        };
-        const copied = function (b, url) {
-            const label = b.innerHTML;
-            const field = fieldOf(b);
-            if (field) field.value = url;
-            const said = function (text) {
-                b.innerHTML = text;
-                setTimeout(function () { b.innerHTML = label; }, 2000);
-            };
-            if (!navigator.clipboard || !navigator.clipboard.writeText) {
-                // No clipboard to write to: the field is selected, so the reader can copy it by hand.
-                if (field) { field.focus(); field.select(); }
-                said('<i class="fa-solid fa-check" aria-hidden="true"></i> Link ready to copy');
-                return;
-            }
-            navigator.clipboard.writeText(url).then(function () {
-                said('<i class="fa-solid fa-check" aria-hidden="true"></i> Link copied');
-            }, function () { window.prompt('Copy this link', url); });
-        };
-        document.querySelectorAll('[data-ovv-share]').forEach(function (b) {
-            b.hidden = false;
-            b.addEventListener('click', function () {
-                const url = b.getAttribute('data-ovv-share');
-                const field = fieldOf(b);
-                if (field) field.value = url;
-                if (navigator.share && window.matchMedia('(hover: none)').matches) {
-                    navigator.share({ title: title, url: url }).catch(function () { /* closed */ });
-                    return;
-                }
-                copied(b, url);
-            });
-        });
-        document.querySelectorAll('[data-ovv-share-at]').forEach(function (b) {
-            b.hidden = false;
-            b.addEventListener('click', function () {
-                copied(b, momentUrl(b.getAttribute('data-ovv-share-at') || ''));
-            });
-        });
-    }
-
     // The transcript follows the video (the line being said is marked and kept in view inside its panel, unless the
     // reader scrolled it lately or is searching), and its search box keeps only the lines that have the words.
     function transcript(video) {
@@ -505,7 +451,6 @@
         copyButtons();
         tabs();
         openers();
-        share(document.querySelector('video[data-ovv-video]'));
 
         const video = document.querySelector('video[data-ovv-video]');
         transcript(video);

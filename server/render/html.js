@@ -21,7 +21,44 @@ function render(v) {
     return esc(v);
 }
 
+const kit = require('openvibe-shared/kit');
+
 const code = (s) => html`<code>${s}</code>`;
+
+/**
+ * The Share button, built by the shared kit (openvibe-shared 4.114.0): the same quiet button with the same share
+ * icon on every OpenVibe site. The navbar fetches the sheet the first time the button is pressed.
+ *
+ *   url:      the page's own public address — the link that is shared
+ *   title:    what the thing is called
+ *   text:     a line sent with it (the thing's own summary)
+ *   image:    a picture of it (a thumbnail), for the places that take one
+ *   embed:    an embeddable player address, for the places that take one
+ *   timeFrom: the player whose moment can be shared (a selector), so the sheet can offer "Start at …"
+ */
+function shareButton({ title = '', url = '', text = '', image = '', embed = '', timeFrom = null, small = false }) {
+    const line = String(text || '').trim().replace(/\s+/g, ' ').slice(0, 240);
+    const button = kit.share({ title, url, text: line, image, embed, small });
+    return timeFrom ? button.replace('data-ov-share-sheet', `data-ov-share-sheet data-time-from="${esc(timeFrom)}"`) : button;
+}
+
+/**
+ * The Share button: the one share sheet every OpenVibe site opens (openvibe-shared 4.114.0). The navbar fetches
+ * the sheet the first time the button is pressed, so the button itself only says what is being shared:
+ *
+ *   url:      the page's own public address — the link that is shared
+ *   title:    what the thing is called
+ *   text:     a line sent with it (the thing's own summary)
+ *   image:    a picture of it (a thumbnail), for the places that take one
+ *   timeFrom: the player whose moment can be shared (a selector), so the sheet can offer "Start at …"
+ *
+ * Nothing is stored and no clip is made: a moment is the page's own address with a time on it.
+ */
+function shareButton({ url = '', title = '', text = '', image = '', timeFrom = null, cls = '', label = 'Share', icon = 'fa-solid fa-share-nodes' }) {
+    const line = String(text || '').trim().replace(/\s+/g, ' ');
+    const summary = line.length > 240 ? `${line.slice(0, 237).trimEnd()}…` : line;
+    return html`<button type="button" class="${cls}" data-ov-share-sheet${url ? html` data-url="${url}"` : ''}${title ? html` data-title="${title}"` : ''}${summary ? html` data-text="${summary}"` : ''}${image ? html` data-image="${image}"` : ''}${timeFrom ? html` data-time-from="${timeFrom}"` : ''}><i class="${icon}" aria-hidden="true"></i> ${label}</button>`;
+}
 const time = (iso) => (iso ? html`<time datetime="${iso}">${String(iso).replace('T', ' ').replace(/\.\d+Z$/, ' UTC').replace(/Z$/, ' UTC')}</time>` : '—');
 
 /** A <table> from headers and rows of cells (cells are already html or plain values). Each cell names its column
@@ -43,4 +80,4 @@ const notice = (text, kind = 'info') => html`<div class="notice ${kind}" role="s
 const csrfField = (token) => html`<input type="hidden" name="csrf" value="${token}">`;
 const badge = (text, kind = '') => html`<span class="badge ${kind}">${text}</span>`;
 
-module.exports = { esc, html, raw, Raw, render, code, time, table, problemBox, notice, csrfField, badge };
+module.exports = { esc, html, raw, Raw, render, code, time, table, problemBox, notice, csrfField, badge, shareButton };

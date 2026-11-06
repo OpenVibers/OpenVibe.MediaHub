@@ -150,6 +150,11 @@ function multipart(fields, file) {
             assert.ok(page.text.includes(`content="https://openvibe.pics${direct}"`), 'og:image is the picture');
             assert.ok(page.text.includes('Report this picture'));
             assert.ok(!page.text.includes('Delete this picture'), 'no owner tools for a visitor');
+            // One Share button: the picture's own page, with the picture as its image.
+            const buttons = page.text.match(/<button[^>]*data-ov-share-sheet[^>]*>/g) || [];
+            assert.strictEqual(buttons.length, 1, 'one Share button: ' + buttons.join(' | '));
+            assert.ok(buttons[0].includes(`data-url="https://openvibe.pics/i/${slug}"`), buttons[0]);
+            assert.ok(buttons[0].includes(`data-image="https://openvibe.pics${direct}"`), buttons[0]);
             assert.ok((await t.get(`/i/${slug}`, { headers: PICS, as: kim })).text.includes('Delete this picture'));
         });
 

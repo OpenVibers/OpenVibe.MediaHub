@@ -158,7 +158,7 @@ function unzip(buf) {
         assert.ok(!r.text.includes('ovv-panel-dl'), 'no line of links under a panel any more');
         // The layout: tabs beside the player, one action row, the stream's parts in About.
         assert.strictEqual((r.text.match(/role="tab"/g) || []).length, 3, 'Chat, Chapters, Transcript');
-        assert.ok(r.text.includes('data-ovv-share="https://openvibe.video/v/6026"') && r.text.includes('aria-label="More"'), 'Share and More');
+        assert.ok(r.text.includes('data-ov-share-sheet data-url="https://openvibe.video/v/6026"') && r.text.includes('aria-label="More"'), 'Share and More');
         assert.ok(r.text.includes('<a href="/v/6025">Part 1</a>') && r.text.includes('<b>Part 2 (this one)</b>'), 'the other part of the stream');
         // Chat replay sits in the part's own time: 12 s in, not 721 s.
         assert.ok(r.text.includes('data-ovv-at="12"') && !r.text.includes('in part one'), 'chat in part 2\'s time');

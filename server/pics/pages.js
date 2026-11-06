@@ -32,7 +32,7 @@ const { asyncRouter } = require('../http/router');
 const { sameOrigin } = require('../http/principal');
 const { boundaryOf, readFormData } = require('../http/form-upload');
 const { formatBytes } = require('../drive/rules');
-const { html, raw, notice, time } = require('../render/html');
+const { html, raw, notice, time, shareButton } = require('../render/html');
 const labelsUi = require('../render/labels-ui');
 const { ACCESS_COOKIE, REFRESH_COOKIE } = require('../auth/sso');
 const { send, assetVersion, SITE_NAME } = require('./layout');
@@ -356,6 +356,7 @@ ${hidden ? notice(row.state === 'hidden' ? 'This picture is hidden while staff l
 ${labelsUi.chips(labelsUi.inForce(row))}
 <figure class="ovp-figure"${labelsUi.attrs(labelsUi.inForce(row), { owner: row.owner, opened: true })}><a href="/i/${row.slug}.${row.ext}"><img src="/i/${row.slug}.${row.ext}" alt="${pics.altOf(row)}" width="${row.width}" height="${row.height}" decoding="async"></a></figure>
 <p class="ovp-meta">${Number(row.width)} × ${Number(row.height)} · ${KIND[row.ext] || row.ext}${row.animated ? ' (animated)' : ''} · ${formatBytes(row.bytes)} · uploaded ${time(row.created_at)}</p>
+${raw(shareButton({ url: L.page, title, text: row.description || `${title}: a picture on ${SITE_NAME}.`, image: L.direct }))}
 ${row.description ? html`<p class="ovp-desc">${row.description}</p>` : ''}
 ${row.ai_caption && row.alt_source === 'ai' ? html`<p class="ovp-ai"><span class="ovp-ai-label">Described by AI</span> ${row.ai_caption}</p>` : ''}
 </article>

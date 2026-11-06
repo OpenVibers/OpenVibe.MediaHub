@@ -24,6 +24,10 @@ const { SAME, bytes, upload, share } = require('./helpers/drive');
             const page = await t.get(`/s/${slug}`);
             assert.strictEqual(page.status, 200, page.text.slice(0, 200));
             assert.ok(page.text.includes('notes.txt') && page.text.includes('Shared publicly'));
+            // One Share button, with the share page's own address.
+            const buttons = page.text.match(/<button[^>]*data-ov-share-sheet[^>]*>/g) || [];
+            assert.strictEqual(buttons.length, 1, 'one Share button on the share page: ' + buttons.join(' | '));
+            assert.ok(buttons[0].includes(`data-url="https://openvibe.download/s/${slug}"`), buttons[0]);
             const dl = await t.get(`/s/${slug}/download`);
             assert.strictEqual(dl.status, 200);
             assert.ok(dl.buffer.equals(bytes(500, 'public')), 'the file, to anyone with the link');

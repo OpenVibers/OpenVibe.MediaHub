@@ -175,22 +175,24 @@ function startLive() {
             assert.ok(!line.includes('A long recording'), 'no title from a recording we cannot see');
         });
 
-        await check('outcome 3: the page carries a plain link, and says how to make a link to a moment', async () => {
+        await check('outcome 3: the page carries one Share button, with the page\'s own link', async () => {
             const r = await get('/v/501');
-            const field = /<input class="ovv-share-url"[^>]*value="([^"]*)"/.exec(r.text);
-            assert.ok(field, 'the link is written out on the page');
-            assert.strictEqual(field[1], 'https://openvibe.video/v/501');
-            const panel = r.text.slice(r.text.indexOf('ovv-share'), r.text.indexOf('</details>', r.text.indexOf('ovv-share')));
-            assert.ok(panel.includes('?t=125'), 'the panel says how to link to a moment: ' + panel);
-            assert.ok(panel.includes('nothing is stored'), 'a moment is not a clip: ' + panel);
-            assert.ok(panel.includes('data-ovv-share-at="https://openvibe.video/v/501"'), 'the button that copies the link at the moment it plays');
-            // The page opened at a moment: the field shows that link.
-            const at = await get('/v/501?t=125');
-            assert.strictEqual(/<input class="ovv-share-url"[^>]*value="([^"]*)"/.exec(at.text)[1], 'https://openvibe.video/v/501?t=125');
-            // An upload's watch page carries the same plain link.
+            const buttons = r.text.match(/<button[^>]*data-ov-share-sheet[^>]*>/g) || [];
+            assert.strictEqual(buttons.length, 1, 'one Share button: ' + buttons.join(' | '));
+            assert.ok(buttons[0].includes('data-url="https://openvibe.video/v/501"'), buttons[0]);
+            assert.ok(buttons[0].includes('data-time-from=".ovv-player"'), 'the sheet can share the moment it plays: ' + buttons[0]);
+            assert.ok(!r.text.includes('data-ovv-share'), 'the old share box is gone');
+            // A clip's page carries the same button, with the clip's own link.
+            const clip = await get('/c/602');
+            const clipButtons = clip.text.match(/<button[^>]*data-ov-share-sheet[^>]*>/g) || [];
+            assert.strictEqual(clipButtons.length, 1, 'one Share button on the clip page: ' + clipButtons.join(' | '));
+            assert.ok(clipButtons[0].includes('data-url="https://openvibe.video/c/602"'), clipButtons[0]);
+            // An upload's watch page carries the same button.
             const up = await get('/u/vup_01J0000000000000000000000B');
             assert.strictEqual(up.status, 200);
-            assert.ok(/<input class="ovv-share-url"[^>]*value="https:\/\/openvibe\.video\/u\/vup_01J0000000000000000000000B"/.test(up.text), 'the upload page has the link too');
+            const upButtons = up.text.match(/<button[^>]*data-ov-share-sheet[^>]*>/g) || [];
+            assert.strictEqual(upButtons.length, 1, 'one Share button on the upload page: ' + upButtons.join(' | '));
+            assert.ok(upButtons[0].includes('data-url="https://openvibe.video/u/vup_01J0000000000000000000000B"'), upButtons[0]);
         });
 
         await check('outcome 7: every export says what it is for, and the transcript says it was written by AI', async () => {
