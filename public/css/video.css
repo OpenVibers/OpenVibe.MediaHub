@@ -348,10 +348,6 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 /* A clip's credit: the recording it was cut from, and a link back to it. */
 .ovv-source { margin: 0 0 10px; font-size: .88rem; color: var(--ovv-dim); overflow-wrap: anywhere; }
 .ovv-source i { color: var(--ovv-faint); }
-/* The share box: the page's own link, and a link to the moment it is playing (a moment, not a clip). */
-.ovv-share-url { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--ovv-line-strong); border-radius: 8px; background: var(--bg-tertiary, #16223a); color: inherit; font-size: .82rem; }
-.ovv-share-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
-
 /* A button that opens a small menu or form (Save, Clip, More): a <details>; video.js closes it on a click elsewhere. */
 .ovv-pop { position: relative; }
 .ovv-pop > summary { list-style: none; cursor: pointer; }

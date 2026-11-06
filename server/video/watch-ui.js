@@ -13,12 +13,13 @@
  *
  *   whatItIs({ … })    the one line under a watch page's title that says what the video is: a stream recording, a clip
  *                       or an upload, when it was streamed or published, how long it is and how many people watched
- *   sharePanel({ … })  the share box: the page's own link, and a link to the moment it is playing (no clip, nothing
- *                       stored)
+ *   shareButton({ … }) the Share button: the one share sheet every OpenVibe site opens (openvibe-shared
+ *                       4.114.0). The navbar fetches the sheet the first time the button is pressed; the button
+ *                       itself only says what is being shared.
  *
  * Times read the way a player shows them (1:57, or 1:02:05 in a video an hour or longer), not 00:01:57.
  */
-const { html } = require('../render/html');
+const { html, shareButton } = require('../render/html');
 
 /** Seconds → "1:57", or "0:01:57" when the video runs an hour or more (every time in it then lines up). */
 function clockOf(seconds, long = false) {
@@ -102,29 +103,7 @@ function isoOf(v) {
     return String(v == null ? '' : v);
 }
 
-/**
- * The share box: the page's own link, and a link to the moment the video is playing. The link is written out in a
- * field, so it can be copied without JavaScript; the buttons (copy, copy at this moment) appear when JavaScript is
- * there. Nothing is stored and no clip is made: it is the page's address with a time on it.
- *
- *   url: the page's own address (with ?t= when the page was opened at a moment)
- *   at: the moment in the video the page was opened at (seconds), or null
- */
-function sharePanel({ url, id, at = null, what = 'video' }) {
-    const field = `ovv-share-${id}`;
-    const withTime = at != null && Number(at) > 0 ? `${url}?t=${Math.floor(Number(at))}` : url;
-    return html`<details class="ovv-pop ovv-share" data-ovv-menu><summary class="ovv-btn" title="Share a link to this ${what}"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Share</summary>
-<div class="ovv-pop-panel" role="group" aria-label="Share this ${what}">
-<p class="ovv-pop-title">Share this ${what}</p>
-<label class="sr-only" for="${field}">The link to this video</label>
-<input class="ovv-share-url" id="${field}" type="text" readonly value="${withTime}">
-<p class="ovv-fine">A plain link: it opens this page. Put <code>?t=125</code> on the end and the video opens at 2:05 — a moment, not a clip: nothing is stored and nothing is cut.</p>
-<p class="ovv-share-buttons">
-<button type="button" class="ovv-btn ovv-btn--small" hidden data-ovv-share="${url}" data-ovv-share-field="${field}">Copy the link</button>
-<button type="button" class="ovv-btn ovv-btn--small" hidden data-ovv-share-at="${url}" data-ovv-share-field="${field}">Copy the link at this moment</button>
-</p>
-</div></details>`;
-}
+
 
 /** A button of the action row that opens a menu or a small form. `body` is the panel's content (html). */
 function actionMenu({ icon, label, title = null, body, cls = '', iconOnly = false }) {
@@ -217,4 +196,4 @@ ${t.body}
 </section>`;
 }
 
-module.exports = { clockOf, lengthWords, dayLabel, streamDate, whatItIs, sharePanel, actionMenu, menuLinks, cornerMenu, downloadsFor, companion };
+module.exports = { clockOf, lengthWords, dayLabel, streamDate, whatItIs, shareButton, actionMenu, menuLinks, cornerMenu, downloadsFor, companion };

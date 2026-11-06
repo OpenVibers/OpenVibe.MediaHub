@@ -430,6 +430,10 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('Clips'));
         assert.ok(r.text.includes('/c/201'));
         assert.match(r.text, /<img src="[^"]*\/avatar\/streamer" alt="" loading="lazy">/, 'the person\'s picture over the letter');
+        // One Share button, with the channel page's own public address.
+        const buttons = r.text.match(/<button[^>]*data-ov-share-sheet[^>]*>/g) || [];
+        assert.strictEqual(buttons.length, 1, 'one Share button: ' + buttons.join(' | '));
+        assert.ok(buttons[0].includes('data-url="https://openvibe.video/@streamer"'), buttons[0]);
     });
 
     await check('an unknown /api path on the video host is a JSON 404, not a page', async () => {

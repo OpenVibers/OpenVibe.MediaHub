@@ -76,6 +76,15 @@ const { SAME, bytes, upload, share } = require('./helpers/drive');
         assert.strictEqual((await t.get(`/files/${file.id}`, { as: kim })).status, 200);
     });
 
+    await check('the file page carries one Share button, with the file page\'s own address', async () => {
+        const file = (await upload(t, kim, bytes(80, 'shared'), { name: 'shared.txt', contentType: 'text/plain' })).json().file;
+        const r = await t.get(`/files/${file.id}`, { as: kim });
+        assert.strictEqual(r.status, 200);
+        const buttons = r.text.match(/<button[^>]*data-ov-share-sheet[^>]*>/g) || [];
+        assert.strictEqual(buttons.length, 1, 'one Share button: ' + buttons.join(' | '));
+        assert.ok(buttons[0].includes(`data-url="https://openvibe.download/files/${file.id}"`), buttons[0]);
+    });
+
     await check('everything a person typed is escaped, everywhere it is shown', async () => {
         const nastyName = '<script>alert("x")</script>.txt';
         const nastyFolder = '<img src=x onerror="alert(1)">';

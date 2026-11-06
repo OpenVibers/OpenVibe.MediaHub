@@ -32,7 +32,7 @@ const { asyncRouter } = require('../http/router');
 const { sameOrigin } = require('../http/principal');
 const { boundaryOf, readFormData } = require('../http/form-upload');
 const { formatBytes } = require('../drive/rules');
-const { html, raw, notice, time } = require('../render/html');
+const { html, raw, notice, time, shareButton } = require('../render/html');
 const labelsUi = require('../render/labels-ui');
 const { ACCESS_COOKIE, REFRESH_COOKIE } = require('../auth/sso');
 const { send, assetVersion, SITE_NAME } = require('./layout');
@@ -361,6 +361,7 @@ ${row.ai_caption && row.alt_source === 'ai' ? html`<p class="ovp-ai"><span class
 </article>
 <section class="ovp-share" aria-labelledby="h-share"><h2 id="h-share">Share and embed</h2>
 <p class="ovp-share-lede">No account needed: anyone with the link can open this picture and copy these. The direct link is the picture itself, at full size — no page around it.</p>
+${shareButton({ url: L.page, title, text: row.description || `${title}: a picture on ${SITE_NAME}.`, image: L.direct, cls: 'ovp-btn' })}
 <div class="ovp-link-grid">
 ${linkCard('Direct link', 'The picture itself, full size.', L.direct, `snip-direct-${row.slug}`)}
 ${linkCard('Markdown', 'For a chat or a post.', L.markdown, `snip-md-${row.slug}`)}
