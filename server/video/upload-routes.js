@@ -235,9 +235,13 @@ ${fresh.map((x) => html`<tr><td><a href="/u/${x.id}">${x.title}</a></td><td>${st
         let row = await up.byId(req.params.id);
         const who = whoOf(req);
         if (!up.canSee(row, who)) return notFound(req, res);
-        // Specific people and Only me: the share row decides, beside the old column.
+        // Specific people and Only me: the share row decides, beside the old column. A row written before the
+        // sharing model (an import, a cut) does not exist yet: the column still decides, failing closed for private.
         const own = who.requester && row.owner === who.requester;
-        if (!own && !who.staff && ctx.sharing && !await ctx.sharing.canView(req.viewer, 'video', row.id).catch(() => false)) return notFound(req, res);
+        if (!own && !who.staff && ctx.sharing) {
+            const share = await ctx.sharing.shareOf('video', row.id).catch(() => null);
+            if (share && !await ctx.sharing.canView(req.viewer, 'video', row.id).catch(() => false)) return notFound(req, res);
+        }
         if (row.status === 'processing') row = await up.refresh(row);
         const manage = own || who.staff;
         const ready = row.status === 'ready';

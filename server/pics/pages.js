@@ -157,9 +157,10 @@ function createPicsRoutes(ctx) {
         if (!row) return { row: null, status: 404 };
         if (row.state === 'removed') return { row, status: 410 };
         if (!pics.canSee(row, whoOf(req))) return { row: null, status: 404 };
-        // The share row is the authority: Only me and Specific people never serve the page or the bytes.
-        const allowed = sharing ? await sharing.canView(req.viewer, 'picture', row.id).catch(() => false) : true;
-        if (!allowed) return { row, status: 404, denied: true };
+        // The share row is the authority once it exists: Only me and Specific people never serve the page or the
+        // bytes. A picture from before the sharing model has no row; its page was always link-only, so it stays.
+        const share = sharing ? await sharing.shareOf('picture', row.id).catch(() => null) : null;
+        if (share && !await sharing.canView(req.viewer, 'picture', row.id).catch(() => false)) return { row, status: 404, denied: true };
         return { row, status: 200 };
     }
 
@@ -565,7 +566,10 @@ ${albums.length ? html`<div class="ovp-albums">${albums.map((a) => html`<a class
         const album = pics.isSlug(slug) ? await store.albumBySlug(s, slug) : null;
         if (!album) return notFound(req, res);
         const owner = album.owner === whoOf(req).requester;
-        if (!owner && sharing && !await sharing.canView(req.viewer, 'album', album.id).catch(() => false)) return notFound(req, res);
+        if (!owner && sharing) {
+            const share = await sharing.shareOf('album', album.id).catch(() => null);
+            if (share && !await sharing.canView(req.viewer, 'album', album.id).catch(() => false)) return notFound(req, res);
+        }
         const rows = await store.albumImages(s, album.id, { visibleOnly: !owner });
         return page(req, res, {
             title: album.title, noindex: true, scripts: ['js/pics.js'],
