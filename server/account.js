@@ -53,6 +53,23 @@ const TABLES = [
     { table: 'mh_sync_keys', subject: 'owner', value: AS_REQUESTER, file: 'sync_keys.json', columns: ['id', 'name', 'prefix', 'created_at', 'last_used_at', 'revoked_at'] },
 ];
 
+
+/** The sharing system's rows (openvibe-sdk/share): jsonb subjects, so the SDK's table map cannot name them. */
+async function shareExport(db, subject) {
+    const owned = await db.many("SELECT * FROM shares WHERE service = $1 AND owner_subject->>'id' = $2", ['mediahub', subject]);
+    const member = await db.many("SELECT * FROM share_members WHERE service = $1 AND subject->>'id' = $2", ['mediahub', subject]);
+    const asked = await db.many("SELECT * FROM share_access_requests WHERE service = $1 AND subject->>'id' = $2", ['mediahub', subject]);
+    return owned.length || member.length || asked.length ? [{ name: 'shares.json', content: { owned, member_of: member, requests: asked } }] : [];
+}
+async function shareErase(t, subjects) {
+    for (const subject of subjects) {
+        await t.exec("DELETE FROM share_members WHERE service = $1 AND subject->>'id' = $2", ['mediahub', subject]);
+        await t.exec("DELETE FROM share_access_requests WHERE service = $1 AND subject->>'id' = $2", ['mediahub', subject]);
+        await t.exec("DELETE FROM share_transfers WHERE service = $1 AND (from_subject->>'id' = $2 OR to_subject->>'id' = $2)", ['mediahub', subject]);
+        await t.exec("DELETE FROM shares WHERE service = $1 AND owner_subject->>'id' = $2", ['mediahub', subject]);
+    }
+}
+
 function createAccount({ db, config, media, log = console, onMediaVodReady = null }) {
     /** The object ids of a deletion, read before the rows go (extraErase runs after them). */
     let pendingObjects = [];
@@ -80,9 +97,11 @@ function createAccount({ db, config, media, log = console, onMediaVodReady = nul
             return [
                 ...(rows.length ? [{ name: 'playlist_items.json', content: rows }] : []),
                 ...(albumRows.length ? [{ name: 'pics_album_images.json', content: albumRows }] : []),
+                ...await shareExport(db, subject),
             ];
         },
-        extraErase: async () => {
+        extraErase: async (t, subjects) => {
+            await shareErase(t, subjects);
             const vods = pendingVods;
             pendingVods = [];
             for (const id of vods) {
