@@ -54,10 +54,10 @@ function shareButton({ title = '', url = '', text = '', image = '', embed = '', 
  *
  * Nothing is stored and no clip is made: a moment is the page's own address with a time on it.
  */
-function shareButton({ url = '', title = '', text = '', image = '', timeFrom = null, cls = '', label = 'Share', icon = 'fa-solid fa-share-nodes' }) {
+function shareButton({ url = '', title = '', text = '', image = '', timeFrom = null, kind = null, id = null, cls = '', label = 'Share', icon = 'fa-solid fa-share-nodes' }) {
     const line = String(text || '').trim().replace(/\s+/g, ' ');
     const summary = line.length > 240 ? `${line.slice(0, 237).trimEnd()}…` : line;
-    return html`<button type="button" class="${cls}" data-ov-share-sheet${url ? html` data-url="${url}"` : ''}${title ? html` data-title="${title}"` : ''}${summary ? html` data-text="${summary}"` : ''}${image ? html` data-image="${image}"` : ''}${timeFrom ? html` data-time-from="${timeFrom}"` : ''}><i class="${icon}" aria-hidden="true"></i> ${label}</button>`;
+    return html`<button type="button" class="${cls}" data-ov-share-sheet${url ? html` data-url="${url}"` : ''}${title ? html` data-title="${title}"` : ''}${summary ? html` data-text="${summary}"` : ''}${image ? html` data-image="${image}"` : ''}${timeFrom ? html` data-time-from="${timeFrom}"` : ''}${kind && id ? html` data-kind="${kind}" data-id="${id}"` : ''}><i class="${icon}" aria-hidden="true"></i> ${label}</button>`;
 }
 const time = (iso) => (iso ? html`<time datetime="${iso}">${String(iso).replace('T', ' ').replace(/\.\d+Z$/, ' UTC').replace(/Z$/, ' UTC')}</time>` : '—');
 

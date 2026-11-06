@@ -45,7 +45,7 @@ function kindOf(contentType, name) {
     return ext && EXT_KINDS[ext[1]] ? EXT_KINDS[ext[1]] : null;
 }
 
-function createUploads({ s, media, config, log = console, events = null }) {
+function createUploads({ s, media, config, log = console, events = null, sharing = null }) {
     const cfg = config.videoUploads;
     const addressKey = crypto.createHash('sha256').update(`video-address:${config.oauth.clientSecret || 'dev'}`).digest();
     const addressId = (ip) => `ip:${crypto.createHmac('sha256', addressKey).update(String(ip || 'unknown')).digest('hex').slice(0, 32)}`;
@@ -105,6 +105,7 @@ function createUploads({ s, media, config, log = console, events = null }) {
         await s.db.query(`INSERT INTO video_uploads (id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, created_at, updated_at)
                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)`,
         [id, who.requester, who.username || null, title, description, visibility, Number(vod.data.id), kind, size, PART_SIZE, Math.ceil(size / PART_SIZE), now]);
+        if (sharing) await sharing.register(who.requester, 'video', id, visibility);
         return await byId(id);
     }
 
@@ -128,6 +129,7 @@ function createUploads({ s, media, config, log = console, events = null }) {
         await s.db.query(`INSERT INTO video_uploads (id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, created_at, updated_at)
                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, 0, 0, $9, $9)`,
         [id, who.requester, who.username || null, title, description, visibility, Number(vod.data.id), kind, now]);
+        if (sharing) await sharing.register(who.requester, 'video', id, visibility);
         return await byId(id);
     }
 

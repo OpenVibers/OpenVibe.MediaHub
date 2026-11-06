@@ -95,6 +95,7 @@ function createPicsApi(ctx) {
     r.get('/images/:slug', async (req, res) => {
         const row = await load(req, res);
         if (!row) return undefined;
+        if (ctx.sharing && !await ctx.sharing.canView(req.viewer, 'picture', row.id).catch(() => false)) return problem(req, res, 404, 'pics.image_not_found', 'No such picture.');
         return res.json(pics.toWire(row, { owner: pics.isOwner(row, whoOf(req)) }));
     });
 
@@ -164,6 +165,7 @@ function createPicsApi(ctx) {
         const a = pics.isSlug(slug) ? await store.albumBySlug(s, slug) : null;
         if (!a) return problem(req, res, 404, 'pics.album_not_found', 'No such album.');
         const owner = a.owner === whoOf(req).requester;
+        if (!owner && ctx.sharing && !await ctx.sharing.canView(req.viewer, 'album', a.id).catch(() => false)) return problem(req, res, 404, 'pics.album_not_found', 'No such album.');
         return res.json(albumWire(a, (await store.albumImages(s, a.id, { visibleOnly: !owner })).map((x) => pics.toWire(x, { owner }))));
     });
 

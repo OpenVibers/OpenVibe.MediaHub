@@ -49,6 +49,7 @@ const KIND = { jpg: 'JPEG', png: 'PNG', gif: 'GIF', webp: 'WebP', avif: 'AVIF' }
 function createPicsRoutes(ctx) {
     const { config, s, media, log } = ctx;
     const pics = ctx.pics;
+    const sharing = ctx.sharing;
     const cfg = config.pics;
     const base = cfg.url;
     const host = (() => { try { return new URL(base).hostname; } catch { return 'openvibe.pics'; } })();
@@ -107,6 +108,18 @@ function createPicsRoutes(ctx) {
         },
     }));
 
+    // ── /api/v1/<kind>/<id>/share — the uniform share API on this host ──────
+    if (sharing) {
+        const shareApi = express.Router();
+        shareApi.use(sharing.shares.router({
+            service: 'mediahub',
+            authenticate: (req) => sharing.shareViewer(req.viewer),
+            describe: require('../sharing').describeRef(s.db, config),
+        }));
+        const SHARE_PATH = /^\/api\/v1\/(?:shared-with-me$|share\/people$|[^/]+\/[^/]+\/share(?:\/|$))/;
+        r.use((req, res, next) => (SHARE_PATH.test(req.path) ? shareApi(req, res, next) : next()));
+    }
+
     // ── The API on this host ────────────────────────────────
     r.use('/api/v1', createPicsApi(ctx));
     r.use('/api', (req, res) => res.status(404).type('application/problem+json').send(JSON.stringify({ type: 'about:blank', title: 'Not found', status: 404, code: 'route.not_found' })));
@@ -144,6 +157,9 @@ function createPicsRoutes(ctx) {
         if (!row) return { row: null, status: 404 };
         if (row.state === 'removed') return { row, status: 410 };
         if (!pics.canSee(row, whoOf(req))) return { row: null, status: 404 };
+        // The share row is the authority: Only me and Specific people never serve the page or the bytes.
+        const allowed = sharing ? await sharing.canView(req.viewer, 'picture', row.id).catch(() => false) : true;
+        if (!allowed) return { row, status: 404, denied: true };
         return { row, status: 200 };
     }
 
@@ -356,7 +372,7 @@ ${hidden ? notice(row.state === 'hidden' ? 'This picture is hidden while staff l
 ${labelsUi.chips(labelsUi.inForce(row))}
 <figure class="ovp-figure"${labelsUi.attrs(labelsUi.inForce(row), { owner: row.owner, opened: true })}><a href="/i/${row.slug}.${row.ext}"><img src="/i/${row.slug}.${row.ext}" alt="${pics.altOf(row)}" width="${row.width}" height="${row.height}" decoding="async"></a></figure>
 <p class="ovp-meta">${Number(row.width)} × ${Number(row.height)} · ${KIND[row.ext] || row.ext}${row.animated ? ' (animated)' : ''} · ${formatBytes(row.bytes)} · uploaded ${time(row.created_at)}</p>
-${raw(shareButton({ url: L.page, title, text: row.description || `${title}: a picture on ${SITE_NAME}.`, image: L.direct }))}
+${raw(shareButton({ url: L.page, title, text: row.description || `${title}: a picture on ${SITE_NAME}.`, image: L.direct, kind: 'picture', id: row.id }))}
 ${row.description ? html`<p class="ovp-desc">${row.description}</p>` : ''}
 ${row.ai_caption && row.alt_source === 'ai' ? html`<p class="ovp-ai"><span class="ovp-ai-label">Described by AI</span> ${row.ai_caption}</p>` : ''}
 </article>
@@ -405,7 +421,25 @@ ${pics.REASONS.map((r) => html`<label class="ovp-radio"><input type="radio" name
     }
 
     r.get('/i/:slug', async (req, res) => {
-        const { row, status } = await picture(req, res);
+        const { row, status, denied } = await picture(req, res);
+        if (denied && row) {
+            const share = sharing ? await sharing.shareOf('picture', row.id).catch(() => null) : null;
+            if (share && share.audience === 'people') {
+                return page(req, res, {
+                    title: 'A picture on OpenVibe.Pics', noindex: true,
+                    body: html`<header class="ovp-page-head"><h1>A picture on OpenVibe.Pics</h1><p class="muted">This is shared with specific people.</p></header>
+<div id="pic-gate"><p class="muted">This picture is shared with specific people on OpenVibe.Pics.</p><p>${signInLink(req.originalUrl)}</p></div>
+<script src="${ovServe.url('ov-share.js')}" defer></script>
+<script>
+window.addEventListener('DOMContentLoaded', function () {
+  var el = document.getElementById('pic-gate');
+  if (el && window.OVShare) OVShare.gate(el, { kind: 'picture', id: ${JSON.stringify(row.id)},
+    signedInAs: ${JSON.stringify(req.viewer && req.viewer.subject ? req.viewer.subject : '')}, signInUrl: ${JSON.stringify(`/auth/login?next=${encodeURIComponent(req.originalUrl)}`)} });
+});
+</script>`,
+                }, 404);
+            }
+        }
         if (!row || status !== 200) return notFound(req, res, status);
         return picturePage(req, res, row);
     });
@@ -531,6 +565,7 @@ ${albums.length ? html`<div class="ovp-albums">${albums.map((a) => html`<a class
         const album = pics.isSlug(slug) ? await store.albumBySlug(s, slug) : null;
         if (!album) return notFound(req, res);
         const owner = album.owner === whoOf(req).requester;
+        if (!owner && sharing && !await sharing.canView(req.viewer, 'album', album.id).catch(() => false)) return notFound(req, res);
         const rows = await store.albumImages(s, album.id, { visibleOnly: !owner });
         return page(req, res, {
             title: album.title, noindex: true, scripts: ['js/pics.js'],
@@ -538,6 +573,7 @@ ${albums.length ? html`<div class="ovp-albums">${albums.map((a) => html`<a class
             body: html`<div class="ovp-section-head"><h1>${album.title}</h1><span class="muted">${rows.length} picture${rows.length === 1 ? '' : 's'}</span></div>
 ${album.description ? html`<p class="ovp-desc">${album.description}</p>` : ''}
 ${copyRow('Link to this album', `${base}/a/${album.slug}`, 'c-album')}
+<p class="ovp-share">${raw(shareButton({ url: `${base}/a/${album.slug}`, title: album.title, text: album.description || `${album.title}: an album on ${SITE_NAME}.`, kind: 'album', id: album.id }))}</p>
 ${grid(rows, owner ? 'Empty. Add pictures from their pages.' : 'Nothing to show here.')}
 ${owner ? html`<section class="ovp-section ovp-owner" aria-labelledby="h-manage"><h2 id="h-manage">Manage</h2>
 <form class="ovp-form" method="post" action="/a/${album.slug}/edit"><label for="al-title">Name</label><input id="al-title" name="title" type="text" maxlength="120" value="${album.title}" required>

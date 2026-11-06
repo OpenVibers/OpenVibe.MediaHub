@@ -32,6 +32,8 @@ function createEventsOutbox({ s, config, log = console, fetchImpl = null }) {
 
     return {
         EVENT_TYPES,
+        /** Any envelope (the sharing system's share.* events) through the same at-least-once queue. */
+        emit: (envelope) => out.emit(envelope),
         /** Inside the transaction that stores the picture; signed-out pictures emit nothing. */
         async pictureUploaded(row) {
             const owner = subjectOf(row.owner);

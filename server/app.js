@@ -75,16 +75,19 @@ async function createApp(opts = {}) {
     const playlists = createPlaylists({ s, config, log });
     // MediaHub's own events (server/events-outbox.js): written with the change, relayed to OpenVibe.Events.
     const eventsOutbox = require('./events-outbox').createEventsOutbox({ s, config, log, fetchImpl: opts.fetchImpl || null });
-    const pics = createPics({ s, media, config, log, events: eventsOutbox });
+    const { createSharing, describeRef } = require('./sharing');
+    // Sharing (openvibe-sdk/share): the row next to each picture, album and video upload, and the one access check.
+    const sharing = opts.sharing || createSharing({ db: s.db, config, outbox: { emit: (envelope) => eventsOutbox.emit(envelope) }, now: s.now, fetchImpl, log });
+    const pics = createPics({ s, media, config, log, events: eventsOutbox, sharing });
     const picsDescribe = opts.picsDescribe || require('./pics/describe').createPicDescriber({ s, media, config, fetchImpl, log });
     // OpenVibe.Video uploads (server/video/uploads.js): Media VODs in this tenant.
-    const videoUploads = require('./video/uploads').createUploads({ s, media, config, log, events: eventsOutbox });
+    const videoUploads = require('./video/uploads').createUploads({ s, media, config, log, events: eventsOutbox, sharing });
     const videoAi = opts.videoAi || require('./video/ai-edit').createAiEdit({ s, media, config, fetchImpl, log });
     const videoCuts = require('./video/cut').createCuts({ s, media, uploads: videoUploads, videoAi, config, log, spawnImpl: opts.spawnImpl });
     const syncKeys = createSyncKeys({ s, config });
     const drops = createDrops({ s, media, config, uploads, log });
     const videoSearch = require('./video/search-index').createVideoSearchIndex({ s, config, videoAi, fetchImpl, log });
-    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, pics, picsDescribe, eventsOutbox, videoUploads, videoAi, videoCuts, syncKeys, drops, videoSearch, fetchImpl, log };
+    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, pics, picsDescribe, eventsOutbox, videoUploads, videoAi, videoCuts, syncKeys, drops, videoSearch, fetchImpl, log, sharing };
     // IndexNow for openvibe.video: off without a key; a malformed key warns and stays off rather than stopping the site.
     ctx.indexnow = opts.indexnow || (() => {
         const warn = (...a) => (log.warn || console.warn)(...a);
@@ -240,6 +243,18 @@ async function createApp(opts = {}) {
 
     // ── API ─────────────────────────────────────────────────
     app.use('/api/v1', rateLimit({ windowMs: 60_000, limit: Number(process.env.MEDIAHUB_API_RATE_LIMIT_PER_MIN) || 240, standardHeaders: true, legacyHeaders: false, handler: (req, res) => contracts.http.sendProblem(res, 429, 'rate_limited', { detail: 'too many requests from this address; retry shortly', ctx: req.ov }) }));
+    // ── /api/v1/<kind>/<id>/share — the uniform share API (openvibe-sdk/share) ────
+    {
+        const shareApi = express.Router();
+        shareApi.use(sso.middleware());
+        shareApi.use(sharing.shares.router({
+            service: 'mediahub',
+            authenticate: (req) => sharing.shareViewer(req.viewer),
+            describe: describeRef(s.db, config),
+        }));
+        const SHARE_PATH = /^\/api\/v1\/(?:shared-with-me$|share\/people$|[^/]+\/[^/]+\/share(?:\/|$))/;
+        app.use((req, res, next) => (SHARE_PATH.test(req.path) ? shareApi(req, res, next) : next()));
+    }
     app.use('/api/v1', createApi(ctx));
     app.use('/api', (req, res) => contracts.http.sendProblem(res, 404, 'route.not_found', { detail: 'No such API route', ctx: req.ov }));
 
