@@ -95,6 +95,7 @@ function renderPage(o) {
         head: `<meta name="referrer" content="${o.noReferrer ? 'no-referrer' : 'strict-origin-when-cross-origin'}">
 ${appIcon.headTags({ site: 'media-hub' })}
 <link rel="stylesheet" href="${asset('css/app.css')}">
+<link rel="stylesheet" href="${ovServe.url('kit.css')}">
 ${(o.styles || []).map((name) => `<link rel="stylesheet" href="${esc(ovServe.url(name))}">`).join('\n')}
 ${render(scripts)}
 <meta name="ov-boost" content="media-hub@${esc(RELEASE)}">

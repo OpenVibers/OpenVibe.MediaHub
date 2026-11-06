@@ -329,7 +329,7 @@ ${shares.length ? html`<ul class="file-list">${shares.map((sh) => html`<li class
             body: html`<h1>${row.name}</h1>
 ${rules.isPreviewable(row.content_type) ? html`<figure class="file-preview"><img src="/files/${row.id}/preview?w=640" alt="${row.name}" decoding="async"></figure>` : ''}
 ${table(['Size', 'Type', 'SHA-256', 'Added'], [[fileSize(row), row.content_type, row.sha256 || '—', time(row.created_at)]])}
-<p><a class="sc-btn sc-primary" href="/files/${row.id}/download">Download</a> ${shareButton({ url: `${config.baseUrl}/files/${row.id}`, title: row.name, text: `${row.name} — a file on ${SITE_NAME}.`, image: rules.isPreviewable(row.content_type) ? `${config.baseUrl}/files/${row.id}/preview?w=640` : '', cls: 'sc-btn' })}</p>
+<p><a class="sc-btn sc-primary" href="/files/${row.id}/download">Download</a> ${raw(shareButton({ url: `${config.baseUrl}/files/${row.id}`, title: row.name, text: `${row.name} — a file on ${SITE_NAME}.`, image: rules.isPreviewable(row.content_type) ? `${config.baseUrl}/files/${row.id}/preview?w=640` : '' }))}</p>
 <section aria-labelledby="h-share"><h2 id="h-share">Make a share link</h2>
 <form method="post" action="/files/${row.id}/share">
 <div class="field"><label for="hours">Expires in</label><select id="hours" name="hours">${rules.EXPIRY_CHOICES.map((c) => html`<option value="${c.hours}"${c.hours === rules.EXPIRY_DEFAULT_HOURS ? raw(' selected') : ''}>${c.label}</option>`)}</select></div>
@@ -609,7 +609,7 @@ ${shares.length ? html`<h3>Its links</h3><ul class="file-list">${shares.map((sh)
 ${notice(`Shared ${share.public ? 'publicly' : 'with you'} by ${share.owner_username ? `@${share.owner_username}` : 'an OpenVibe member'}.`, 'info')}
 ${rules.isPreviewable(file.content_type) ? html`<figure class="file-preview"><img src="/s/${share.slug}/preview?w=640" alt="${file.name}" decoding="async"></figure>` : ''}
 ${table(['Size', 'Type', 'Expires', 'Downloads'], [[fileSize(file), file.content_type, time(share.expires_at), String(Number(share.downloads) || 0)]])}
-<p><a class="sc-btn sc-primary" href="/s/${share.slug}/download">Download</a> ${shareButton({ url: `${config.baseUrl}/s/${share.slug}`, title: file.name, text: `${file.name} — shared by ${share.owner_username ? `@${share.owner_username}` : 'an OpenVibe member'} on ${SITE_NAME}.`, image: rules.isPreviewable(file.content_type) ? `${config.baseUrl}/s/${share.slug}/preview?w=640` : '', cls: 'sc-btn' })}</p>
+<p><a class="sc-btn sc-primary" href="/s/${share.slug}/download">Download</a> ${raw(shareButton({ url: `${config.baseUrl}/s/${share.slug}`, title: file.name, text: `${file.name} — shared by ${share.owner_username ? `@${share.owner_username}` : 'an OpenVibe member'} on ${SITE_NAME}.`, image: rules.isPreviewable(file.content_type) ? `${config.baseUrl}/s/${share.slug}/preview?w=640` : '' }))}</p>
 ${mine ? '' : reportForm(share)}
 <p class="small muted">${REPORT_NOTE}</p>`,
             });
@@ -621,8 +621,7 @@ ${mine ? '' : reportForm(share)}
             crumbs: [{ label: 'Home', href: '/' }, { label: 'Shared folder' }],
             body: html`<h1>${folder ? folder.name : 'A folder'}</h1>
 ${notice(`Shared ${share.public ? 'publicly' : 'with you'} by ${share.owner_username ? `@${share.owner_username}` : 'an OpenVibe member'}.`, 'info')}
-<p class="small muted">${files.length} file${files.length === 1 ? '' : 's'} · expires ${time(share.expires_at)}</p>
-<p>${shareButton({ url: `${config.baseUrl}/s/${share.slug}`, title: folder ? folder.name : 'A shared folder', text: `A folder shared by ${share.owner_username ? `@${share.owner_username}` : 'an OpenVibe member'} on ${SITE_NAME}.`, cls: 'sc-btn' })}</p>
+<p class="small muted">${files.length} file${files.length === 1 ? '' : 's'} · expires ${time(share.expires_at)} ${raw(shareButton({ url: `${config.baseUrl}/s/${share.slug}`, title: folder ? folder.name : 'A shared folder', text: `A folder shared by ${share.owner_username ? `@${share.owner_username}` : 'an OpenVibe member'} on ${SITE_NAME}.` }))}</p>
 ${files.length ? html`<ul class="file-list">${files.map((f) => html`<li class="file"><span class="file-main"><span class="file-name">${f.name}</span><span class="file-meta small muted">${fileSize(f)} · ${f.content_type}</span></span><a class="sc-btn" href="/s/${share.slug}/f/${f.id}/download">Download</a></li>`)}</ul>` : html`<p class="muted">The folder is empty.</p>`}
 ${mine ? '' : reportForm(share)}`,
         });
