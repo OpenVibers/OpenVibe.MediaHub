@@ -312,6 +312,19 @@
         try { saved = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { saved = {}; }
         const save = function () { try { localStorage.setItem(key, JSON.stringify(saved)); } catch { /* private window */ } };
         const clamp = function (v, lo, hi) { return Math.min(hi, Math.max(lo, v)); };
+        // A PIP takes its recording's own shape (2026-11-07: a portrait camera was cut to 16:9). `w` is the width of a
+        // 16:9 PIP; any other shape keeps that area, never more than 85% of the player's height, and on a phone-sized
+        // player never less than a 150 px wide 16:9 box. Dropped near an edge it snaps to a 12 px margin.
+        const BASE = 16 / 9;
+        const boxOf = function (g, aspect) {
+            const a = aspect || BASE;
+            const r = root.getBoundingClientRect();
+            const w0 = r.width && r.width < 640 ? Math.max(g.w, Math.min(0.6, 150 / r.width)) : g.w;
+            let wf = w0 * Math.sqrt(a / BASE);
+            if (r.width && r.height && (wf * r.width) / a > 0.85 * r.height) wf = (0.85 * r.height * a) / r.width;
+            wf = Math.min(wf, 1);
+            return { a: a, wf: wf, hf: r.width && r.height ? (wf * r.width) / a / r.height : wf / a, rw: r.width, rh: r.height };
+        };
         const items = list.map(function (p, i) {
             const id = p.href.split('?')[0] + '#' + i;
             const g = Object.assign({ x: p.x, y: p.y, w: p.w, muted: p.muted, hidden: false }, saved[id] || {});
@@ -344,7 +357,7 @@
             // The shared player plays and pauses on a click anywhere in it: a click on a PIP is the PIP's.
             box.addEventListener('click', function (e) { e.stopPropagation(); });
             root.appendChild(box);
-            const item = { p: p, id: id, g: g, box: box, v: v, loaded: false };
+            const item = { p: p, id: id, g: g, box: box, v: v, loaded: false, aspect: null };
             const paintMute = function () {
                 mute.innerHTML = '<i class="fa-solid ' + (g.muted ? 'fa-volume-xmark' : 'fa-volume-high') + '" aria-hidden="true"></i>';
                 mute.title = g.muted ? 'Turn on ' + p.title + "'s sound" : 'Mute ' + p.title;
@@ -352,10 +365,31 @@
                 v.muted = g.muted || video.muted;
             };
             const place = function () {
-                box.style.left = (g.x * 100) + '%';
-                box.style.top = (g.y * 100) + '%';
-                box.style.width = (g.w * 100) + '%';
+                const b = boxOf(g, item.aspect);
+                box.style.left = (clamp(g.x, 0, Math.max(0, 1 - b.wf)) * 100) + '%';
+                box.style.top = (clamp(g.y, 0, Math.max(0, 1 - b.hf)) * 100) + '%';
+                box.style.width = (b.wf * 100) + '%';
+                box.style.aspectRatio = String(b.a);
+                box.classList.toggle('is-portrait', b.a < 1);
             };
+            const settle = function () {
+                const b = boxOf(g, item.aspect);
+                const maxX = Math.max(0, 1 - b.wf), maxY = Math.max(0, 1 - b.hf);
+                const mx = b.rw ? 12 / b.rw : 0, my = b.rh ? 12 / b.rh : 0;
+                g.x = clamp(g.x, 0, maxX); g.y = clamp(g.y, 0, maxY);
+                if (g.x < 0.04) g.x = Math.min(mx, maxX); else if (g.x > maxX - 0.04) g.x = Math.max(0, maxX - mx);
+                if (g.y < 0.04) g.y = Math.min(my, maxY); else if (g.y > maxY - 0.04) g.y = Math.max(0, maxY - my);
+            };
+            const readShape = function () {
+                if (!v.videoWidth || !v.videoHeight) return;
+                const a = v.videoWidth / v.videoHeight;
+                if (item.aspect && Math.abs(item.aspect - a) < 0.01) return;
+                item.aspect = a;
+                place();
+            };
+            v.addEventListener('loadedmetadata', readShape);
+            v.addEventListener('resize', readShape);
+            item.place = place;
             const keep = function () { saved[id] = g; save(); };
             mute.addEventListener('click', function () { g.muted = !g.muted; paintMute(); keep(); if (!g.muted) v.play().catch(function () {}); });
             hide.addEventListener('click', function () { g.hidden = true; keep(); sync(); restoreBar(); });
@@ -371,21 +405,24 @@
             });
             box.addEventListener('pointermove', function (e) {
                 if (!drag) return;
-                const b = box.getBoundingClientRect();
-                if (drag.resize) g.w = clamp(drag.w + (e.clientX - drag.px) / drag.rw, 0.08, 0.6);
+                const k = Math.sqrt((item.aspect || BASE) / BASE) || 1;
+                if (drag.resize) g.w = clamp(drag.w + (e.clientX - drag.px) / drag.rw / k, 0.08, 0.6);
                 else {
-                    g.x = clamp(drag.x + (e.clientX - drag.px) / drag.rw, 0, Math.max(0, 1 - b.width / drag.rw));
-                    g.y = clamp(drag.y + (e.clientY - drag.py) / drag.rh, 0, Math.max(0, 1 - b.height / drag.rh));
+                    const b = boxOf(g, item.aspect);
+                    g.x = clamp(drag.x + (e.clientX - drag.px) / drag.rw, 0, Math.max(0, 1 - b.wf));
+                    g.y = clamp(drag.y + (e.clientY - drag.py) / drag.rh, 0, Math.max(0, 1 - b.hf));
                 }
                 place();
             });
-            const end = function () { if (!drag) return; drag = null; box.classList.remove('is-moving'); keep(); };
+            const end = function () { if (!drag) return; drag = null; box.classList.remove('is-moving'); settle(); place(); keep(); };
             box.addEventListener('pointerup', end);
             box.addEventListener('pointercancel', end);
             paintMute();
             place();
             return item;
         });
+        // The player changes size (a window, full screen, a phone turned): each PIP's height cap follows.
+        if (typeof ResizeObserver === 'function') new ResizeObserver(function () { items.forEach(function (it) { if (it.place) it.place(); }); }).observe(root);
         // The "Show …" buttons of hidden PIPs, under the player's top-left corner.
         let pills = null;
         function restoreBar() {
