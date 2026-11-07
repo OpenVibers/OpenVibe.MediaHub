@@ -807,6 +807,104 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
     }));
 
     // ── Playlist API (openvibe.video only; the drive's /api/v1 is untouched) ──
+    // ── Watch together (Party watch v1): what openvibe.party plays for a watch page, and what it offers to pick ──
+    //   GET /api/v1/video/watchable?url=<a watch page>   { kind, title, page_url, file_url, thumbnail_url, duration_s, channel }
+    //   GET /api/v1/video/watchable/latest?limit=1-12    { items: [the same, without file_url] }
+    // Only what anyone with the link may watch: public or unlisted, ready, and with no content label in force (a party
+    // is shown to everyone in it). A private item, one still processing, or a page on another site is a 404. Read-only,
+    // no cookies, cached a minute: Chat calls it from the server when a person pastes a link or opens the party home.
+    const WATCHABLE_LIVE = new URL(livePublic).host;
+    const watchable = (o) => ({
+        kind: o.kind, title: String(o.title || (o.kind === 'clip' ? 'Clip' : 'Video')).slice(0, 200),
+        page_url: o.page_url, thumbnail_url: httpsUrl(o.thumbnail_url) || null,
+        duration_s: Number(o.duration_seconds) > 0 ? Math.round(Number(o.duration_seconds)) : null,
+        channel: o.channel || null,
+    });
+    async function liveItem(kind, id) {
+        if (!live.isId(String(id))) return null;
+        const data = await (kind === 'clip' ? live.clip(String(id)) : live.vod(String(id))).catch(() => null);
+        const item = data && (kind === 'clip' ? data.clip : data.vod);
+        if (!item || labelsUi.inForce(item).length) return null;
+        if (item.status && item.status !== 'ready') return null;
+        const file = fileOf(item);
+        if (!file) return null;
+        return { ...watchable({ kind, title: item.title, page_url: `${base}${watchHref(kind, item.id || id, item.watch_id)}`, thumbnail_url: item.thumbnail_url,
+            duration_seconds: item.duration_seconds, channel: item.username || (item.channel && item.channel.username) || null }), file_url: file };
+    }
+    async function resolveWatchable(raw) {
+        let u;
+        try { u = new URL(String(raw || '')); } catch { return null; }
+        if (u.protocol !== 'https:' || u.username || u.password || u.port) return null;
+        const host = u.host.toLowerCase().replace(/^www\./, '');
+        if (host === new URL(base).host) {
+            const v = /^\/v\/(\d{1,12})$/.exec(u.pathname);
+            if (v) return liveItem('vod', v[1]);
+            const c = /^\/c\/(\d{1,12})$/.exec(u.pathname);
+            if (c) return liveItem('clip', c[1]);
+            if (u.pathname !== '/watch') return null;
+            const watchId = String(u.searchParams.get('v') || '');
+            if (!/^[A-Za-z0-9_-]{11}$/.test(watchId)) return null;
+            const row = await ctx.videoUploads.byWatchId(watchId);
+            if (row) {
+                if (row.state !== 'active' || row.status !== 'ready' || row.visibility === 'private' || labelsUi.inForce(row).length) return null;
+                const v2 = await ctx.videoUploads.playback(row).catch(() => null);
+                const file = v2 && fileOf(v2);
+                if (!file) return null;
+                return { ...watchable({ kind: 'upload', title: row.title, page_url: `${base}/watch?v=${row.watch_id}`, thumbnail_url: row.thumbnail_url,
+                    duration_seconds: row.duration_seconds, channel: row.owner_username || null }), file_url: file };
+            }
+            const out = await ctx.media.watchResolve(watchId).catch(() => null);
+            const ref = out && out.ok && out.data;
+            if (!ref || (ref.kind !== 'vod' && ref.kind !== 'clip')) return null;
+            return liveItem(ref.kind, ref.id);
+        }
+        // A recording's or a clip's old address on OpenVibe.Live (it redirects here).
+        if (host === WATCHABLE_LIVE) {
+            const m = /^\/(vod|v|clip|c)\/(\d{1,12})$/.exec(u.pathname);
+            if (m) return liveItem(m[1] === 'clip' || m[1] === 'c' ? 'clip' : 'vod', m[2]);
+        }
+        return null;
+    }
+    const watchableCache = new Map();   // key → { at, value }
+    const cached = async (key, fn) => {
+        const hit = watchableCache.get(key);
+        if (hit && Date.now() - hit.at < 60_000) return hit.value;
+        const value = await fn();
+        if (watchableCache.size > 500) watchableCache.clear();
+        watchableCache.set(key, { at: Date.now(), value });
+        return value;
+    };
+    const watchableProblem = (res, status, detail) => res.status(status).type('application/problem+json').json({ type: 'https://openvibe.network/problems/video.not_watchable', title: 'Not watchable', status, code: 'video.not_watchable', detail });
+    r.get('/api/v1/video/watchable/latest', async (req, res) => {
+        const limit = Math.max(1, Math.min(12, Number(req.query.limit) || 8));
+        const items = await cached(`latest:${limit}`, async () => {
+            const [vods, clips, uploads] = await Promise.all([
+                settle(live.feed({ type: 'vods', limit: 12 })), settle(live.feed({ type: 'clips', limit: 8 })),
+                ctx.videoUploads.latest(8).catch(() => []),
+            ]);
+            const fromFeed = (answer, kind) => itemsOf(answer)
+                .filter((x) => !labelsUi.inForce(x).length && !(kind === 'vod' && Number(x.duration_seconds) > 0 && Number(x.duration_seconds) < MIN_HOME_SECONDS))
+                .map((x) => ({ at: x.created_at, ...watchable({ kind, title: x.title, page_url: `${base}${watchHref(kind, x.id, x.watch_id)}`, thumbnail_url: x.thumbnail_url,
+                    duration_seconds: x.duration_seconds, channel: x.channel && x.channel.username ? x.channel.username : null }) }));
+            const fromUploads = (uploads || []).filter((x) => !labelsUi.inForce(x).length).map((x) => ({ at: x.ready_at || x.created_at, ...watchable({ kind: 'upload', title: x.title,
+                page_url: `${base}${x.watch_id ? `/watch?v=${x.watch_id}` : `/u/${x.id}`}`, thumbnail_url: x.thumbnail_url, duration_seconds: x.duration_seconds, channel: x.owner_username || null }) }));
+            return [...fromFeed(vods, 'vod'), ...fromFeed(clips, 'clip'), ...fromUploads]
+                .sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')))
+                .slice(0, limit)
+                .map(({ at, ...x }) => x);
+        });
+        res.set('Cache-Control', 'public, max-age=60');
+        res.json({ items });
+    });
+    r.get('/api/v1/video/watchable', async (req, res) => {
+        const url = String(req.query.url || '').slice(0, 2048);
+        if (!url) return watchableProblem(res, 400, 'Name the watch page: ?url=https://openvibe.video/watch?v=…');
+        const item = await cached(`one:${url}`, () => resolveWatchable(url));
+        if (!item) return watchableProblem(res, 404, 'That is not a video anyone with the link may watch together.');
+        res.set('Cache-Control', 'public, max-age=60');
+        res.json(item);
+    });
+
     r.use('/api/v1/video', createVideoApiRoutes(ctx));
     // Uploads' part API (server/video/upload-routes.js): raw parts and its own JSON, before the forms' parser.
     r.use('/api/v1/videos', createUploadApi({ ctx, config }));
