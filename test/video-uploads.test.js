@@ -107,6 +107,11 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         assert.ok(page.text.includes('src="https://openvibe.media/v/vod-1.mp4"') && page.text.includes('data-ovv-hls="https://openvibe.media/o/med_vod1/master.m3u8"'), 'the file, and HLS on the same origin');
         assert.ok(page.text.includes('Line one\nLine two'));
         assert.ok(page.text.includes('<a class="ovv-channel-name" href="/@kim">@kim</a>'));
+        // The upload's watch page carries the Ask your agent chip beside Share too.
+        const asks = page.text.match(/<button[^>]*data-ov-ask[^>]*>/g) || [];
+        assert.strictEqual(asks.length, 1, 'one Ask your agent chip: ' + asks.join(' | '));
+        assert.match(asks[0], /data-ov-ask="About the video “Trip to the coast” on OpenVibe\.Video \(https:\/\/openvibe\.video\/watch\?v=[A-Za-z0-9_-]+\): "/);
+        assert.ok(asks[0].includes('class="ovk-ask ovk-btn'), 'the shared kit chip');
         assert.ok(page.text.includes('Report this video'), 'others may report it');
         assert.ok(!page.text.includes('Manage this video'));
         const wid = [...t.media.vods.values()][0].watch_id;
