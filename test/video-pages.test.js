@@ -437,6 +437,34 @@ function countOccurrences(haystack, needle) {
         assert.strictEqual((await getVideo('/v/103')).status, 404);
     });
 
+    await check('watch together: a watch page resolves to the file a party plays; private, elsewhere and missing do not', async () => {
+        const q = (u) => getVideo(`/api/v1/video/watchable?url=${encodeURIComponent(u)}`);
+        const one = await q('https://openvibe.video/v/101');
+        assert.strictEqual(one.status, 200, one.text);
+        const doc = JSON.parse(one.text);
+        assert.strictEqual(doc.kind, 'vod');
+        assert.strictEqual(doc.file_url, 'https://openvibe.media/v/101', 'the file, not the page');
+        assert.strictEqual(doc.title, 'A public recording');
+        assert.match(doc.page_url, /^https:\/\/openvibe\.video\/(watch\?v=|v\/101)/);
+        const clip = JSON.parse((await q('https://openvibe.video/c/201')).text);
+        assert.strictEqual(clip.kind, 'clip');
+        assert.ok(/^https:\/\//.test(clip.file_url), 'a clip resolves to its file');
+        assert.strictEqual((await q('https://openvibe.video/v/102')).status, 200, 'an unlisted one: whoever has the link may watch it');
+        assert.strictEqual((await q('https://openvibe.video/v/103')).status, 404, 'a private one never');
+        assert.strictEqual((await q('https://evil.example/v/101')).status, 404, 'another site never');
+        assert.strictEqual((await q('http://openvibe.video/v/101')).status, 404, 'https only');
+        assert.strictEqual((await getVideo('/api/v1/video/watchable')).status, 400);
+        const latest = await getVideo('/api/v1/video/watchable/latest?limit=6');
+        assert.strictEqual(latest.status, 200, latest.text);
+        const items = JSON.parse(latest.text).items;
+        assert.ok(items.length > 0 && items.length <= 6);
+        for (const x of items) {
+            assert.ok(/^https:\/\/openvibe\.video\//.test(x.page_url), x.page_url);
+            assert.strictEqual(x.file_url, undefined, 'the list names pages; the file is resolved when a party starts');
+        }
+        assert.ok(!items.some((x) => x.title === 'A two-second blip'), 'a two-second blip is not offered');
+    });
+
     await check('the channel page lists recordings and clips', async () => {
         const r = await getVideo('/@streamer');
         assert.strictEqual(r.status, 200);
