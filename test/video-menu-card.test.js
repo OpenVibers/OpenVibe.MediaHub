@@ -66,8 +66,9 @@ function fakeRes() {
     assert.strictEqual(first.status(), 200);
     assert.strictEqual(first.headers['Access-Control-Allow-Origin'], '*');
     assert.strictEqual(first.headers['Cache-Control'], 'public, max-age=60');
-    assert.strictEqual(first.body().site, 'media-hub');
-    assert.deepStrictEqual(first.body().items.map((x) => x.url), ['https://openvibe.video/c/2', 'https://openvibe.video/v/1']);
+    assert.ok(Array.isArray(first.body()) && first.body().length === 1, 'the file is an array of cards');
+    assert.strictEqual(first.body()[0].site, 'media-hub');
+    assert.deepStrictEqual(first.body()[0].items.map((x) => x.url), ['https://openvibe.video/c/2', 'https://openvibe.video/v/1']);
     assert.strictEqual(calls, 2, 'one feed call for VODs and one for clips');
 
     const second = fakeRes();
@@ -84,7 +85,7 @@ function fakeRes() {
     const half = fakeRes();
     await oneDown({}, half.res);
     assert.strictEqual(half.status(), 200);
-    assert.deepStrictEqual(half.body().items.map((x) => x.url), ['https://openvibe.video/c/2']);
+    assert.deepStrictEqual(half.body()[0].items.map((x) => x.url), ['https://openvibe.video/c/2']);
 
     let fail = false;
     let buildCalls = 0;
@@ -103,7 +104,7 @@ function fakeRes() {
     const kept = fakeRes();
     await flaky({}, kept.res);
     assert.strictEqual(kept.status(), 200);
-    assert.strictEqual(kept.body().items[0].url, 'https://openvibe.video/v/1');
+    assert.strictEqual(kept.body()[0].items[0].url, 'https://openvibe.video/v/1');
 
     const never = createMenuCardHandler({ feed: async () => { throw new Error('down'); }, now: () => t });
     const none = fakeRes();

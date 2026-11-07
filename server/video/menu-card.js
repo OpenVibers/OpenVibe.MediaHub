@@ -99,7 +99,7 @@ function createMenuCardHandler({ feed, now = Date.now }) {
             res.set('Cache-Control', 'public, max-age=60')
                 .set('Access-Control-Allow-Origin', '*')
                 .set('Cross-Origin-Resource-Policy', 'cross-origin')
-                .json(body);
+                .json([body]);
         } catch {
             res.status(503).set('Cache-Control', 'no-store').set('Access-Control-Allow-Origin', '*')
                 .json({ error: 'menu_unavailable' });
