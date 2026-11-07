@@ -35,6 +35,7 @@ const { send, asset, assetVersion, SITE_NAME } = require('./layout');
 const { createLiveClient, LiveRefusedError } = require('./live-client');
 const { createChatClient } = require('./chat-client');
 const { createSearchReads, CATEGORIES, isCategory } = require('./search-reads');
+const { createMenuCardHandler } = require('./menu-card');
 const rules = require('../drive/rules');
 const labelsUi = require('../render/labels-ui');
 /** 2147483648 → "2 GB" (the drive's formatBytes, without a trailing ".0"). */
@@ -639,6 +640,9 @@ function createVideoRoutes(ctx) {
     const chat = createChatClient({ config, fetchImpl: ctx.fetchImpl || globalThis.fetch, log });
     const shelves = createSearchReads({ config, fetchImpl: ctx.fetchImpl || globalThis.fetch, log });
     const r = asyncRouter();
+    // The menu's network card (frame.menu-card@1): the week's most viewed public recordings and clips. Public,
+    // CORS *, cached two minutes; the rows are Live's Content feed (which reads Media) and never a private item.
+    r.get('/.well-known/openvibe-menu.json', createMenuCardHandler({ feed: (opts) => live.feed(opts) }));
     const base = String(config.video.url).replace(/\/+$/, '');
     const livePublic = String(config.video.livePublicUrl).replace(/\/+$/, '');
     const videoHostname = (() => { try { return new URL(config.video.url).hostname; } catch { return 'openvibe.video'; } })();
