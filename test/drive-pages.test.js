@@ -15,7 +15,7 @@ const { SAME, bytes, upload, share } = require('./helpers/drive');
     const sam = t.network.addUser('sam');
 
     await check('a guest gets a sign-in page for every file page, never a file', async () => {
-        for (const p of ['/files', '/files/fil_01JABCDEFGHJKMNPQRSTVWXYZ0', '/staff', '/s/abcdefghijklmnopqrstuvwx']) {
+        for (const p of ['/files', '/files/bin', '/files/fil_01JABCDEFGHJKMNPQRSTVWXYZ0', '/staff', '/s/abcdefghijklmnopqrstuvwx']) {
             const r = await t.get(p);
             assert.strictEqual(r.status, 401, p);
             assert.ok(r.text.includes('Sign in'), `${p}: a sign-in page`);
@@ -167,6 +167,25 @@ const { SAME, bytes, upload, share } = require('./helpers/drive');
         assert.strictEqual(gone.status, 303, 'an empty one goes');
         assert.strictEqual(gone.headers.get('location'), `/files?folder=${work.id}`, 'back to where it was');
         assert.ok(!(await t.get('/api/v1/folders', { as: lee })).json().folders.some((f) => f.id === invoices.id));
+    });
+
+    await check('a deleted file waits in the bin, and the drive links it there with a count', async () => {
+        const file = (await upload(t, kim, bytes(70, 'bin-page'), { name: 'bin-page.txt', contentType: 'text/plain' })).json().file;
+        const page = await t.get(`/files/${file.id}`, { as: kim });
+        assert.ok(page.text.includes('goes to the bin for 30 days'), 'the file page says where a delete goes');
+        assert.ok(page.text.includes('share links stop working at once'), 'and what happens to its links');
+        const deleted = await t.get(`/files/${file.id}/delete`, { as: kim, form: {}, headers: SAME });
+        assert.strictEqual(deleted.status, 303);
+        assert.strictEqual((await t.get(`/files/${file.id}`, { as: kim })).status, 404);
+        const drive = await t.get('/files', { as: kim });
+        assert.match(drive.text, /href="\/files\/bin"[^\n]*<em>1<\/em>/, 'the sidebar counts it');
+        const bin = await t.get('/files/bin', { as: kim });
+        assert.strictEqual(bin.status, 200);
+        assert.ok(bin.text.includes('bin-page.txt'), 'the bin lists it');
+        assert.ok(bin.text.includes(`action="/files/${file.id}/restore"`) && bin.text.includes(`action="/files/${file.id}/purge"`), 'with Restore and Delete forever');
+        assert.ok(bin.text.includes('action="/files/bin/empty"'), 'and a way to empty it');
+        await t.get(`/files/${file.id}/restore`, { as: kim, form: {}, headers: SAME });
+        assert.strictEqual((await t.get(`/files/${file.id}`, { as: kim })).status, 200, 'restored to the drive');
     });
 
     await check('the update log and the crawl artifacts still work, and a guest can read the rules', async () => {

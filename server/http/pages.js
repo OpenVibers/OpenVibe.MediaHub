@@ -298,6 +298,13 @@ ${raw(showcase.cta({ title: 'Before you upload', text: 'Read the rules: what is 
     }
     const pathBar = (path, last = null) => html`<nav class="dr-path" aria-label="Where you are"><a href="/files">${ui.icon('home')}<span>My files</span></a>${path.map((f, i) => html`${ui.icon('chevron')}${i === path.length - 1 && !last ? html`<span aria-current="page">${f.name}</span>` : html`<a href="${folderHref(f.id)}">${f.name}</a>`}`)}${last ? html`${ui.icon('chevron')}<span aria-current="page">${last}</span>` : ''}</nav>`;
     const whoOf = (sh) => (sh.public ? ['globe', 'Anyone with the link'] : sh.allowed_subjects ? ['people', 'Only the people you named'] : ['lock', 'Signed-in people with the link']);
+    /** The sidebar's places; `current` is 'files', 'bin' or null. The counts are the person's own live numbers. */
+    const places = (current, liveShares, binCount) => html`<nav class="dr-places" aria-label="Places">
+<a href="/files"${current === 'files' ? raw(' aria-current="page"') : ''}>${ui.icon('home')}<span>My files</span></a>
+<a href="/files#shared">${ui.icon('link')}<span>Shared links</span>${liveShares.length ? html`<em>${liveShares.length}</em>` : ''}</a>
+<a href="/files/bin"${current === 'bin' ? raw(' aria-current="page"') : ''}>${ui.icon('trash')}<span>Bin</span>${binCount ? html`<em>${binCount}</em>` : ''}</a>
+<a href="/sync">${ui.icon('sync')}<span>Backups</span></a>
+</nav>`;
 
     /** The upload: a big "Upload files" target over a plain file form. upload.js takes it over (many files, the tray). */
     const uploadForm = (folder) => html`<form class="dr-upload" method="post" action="/files/upload" enctype="multipart/form-data" data-upload>
@@ -341,6 +348,7 @@ ${folder ? html`<input type="hidden" name="folder" value="${folder.id}">` : ''}
             }
         }
         const usage = await drive.usage(owner);
+        const binCount = await drive.binCount(owner);
         const title = q ? `“${q}”` : folder ? folder.name : 'My files';
         const empty = !files.length && !folders.length;
         const keep = (extra) => html`${folder ? html`<input type="hidden" name="folder" value="${folder.id}">` : ''}${extra || ''}`;
@@ -359,11 +367,7 @@ ${uploadForm(folder)}
 ${folderForm(folder)}
 <a class="dr-new-row" href="/sync">${ui.icon('sync')}<span><b>Back up a folder</b><small>Keep a folder on your computer copied here</small></span></a>
 </div></details>
-<nav class="dr-places" aria-label="Places">
-<a href="/files"${!folder && !q ? raw(' aria-current="page"') : ''}>${ui.icon('home')}<span>My files</span></a>
-<a href="/files#shared">${ui.icon('link')}<span>Shared links</span>${liveShares.length ? html`<em>${liveShares.length}</em>` : ''}</a>
-<a href="/sync">${ui.icon('sync')}<span>Backups</span></a>
-</nav>
+${places(!folder && !q ? 'files' : null, liveShares, binCount)}
 ${ui.meter(usage)}
 </aside>
 <div class="dr-main" data-main>
@@ -392,6 +396,38 @@ ${showShares ? html`<section class="dr-sec" id="shared" aria-labelledby="h-share
 <small>${who} · expires ${time(sh.expires_at)} · ${Number(sh.downloads)} download${Number(sh.downloads) === 1 ? '' : 's'}</small></span>
 <button class="dr-btn is-quiet" type="button" data-copy="${config.baseUrl}/s/${sh.slug}" hidden>Copy link</button>
 <form method="post" action="/shares/${sh.slug}/revoke"><button class="dr-btn is-quiet" type="submit">Revoke</button></form></li>`; })}</ul></section>` : ''}
+</div>
+</div>`,
+        });
+    });
+
+    // ── The bin (2026-11-07): deleted files wait here 30 days before their bytes go ──
+    r.get('/files/bin', mustSignIn('/files'), async (req, res) => {
+        const owner = requesterOf(req);
+        const [files, binCount, liveShares, usage, allFolders] = await Promise.all([
+            drive.listBinned(owner, { limit: 200 }),
+            drive.binCount(owner),
+            drive.listShares(owner).then((rows) => rows.filter((sh) => drive.stateOf(sh, s.iso()) === 'live')),
+            drive.usage(owner),
+            drive.listFolders(owner),
+        ]);
+        const labels = folderLabels(allFolders);
+        return page(req, res, {
+            title: 'Bin · Your files',
+            scripts: ['js/upload.js'],
+            css: ['css/drive.css'],
+            body: html`<div class="dr" data-drive data-place="Bin">
+<aside class="dr-side" aria-label="Your drive">
+${places('bin', liveShares, binCount)}
+${ui.meter(usage)}
+</aside>
+<div class="dr-main" data-main>
+<header class="dr-bar"><div class="dr-bar-row">
+<h1 class="dr-title">Bin</h1>
+${files.length ? html`<div class="dr-tools"><form method="post" action="/files/bin/empty" data-confirm="Empty the bin? Everything in it is deleted forever, and OpenVibe.Media is asked to delete the bytes."><button class="dr-btn is-danger" type="submit">Empty the bin</button></form></div>` : ''}
+</div></header>
+<p class="dr-bin-note">Deleted files stay here for ${rules.BIN_DAYS} days so you can restore them. Until they are deleted forever they still count against your storage.</p>
+${files.length ? html`<ul class="dr-files" data-items>${files.map((row) => ui.fileCard(row, { bin: true, where: row.folder_id ? labels.get(row.folder_id) || 'A folder' : 'My files' }))}</ul>` : html`<p class="dr-bin-note">The bin is empty. Files you delete go here first.</p>`}
 </div>
 </div>`,
         });
@@ -458,8 +494,8 @@ ${state === 'live' ? html`<button class="dr-btn is-quiet" type="button" data-cop
 </dl>
 
 <section class="fv-card is-danger" id="delete" aria-labelledby="h-delete"><h2 id="h-delete">${ui.icon('trash')}Delete</h2>
-<p>Every share link to this file stops working at once, and OpenVibe.Media is asked to delete the bytes. There is no undo.</p>
-<form method="post" action="/files/${row.id}/delete" data-confirm="Delete “${row.name}”? Its share links stop working, and this cannot be undone."><button class="dr-btn is-danger" type="submit">Delete this file</button></form></section>
+<p>Every share link to this file stops working at once. The file goes to the bin for ${rules.BIN_DAYS} days, where you can restore it, and then it is deleted for good.</p>
+<form method="post" action="/files/${row.id}/delete" data-confirm="Delete “${row.name}”? It goes to the bin for ${rules.BIN_DAYS} days, and its share links stop working at once."><button class="dr-btn is-danger" type="submit">Delete this file</button></form></section>
 </div>
 </div>
 </div>`,
@@ -527,7 +563,28 @@ ${state === 'live' ? html`<button class="dr-btn is-quiet" type="button" data-cop
         const row = await drive.ownFile(requesterOf(req), String(req.params.id || ''));
         if (!row) return notFoundFile(req, res);
         await drive.deleteFile(requesterOf(req), row.id);
-        return res.redirect(303, '/files');
+        return res.redirect(303, folderHref(row.folder_id));
+    });
+
+    // ── The bin's own forms: restore, delete forever, empty ──
+    r.post('/files/:id/restore', mustSignIn('/files'), async (req, res) => {
+        if (!sameSite(req, res, '/files')) return undefined;
+        const out = await drive.restoreFile(requesterOf(req), String(req.params.id || ''));
+        if (out.error) return notFoundFile(req, res);
+        return res.redirect(303, '/files/bin');
+    });
+
+    r.post('/files/:id/purge', mustSignIn('/files'), async (req, res) => {
+        if (!sameSite(req, res, '/files')) return undefined;
+        const out = await drive.purgeFile(requesterOf(req), String(req.params.id || ''));
+        if (out.error) return notFoundFile(req, res);
+        return res.redirect(303, '/files/bin');
+    });
+
+    r.post('/files/bin/empty', mustSignIn('/files'), async (req, res) => {
+        if (!sameSite(req, res, '/files')) return undefined;
+        await drive.emptyBin(requesterOf(req));
+        return res.redirect(303, '/files/bin');
     });
 
     r.post('/files/:id/share', mustSignIn('/files'), budgeted('media-hub.share.create'), async (req, res) => {

@@ -4,6 +4,15 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
 
 ## Unreleased
 
+- The drive has a bin, and the API has the drive's full controls (2026-11-07). Deleting a file — from its page, its
+  card, or `DELETE /api/v1/files/:id` — puts it in the bin for 30 days instead of deleting it: its share links stop at
+  once, its bytes stay in OpenVibe.Media, and it still counts against storage. `/files/bin` in the sidebar (with a
+  count) lists what is there, each file with Restore and Delete forever, and an Empty the bin button; a file binned more
+  than 30 days ago is purged hourly in batches of 200 (the row is soft-deleted and Media is asked for the object). The
+  API now also takes `PATCH /api/v1/files/:id` (`name`, `folder_id`; null is the top), `PATCH /api/v1/folders/:id`
+  (`name`), `DELETE /api/v1/folders/:id` (409 `folder.not_empty`), `GET /api/v1/files?q=` across every folder,
+  `POST /api/v1/files/:id/restore` and `DELETE /api/v1/files/:id?forever=1`; a sync key may rename and move but may not
+  delete a folder. Migration `0023_files_bin.sql`.
 - openvibe.download looks and works like a drive (2026-11-07, the owner: "a competitor to Google Drive … sleek and easy
   to use and intuitive and minimalist while being powerful … full controls"). `/files` is a sidebar (New, My files,
   Shared links, Backups, the storage meter) beside the files: folder tiles, then file cards with the picture or a
@@ -11,8 +20,8 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
   rows in the list view. Search covers every folder (`?q=`, and it filters what is on screen as you type); sort by
   newest, oldest, name or size, remembered. Files dropped anywhere on the page upload into the folder on screen, many
   at once, with a tray that shows each one's progress and refreshes the list when they are in. Every file and folder
-  has a menu: Download, Share a link, Move to…, Rename, Delete; a folder deletes only when it is empty (there is no bin
-  yet). On a phone, New is a floating button that opens a bottom sheet, and a menu opens as a sheet over the tab bar.
+  has a menu: Download, Share a link, Move to…, Rename, Delete; a folder deletes only when it is empty. On a phone, New
+  is a floating button that opens a bottom sheet, and a menu opens as a sheet over the tab bar.
   A file's page shows the file large beside what you can do with it: who can open a link (three choices, drawn as
   cards), expiry as chips, Move, Rename, the facts and Delete. Fixed on the way: a folder made inside a folder went to
   the top level. Everything still works with JavaScript off.

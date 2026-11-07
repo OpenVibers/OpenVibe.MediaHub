@@ -33,7 +33,7 @@ const getFile = (s, id) => s.db.maybe(`SELECT * FROM ${FILES} WHERE id = $1`, [i
 /** This person's live files: newest first, a page at a time, optionally one folder (null = the root). */
 async function listFiles(s, owner, { folderId = null, limit = 100, before = null } = {}) {
     const values = [owner];
-    const parts = ['owner = $1', 'deleted_at IS NULL'];
+    const parts = ['owner = $1', 'deleted_at IS NULL', 'binned_at IS NULL'];
     if (folderId === null) parts.push('folder_id IS NULL');
     else { values.push(folderId); parts.push(`folder_id = $${values.length}`); }
     let sql = `SELECT * FROM ${FILES} WHERE ${parts.join(' AND ')}`;
@@ -46,19 +46,38 @@ async function listFiles(s, owner, { folderId = null, limit = 100, before = null
 /** Every size the person still holds — what the quota bar is drawn from. */
 const storedBytes = (s, owner) => s.db.value(`SELECT coalesce(sum(size), 0) FROM ${FILES} WHERE owner = $1 AND deleted_at IS NULL`, [owner]).then(Number);
 
-const liveFileCount = (s, owner) => s.db.value(`SELECT count(*) FROM ${FILES} WHERE owner = $1 AND deleted_at IS NULL`, [owner]).then(Number);
+const liveFileCount = (s, owner) => s.db.value(`SELECT count(*) FROM ${FILES} WHERE owner = $1 AND deleted_at IS NULL AND binned_at IS NULL`, [owner]).then(Number);
 
 /** Soft delete: the row stays (it is what the Media object is written from), the person stops seeing it. */
 const softDeleteFile = (s, id, at) => s.db.exec(`UPDATE ${FILES} SET deleted_at = $2 WHERE id = $1 AND deleted_at IS NULL`, [id, at]);
 
+/** The bin: the row and its bytes stay, hidden from the drive, until it is restored or purged. */
+const binFile = (s, id, at) => s.db.exec(`UPDATE ${FILES} SET binned_at = $2 WHERE id = $1 AND deleted_at IS NULL AND binned_at IS NULL`, [id, at]);
+const restoreFile = (s, id) => s.db.exec(`UPDATE ${FILES} SET binned_at = NULL WHERE id = $1 AND deleted_at IS NULL AND binned_at IS NOT NULL`, [id]);
+
+/** This person's binned files, the newest deletion first. */
+const listBinned = (s, owner, { limit = 200 } = {}) => s.db.many(
+    `SELECT * FROM ${FILES} WHERE owner = $1 AND deleted_at IS NULL AND binned_at IS NOT NULL ORDER BY binned_at DESC, id DESC LIMIT $2`,
+    [owner, limit]);
+const countBinned = (s, owner) => s.db.value(`SELECT count(*) FROM ${FILES} WHERE owner = $1 AND deleted_at IS NULL AND binned_at IS NOT NULL`, [owner]).then(Number);
+
+/** What the due purge takes, oldest first: binned before `beforeIso`, a batch at a time. */
+const dueBinned = (s, beforeIso, limit = 200) => s.db.many(
+    `SELECT * FROM ${FILES} WHERE deleted_at IS NULL AND binned_at IS NOT NULL AND binned_at < $1 ORDER BY binned_at ASC, id ASC LIMIT $2`,
+    [beforeIso, limit]);
+
 /** Rename or move one of the person's live files (the owner is in the WHERE: nobody else's file changes). */
-const renameFile = (s, id, owner, name) => s.db.exec(`UPDATE ${FILES} SET name = $3 WHERE id = $1 AND owner = $2 AND deleted_at IS NULL`, [id, owner, name]);
-const moveFile = (s, id, owner, folderId) => s.db.exec(`UPDATE ${FILES} SET folder_id = $3 WHERE id = $1 AND owner = $2 AND deleted_at IS NULL`, [id, owner, folderId]);
+const renameFile = (s, id, owner, name) => s.db.exec(`UPDATE ${FILES} SET name = $3 WHERE id = $1 AND owner = $2 AND deleted_at IS NULL AND binned_at IS NULL`, [id, owner, name]);
+const moveFile = (s, id, owner, folderId) => s.db.exec(`UPDATE ${FILES} SET folder_id = $3 WHERE id = $1 AND owner = $2 AND deleted_at IS NULL AND binned_at IS NULL`, [id, owner, folderId]);
+/** One update for the API's PATCH { name?, folder_id? }. */
+const updateFile = (s, id, owner, { name, folderId }) => s.db.exec(
+    `UPDATE ${FILES} SET name = $3, folder_id = $4 WHERE id = $1 AND owner = $2 AND deleted_at IS NULL AND binned_at IS NULL`,
+    [id, owner, name, folderId]);
 
 /** This person's live files whose name holds the words, in every folder, newest first. */
 function searchFiles(s, owner, words, { limit = 100 } = {}) {
     const like = `%${String(words).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-    return s.db.many(`SELECT * FROM ${FILES} WHERE owner = $1 AND deleted_at IS NULL AND name ILIKE $2 ORDER BY id DESC LIMIT $3`, [owner, like, limit]);
+    return s.db.many(`SELECT * FROM ${FILES} WHERE owner = $1 AND deleted_at IS NULL AND binned_at IS NULL AND name ILIKE $2 ORDER BY id DESC LIMIT $3`, [owner, like, limit]);
 }
 
 // ── Folders ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -73,9 +92,9 @@ const getFolder = (s, id) => s.db.maybe(`SELECT * FROM ${FOLDERS} WHERE id = $1`
 const listFolders = (s, owner) => s.db.many(`SELECT * FROM ${FOLDERS} WHERE owner = $1 ORDER BY lower(name) ASC, id ASC`, [owner]);
 const countFolders = (s, owner) => s.db.value(`SELECT count(*) FROM ${FOLDERS} WHERE owner = $1`, [owner]).then(Number);
 const renameFolder = (s, id, owner, name) => s.db.exec(`UPDATE ${FOLDERS} SET name = $3 WHERE id = $1 AND owner = $2`, [id, owner, name]);
-/** Whether a folder still holds a live file or a folder. */
+/** Whether a folder still holds a live file or a folder. A binned file does not: it is out of the drive until it is restored. */
 const folderInUse = (s, id) => s.db.value(
-    `SELECT EXISTS (SELECT 1 FROM ${FILES} WHERE folder_id = $1 AND deleted_at IS NULL) OR EXISTS (SELECT 1 FROM ${FOLDERS} WHERE parent_id = $1)`, [id]);
+    `SELECT EXISTS (SELECT 1 FROM ${FILES} WHERE folder_id = $1 AND deleted_at IS NULL AND binned_at IS NULL) OR EXISTS (SELECT 1 FROM ${FOLDERS} WHERE parent_id = $1)`, [id]);
 const deleteFolder = (s, id, owner) => s.db.exec(`DELETE FROM ${FOLDERS} WHERE id = $1 AND owner = $2`, [id, owner]);
 
 // ── Shares ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -176,7 +195,8 @@ const setUploadFile = (s, id, fileId) => s.db.exec(`UPDATE ${UPLOADS} SET file_i
 const dropUpload = (s, id) => s.db.exec(`DELETE FROM ${UPLOADS} WHERE id = $1`, [id]);
 
 module.exports = {
-    insertFile, getFile, listFiles, storedBytes, liveFileCount, softDeleteFile, renameFile, moveFile, searchFiles,
+    insertFile, getFile, listFiles, storedBytes, liveFileCount, softDeleteFile, binFile, restoreFile, updateFile,
+    listBinned, countBinned, dueBinned, renameFile, moveFile, searchFiles,
     insertFolder, getFolder, listFolders, countFolders, deleteFolder, renameFolder, folderInUse,
     insertShare, getShare, listShares, countLiveShares, revokeShare, suspendShare, restoreShare, countDownload,
     deleteSharesForFile, deleteSharesForFolder,

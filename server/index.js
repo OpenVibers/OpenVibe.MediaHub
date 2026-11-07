@@ -60,6 +60,9 @@ async function start() {
         dropSweep.unref();
         timers.push(dropSweep);
     }
+    // The bin (server/drive/bin.js): files binned more than 30 days ago are purged, hourly, in batches of 200.
+    const binPurge = require('./drive/bin').createBinPurge({ drive: ctx.drive, log: ctx.log });
+    binPurge.start();
     // OpenVibe.Video's AI edit (server/video/ai-edit.js): captions, chapters and a summary for finished uploads.
     if (ctx.videoAi.enabled) {
         const aiTimer = setInterval(() => { ctx.videoAi.sweep().catch((err) => console.warn('[OpenVibe.Video] AI sweep failed:', err && err.message)); }, 3 * 60_000);
@@ -77,7 +80,7 @@ async function start() {
     ctx.eventsOutbox.start();
     // Public uploads in OpenVibe.Search (server/video/search-index.js; off without MEDIAHUB_SEARCH_URL).
     ctx.videoSearch.start();
-    createLifecycle({ server, ctx, timers, extra: [() => videoIndexNow.stop(), () => ctx.videoSearch.stop(), () => ctx.eventsOutbox.stop(), () => { if (subscriptions) subscriptions.stop(); }] });
+    createLifecycle({ server, ctx, timers, extra: [() => binPurge.stop(), () => videoIndexNow.stop(), () => ctx.videoSearch.stop(), () => ctx.eventsOutbox.stop(), () => { if (subscriptions) subscriptions.stop(); }] });
     return { server, ctx };
 }
 

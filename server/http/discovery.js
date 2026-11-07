@@ -84,7 +84,7 @@ function createDiscoveryRoutes(ctx) {
             markdown: true,
             base: site,
             summary: 'OpenVibe.Download: a private drive on your OpenVibe account, with share links you control and folder backups.',
-            details: 'Upload files to your own drive, share a file or folder with named OpenVibe accounts, anyone signed in, or a public download page (links expire and can be revoked), and keep a folder on your computer backed up with the openvibe-download command (a sync key from /sync). Every page is server-rendered and readable without JavaScript.',
+            details: 'Upload files to your own drive, share a file or folder with named OpenVibe accounts, anyone signed in, or a public download page (links expire and can be revoked), and keep a folder on your computer backed up with the openvibe-download command (a sync key from /sync). A deleted file waits in the bin for 30 days before it is deleted for good. Every page is server-rendered and readable without JavaScript.',
             sections: [
                 { title: 'Start here', links: [
                     { title: 'OpenVibe.Download', url: abs('/'), note: 'Your files, shared on your terms.' },
@@ -92,6 +92,7 @@ function createDiscoveryRoutes(ctx) {
                     { title: 'What shipped on OpenVibe.MediaHub', url: abs('/updates') },
                 ] },
                 { title: 'Machine-readable', links: [
+                    { title: 'API (OpenAPI 3.1 JSON)', url: abs('/openapi.json') },
                     { title: 'Release metadata (JSON)', url: abs('/release.json') },
                 ] },
             ],
