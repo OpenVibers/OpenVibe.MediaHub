@@ -10,9 +10,11 @@
  * carries the item's own thumbnail (https on openvibe.media, asked for at 640 px and declared 640×360) when the
  * feed has one; no picture is ever a placeholder.
  *
- * The file is public and CORS *, cached for two minutes. A failed feed keeps the last good card; with none yet it
- * answers 503, and Network keeps the site's previous card for its own 30-minute window.
+ * The file is public and CORS *, cached for two minutes. A failed feed keeps the last good card; with none yet
+ * openvibe-sdk/menu answers [] (never a 500), and Network keeps the site's previous card for its 30-minute window.
  */
+const { menuCard, menuRoute } = require('openvibe-sdk/menu');
+
 const SITE = 'media-hub';
 const CARD_ID = 'trending';
 const BASE = 'https://openvibe.video';
@@ -79,16 +81,17 @@ function cardFrom(items, at = Date.now()) {
             if (image) item.image = image;
             return item;
         });
-    return {
+    return menuCard({
         id: CARD_ID,
         site: SITE,
         title: 'Trending',
         kind: 'rows',
+        origin: BASE,
         items: rows,
         more: { label: 'Watch more', url: `${BASE}/` },
-        updated_at: new Date(at).toISOString(),
-        ttl_s: CARD_TTL_S,
-    };
+        ttlSeconds: CARD_TTL_S,
+        updatedAt: at,
+    });
 }
 
 /**
@@ -121,18 +124,8 @@ function createMenuCardHandler({ feed, now = Date.now }) {
         return pending;
     }
 
-    return async function menuCard(req, res) {
-        try {
-            const body = await card();
-            res.set('Cache-Control', 'public, max-age=60')
-                .set('Access-Control-Allow-Origin', '*')
-                .set('Cross-Origin-Resource-Policy', 'cross-origin')
-                .json([body]);
-        } catch {
-            res.status(503).set('Cache-Control', 'no-store').set('Access-Control-Allow-Origin', '*')
-                .json({ error: 'menu_unavailable' });
-        }
-    };
+    // openvibe-sdk/menu answers the file (CORS *, the public cache) and turns a failed build into [], never a 500.
+    return menuRoute(async () => [await card()], { maxAgeSeconds: 60 });
 }
 
 module.exports = { createMenuCardHandler, cardFrom, imageOf, plain, SITE, CARD_ID, CARD_TTL_S };
