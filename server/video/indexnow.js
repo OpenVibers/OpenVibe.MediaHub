@@ -36,7 +36,8 @@ function createVideoIndexNow({ config, live, indexnow, log = console, intervalMs
             for (const it of pages.flatMap((p) => (p && Array.isArray(p.items) ? p.items : []))) {
                 const id = Number(it && it.id);
                 if (!Number.isSafeInteger(id) || id <= 0) continue;
-                const path = `${it.kind === 'clip' ? '/c/' : '/v/'}${id}`;
+                // The page's watch address (YouTube's shape); a feed item without an id yet keeps its numbered page.
+                const path = it.watch_id ? `/watch?v=${it.watch_id}` : `${it.kind === 'clip' ? '/c/' : '/v/'}${id}`;
                 if (seen.has(path)) continue;
                 seen.add(path);
                 if (!primed) continue;

@@ -89,6 +89,7 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
     }
 
     const vods = () => `${media.url}/api/v1/${encodeURIComponent(media.app)}/vods`;
+    const watch = () => `${media.url}/api/v1/${encodeURIComponent(media.app)}/watch`;
     const VOD_EXT = { 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/x-matroska': 'mkv' };
 
     return {
@@ -112,6 +113,12 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
         /** Close the file: Media remuxes, probes, makes the thumbnail and announces it. A big file takes minutes. */
         vodComplete: (vodId) => call(`/${Number(vodId)}/complete`, { root: vods(), method: 'POST', json: {}, timeoutMs: 30 * 60_000 }),
         vodGet: (vodId) => call(`/${Number(vodId)}`, { root: vods() }),
+        /**
+         * Which VOD or clip a watch id names ({ kind: 'vod' | 'clip', id }), the id openvibe.video addresses a page
+         * by. One id space across Media's VODs and clips; a 404 means no row holds it. The caller then reads the item
+         * through its own scoped read, exactly as it did by the numeric id.
+         */
+        watchResolve: (watchId) => call(`/${encodeURIComponent(String(watchId || ''))}`, { root: watch() }),
         /** A signed URL to read the VOD's file for `ttlS` seconds (private ones too): what OpenVibe.AI reads it through. */
         vodSignedUrl: (vodId, ttlS = 3600) => call(`/${Number(vodId)}/signed-url?ttl=${Number(ttlS)}`, { root: vods() }),
         vodUpdate: (vodId, patch) => call(`/${Number(vodId)}`, { root: vods(), method: 'PUT', json: patch }),

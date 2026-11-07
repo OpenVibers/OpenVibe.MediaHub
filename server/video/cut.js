@@ -327,7 +327,7 @@ function createCuts({ s, media, uploads, videoAi = null, config, log = console, 
 
     return {
         enabled, MODES, request, sweep, recover, kick, byId,
-        forUpload: async (row) => (await s.db.many('SELECT * FROM video_cuts WHERE upload_id = $1 ORDER BY created_at DESC LIMIT 10', [row.id]))
+        forUpload: async (row) => (await s.db.many('SELECT c.*, r.watch_id AS result_watch_id FROM video_cuts c LEFT JOIN video_uploads r ON r.id = c.result_upload_id WHERE c.upload_id = $1 ORDER BY c.created_at DESC LIMIT 10', [row.id]))
             .map((c) => ({ ...c, ranges: typeof c.ranges === 'string' ? JSON.parse(c.ranges) : c.ranges })),
         highlightsPlan: async (row) => planHighlights(videoAi ? await videoAi.forUpload(row) : null, Number(row.duration_seconds)),
     };

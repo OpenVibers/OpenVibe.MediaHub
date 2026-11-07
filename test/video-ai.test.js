@@ -37,7 +37,12 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body } = {}) {
         const req = http.request({ hostname: u.hostname, port: u.port, path: u.pathname + u.search, method, headers: h }, (res) => {
             const chunks = [];
             res.on('data', (c) => chunks.push(c));
-            res.on('end', () => { const text = Buffer.concat(chunks).toString('utf8'); resolve({ status: res.statusCode, text, json: () => JSON.parse(text) }); });
+            res.on('end', () => {
+                // A numbered watch page answers 301 to /watch?v=<id>: a GET follows it, as a browser does.
+                if (res.statusCode === 301 && method === 'GET' && res.headers.location) { vreq(base, res.headers.location, { cookie }).then(resolve, reject); return; }
+                const text = Buffer.concat(chunks).toString('utf8');
+                resolve({ status: res.statusCode, text, json: () => JSON.parse(text) });
+            });
         });
         req.on('error', reject);
         if (data) req.write(data);
