@@ -217,7 +217,10 @@ ${raw(showcase.features({
                     { icon: 'ov:account', title: 'You choose who opens it', text: 'Named OpenVibe accounts, anyone signed in, or a public download page for anyone with the link.' },
                     { icon: 'ov:shield', title: 'Reports that act', text: REPORT_NOTE },
                     { icon: 'ov:drive', title: 'Backups', text: 'Keep a folder on your computer copied into your drive with the openvibe-download command. It sends only what is new or changed.' },
-                    { icon: 'ov:plug', title: 'An API', text: 'Everything the pages do, over /api/v1 with your OpenVibe sign-in: upload, list, share and revoke.' },
+                    { icon: 'ov:plug', title: 'An API', text: 'Everything the pages do, over /api/v1 with your OpenVibe sign-in: upload, list, share, move, rename and revoke.' },
+                    { icon: 'ov:download', title: 'Drop and go', text: 'Drop files anywhere on the page, many at once. A tray shows each one going up, and the list updates when they are in.' },
+                    { icon: 'ov:search', title: 'Find anything', text: 'Search every folder by name. Sort by newest, name or size, and see your files as a grid of pictures or a list.' },
+                    { icon: 'ov:history', title: 'A bin for 30 days', text: 'Delete puts a file in the bin, its links stopped at once. Restore it any time in 30 days, or empty the bin yourself.' },
                 ],
             }))}
 ${raw(showcase.steps({
@@ -225,7 +228,7 @@ ${raw(showcase.steps({
                 lede: 'Four steps, and the last one is the point.',
                 items: [
                     { title: 'Sign in', text: 'OpenVibe.Network signs you in. Your session stays in an httpOnly cookie on this site.' },
-                    { title: 'Upload', text: `Drop a file on Your files. A big one goes up in parts with a progress meter, up to ${gb(config.quotas.maxFileBytes)}.` },
+                    { title: 'Upload', text: `Drop files anywhere on Your files, or tap New. Big ones go up in parts, each with its progress in the tray, up to ${gb(config.quotas.maxFileBytes)} a file.` },
                     { title: 'Share', text: `Make a link that expires in an hour to ${rules.EXPIRY_MAX_HOURS / 24} days, public or for signed-in people, and optionally name the OpenVibe usernames allowed to open it.` },
                     { title: 'Take it back', text: 'Revoke a link and it stops working at once. Delete a file and its shares go with it, and Media is asked to drop the bytes.' },
                 ],
