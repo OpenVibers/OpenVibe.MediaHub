@@ -392,6 +392,10 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('data-ovv-view="https://openvibe.live/api/views/clip/201"'), 'playback counts a clip view on Live');
         const cld = graphOf(r.text).find((x) => x['@type'] === 'VideoObject');
         assert.ok(cld && cld.url === 'https://openvibe.video/c/201', 'a clip VideoObject');
+        // Ask your agent on a clip too (11-07: recordings and uploads had the chip, clips did not).
+        const asks = r.text.match(/<button[^>]*data-ov-ask[^>]*>/g) || [];
+        assert.strictEqual(asks.length, 1, 'one Ask your agent chip on a clip');
+        assert.match(asks[0], /data-ov-ask="About the clip “[^"]+” on OpenVibe\.Video \(https:\/\/openvibe\.video\/[^)]+\): "/);
         assert.deepStrictEqual(cld.creator, cld.author);
         assert.strictEqual(cld.creator.url, 'https://openvibe.video/@clipper');
         assert.strictEqual(cld.isLiveBroadcast, undefined);
