@@ -4,6 +4,18 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
 
 ## Unreleased
 
+- openvibe.download looks and works like a drive (2026-11-07, the owner: "a competitor to Google Drive … sleek and easy
+  to use and intuitive and minimalist while being powerful … full controls"). `/files` is a sidebar (New, My files,
+  Shared links, Backups, the storage meter) beside the files: folder tiles, then file cards with the picture or a
+  coloured tile for the kind (PDF, document, spreadsheet, slides, archive, code, audio, video), or the same cards as
+  rows in the list view. Search covers every folder (`?q=`, and it filters what is on screen as you type); sort by
+  newest, oldest, name or size, remembered. Files dropped anywhere on the page upload into the folder on screen, many
+  at once, with a tray that shows each one's progress and refreshes the list when they are in. Every file and folder
+  has a menu: Download, Share a link, Move to…, Rename, Delete; a folder deletes only when it is empty (there is no bin
+  yet). On a phone, New is a floating button that opens a bottom sheet, and a menu opens as a sheet over the tab bar.
+  A file's page shows the file large beside what you can do with it: who can open a link (three choices, drawn as
+  cards), expiry as chips, Move, Rename, the facts and Delete. Fixed on the way: a folder made inside a folder went to
+  the top level. Everything still works with JavaScript off.
 - Content labels show on openvibe.video and OpenVibe.Pics (2026-11-02, L1). Cards, watch pages and pictures say in
   words what they carry (Nudity, Strong language, 18+…), and each viewer's own choice on openvibe.network shows,
   blurs or hides them. A maker always sees their own; on a video's or picture's own page a hide covers it with a

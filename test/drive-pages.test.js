@@ -124,6 +124,51 @@ const { SAME, bytes, upload, share } = require('./helpers/drive');
         assert.ok(drive.text.includes(`/s/${slug}`), 'and so does the drive');
     });
 
+    await check('full controls: rename, move, search, folders inside folders, and only an empty folder is deleted', async () => {
+        const lee = t.network.addUser('lee');
+        assert.strictEqual((await t.get('/folders', { as: lee, form: { name: 'Work' }, headers: SAME })).status, 303);
+        const work = (await t.get('/api/v1/folders', { as: lee })).json().folders.find((f) => f.name === 'Work');
+        // A folder made on a folder's page goes inside it (the form names the folder it is on).
+        const madeInside = await t.get('/folders', { as: lee, form: { name: 'Invoices', folder: work.id }, headers: SAME });
+        assert.strictEqual(madeInside.status, 303);
+        assert.strictEqual(madeInside.headers.get('location'), `/files?folder=${work.id}`);
+        const invoices = (await t.get('/api/v1/folders', { as: lee })).json().folders.find((f) => f.name === 'Invoices');
+        assert.strictEqual(invoices.parent_id, work.id, 'inside Work');
+
+        const file = (await upload(t, lee, bytes(60, 'draft'), { name: 'draft.txt', contentType: 'text/plain' })).json().file;
+        const renamed = await t.get(`/files/${file.id}/rename`, { as: lee, form: { name: 'final.txt', from: 'file' }, headers: SAME });
+        assert.strictEqual(renamed.status, 303);
+        assert.strictEqual(renamed.headers.get('location'), `/files/${file.id}`);
+        assert.ok((await t.get(`/files/${file.id}`, { as: lee })).text.includes('final.txt'), 'the new name shows');
+        assert.strictEqual((await t.get(`/files/${file.id}/rename`, { as: lee, form: { name: '   ' }, headers: SAME })).status, 422, 'an empty name is refused');
+
+        const moved = await t.get(`/files/${file.id}/move`, { as: lee, form: { to: invoices.id }, headers: SAME });
+        assert.strictEqual(moved.status, 303);
+        assert.ok((await t.get(`/files?folder=${invoices.id}`, { as: lee })).text.includes('final.txt'), 'the file is in Invoices');
+        assert.ok(!(await t.get('/files', { as: lee })).text.includes('final.txt'), 'and no longer at the top');
+        // Somebody else's folder is not a place to move to, and somebody else's file cannot be moved at all.
+        assert.strictEqual((await t.get(`/files/${file.id}/move`, { as: lee, form: { to: 'fld_01JABCDEFGHJKMNPQRSTVWXYZ0' }, headers: SAME })).status, 404);
+        assert.strictEqual((await t.get(`/files/${file.id}/move`, { as: sam, form: { to: '' }, headers: SAME })).status, 404);
+
+        const found = await t.get('/files?q=fina', { as: lee });
+        assert.ok(found.text.includes('final.txt'), 'search finds it in any folder');
+        assert.ok(found.text.includes('Work / Invoices'), 'and says where it is');
+        assert.ok(!(await t.get('/files?q=100%25', { as: lee })).text.includes('final.txt'), 'a % is a character, not a wildcard');
+
+        const renamedFolder = await t.get(`/folders/${invoices.id}/rename`, { as: lee, form: { name: 'Bills' }, headers: SAME });
+        assert.strictEqual(renamedFolder.status, 303);
+        assert.ok((await t.get(`/files?folder=${work.id}`, { as: lee })).text.includes('Bills'));
+
+        const notEmpty = await t.get(`/folders/${invoices.id}/delete`, { as: lee, form: {}, headers: SAME });
+        assert.strictEqual(notEmpty.status, 409, 'a folder with a file in it stays');
+        assert.ok(notEmpty.text.includes('still has files or folders'), notEmpty.text.slice(0, 300));
+        await t.get(`/files/${file.id}/delete`, { as: lee, form: {}, headers: SAME });
+        const gone = await t.get(`/folders/${invoices.id}/delete`, { as: lee, form: {}, headers: SAME });
+        assert.strictEqual(gone.status, 303, 'an empty one goes');
+        assert.strictEqual(gone.headers.get('location'), `/files?folder=${work.id}`, 'back to where it was');
+        assert.ok(!(await t.get('/api/v1/folders', { as: lee })).json().folders.some((f) => f.id === invoices.id));
+    });
+
     await check('the update log and the crawl artifacts still work, and a guest can read the rules', async () => {
         assert.strictEqual((await t.get('/updates')).status, 200);
         const robots = await t.get('/robots.txt');

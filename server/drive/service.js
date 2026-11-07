@@ -145,6 +145,31 @@ function createService({ s, media, identity, config, log = console }) {
         return { file: row, media: removed };
     }
 
+    /** Rename one of the person's files. The name follows the same rule as an upload's. */
+    async function renameFile(owner, id, name) {
+        const row = await ownFile(owner, id);
+        if (!row) return { error: 'file.not_found' };
+        const clean = rules.cleanName(name);
+        if (!clean) return { error: 'file.invalid_name', detail: 'A file needs a name.' };
+        await store.renameFile(s, row.id, owner, clean);
+        return { file: await store.getFile(s, row.id) };
+    }
+
+    /** Move one of the person's files into one of their folders, or to the root (folderId null). */
+    async function moveFile(owner, id, folderId = null) {
+        const row = await ownFile(owner, id);
+        if (!row) return { error: 'file.not_found' };
+        if (folderId && !await ownFolder(owner, folderId)) return { error: 'folder.not_found', detail: 'That folder does not exist.' };
+        await store.moveFile(s, row.id, owner, folderId || null);
+        return { file: await store.getFile(s, row.id) };
+    }
+
+    /** The person's files whose names hold the words, from every folder. */
+    const searchFiles = (owner, words, opts) => {
+        const clean = rules.cleanText(words, 100);
+        return clean ? store.searchFiles(s, owner, clean, opts) : Promise.resolve([]);
+    };
+
     // ── Folders ─────────────────────────────────────────────
 
     /** A folder of this person's, or null. */
@@ -163,6 +188,33 @@ function createService({ s, media, identity, config, log = console }) {
             return { error: 'folder.exists', detail: `You already have a folder called "${clean}" here.` };
         }
         return { folder: await store.insertFolder(s, { id: s.newId('fld'), owner, parent_id: parentId || null, name: clean, created_at: nowIso() }) };
+    }
+
+    /** Rename a folder; two folders in one place still never share a name. */
+    async function renameFolder(owner, id, name) {
+        const folder = await ownFolder(owner, id);
+        if (!folder) return { error: 'folder.not_found', detail: 'That folder does not exist.' };
+        const clean = rules.cleanName(name, rules.FOLDER_NAME_MAX);
+        if (!clean) return { error: 'folder.invalid_name', detail: 'A folder needs a name.' };
+        const existing = await store.listFolders(s, owner);
+        if (existing.some((f) => f.id !== folder.id && (f.parent_id || null) === (folder.parent_id || null) && f.name.toLowerCase() === clean.toLowerCase())) {
+            return { error: 'folder.exists', detail: `You already have a folder called "${clean}" here.` };
+        }
+        await store.renameFolder(s, folder.id, owner, clean);
+        return { folder: await store.getFolder(s, folder.id) };
+    }
+
+    /**
+     * Delete an empty folder. A folder that still holds something is refused rather than emptied: there is no bin
+     * yet, and a file deleted here is deleted in Media too.
+     */
+    async function deleteFolder(owner, id) {
+        const folder = await ownFolder(owner, id);
+        if (!folder) return { error: 'folder.not_found', detail: 'That folder does not exist.' };
+        if (await store.folderInUse(s, folder.id)) return { error: 'folder.not_empty', detail: `"${folder.name}" still has files or folders in it. Move or delete them first.` };
+        await store.deleteSharesForFolder(s, folder.id);
+        await store.deleteFolder(s, folder.id, owner);
+        return { folder };
     }
 
     /** A folder's path from the root, for breadcrumbs and the folder picker. */
@@ -293,9 +345,9 @@ function createService({ s, media, identity, config, log = console }) {
 
     return {
         uploadAllowed, shareAllowed, usage, dayOf,
-        recordFile, ownFile, deleteFile,
+        recordFile, ownFile, deleteFile, renameFile, moveFile, searchFiles,
         listFiles, listFolders, listShares, usageDays, shareBySlug, reportsFor,
-        ownFolder, createFolder, folderPath,
+        ownFolder, createFolder, renameFolder, deleteFolder, folderPath,
         createShare, ownShare, revokeShare,
         report, restoreShare, removeShared,
         stateOf, allowedFor, parseAllow,
