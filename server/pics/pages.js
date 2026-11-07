@@ -43,7 +43,9 @@ const kit = require('openvibe-shared/kit');
 const { PATHS: POLICY_PATHS, policyPage } = require('./policy');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
-const FILE_CACHE = 'public, max-age=600, s-maxage=600';
+const FILE_CACHE = 'public, max-age=600, s-maxage=60';
+/** Only Everyone and link pictures may sit in a shared cache; anything narrower is private to each answer. */
+const cacheFor = (row) => (row.state === 'active' && (row.audience === 'public' || row.audience === 'link' || row.audience === undefined) ? FILE_CACHE : 'private, no-store');
 const KIND = { jpg: 'JPEG', png: 'PNG', gif: 'GIF', webp: 'WebP', avif: 'AVIF' };
 
 function createPicsRoutes(ctx) {
@@ -137,7 +139,7 @@ function createPicsRoutes(ctx) {
             'Access-Control-Allow-Origin': '*',
             'X-Robots-Tag': 'noindex',
             // Hidden pictures leave shared caches within ten minutes; their uploader and staff get no-store copies.
-            'Cache-Control': row.state === 'active' ? FILE_CACHE : 'private, no-store',
+            'Cache-Control': cacheFor(row),
             'Content-Disposition': `inline; filename="${row.slug}.${row.ext}"`,
             ETag: `"${row.sha256.slice(0, 32)}"`,
         });
@@ -168,7 +170,7 @@ function createPicsRoutes(ctx) {
         req.params.slug = req.params[0];
         const { row, status } = await picture(req, res);
         if (!row || status !== 200 || row.ext !== req.params[1]) return res.status(status === 410 ? 410 : 404).set('Cache-Control', 'public, max-age=60').type('text/plain').send(status === 410 ? 'Taken down' : 'Not found');
-        if (req.get('if-none-match') === `"${row.sha256.slice(0, 32)}"` && row.state === 'active') return res.status(304).set('Cache-Control', FILE_CACHE).end();
+        if (req.get('if-none-match') === `"${row.sha256.slice(0, 32)}"` && row.state === 'active') return res.status(304).set('Cache-Control', cacheFor(row)).end();
         return serveObject(req, res, row, row.object_id, row.mime_type);
     });
 
@@ -186,7 +188,7 @@ function createPicsRoutes(ctx) {
             'Cross-Origin-Resource-Policy': 'cross-origin',
             'Access-Control-Allow-Origin': '*',
             'X-Robots-Tag': 'noindex',
-            'Cache-Control': FILE_CACHE,
+            'Cache-Control': cacheFor(row),
             'Content-Disposition': `inline; filename="${row.slug}-${req.params[1]}.${req.params[2]}"`,
             'Content-Length': String(v.buffer.length),
         });
@@ -429,15 +431,10 @@ ${pics.REASONS.map((r) => html`<label class="ovp-radio"><input type="radio" name
                 return page(req, res, {
                     title: 'A picture on OpenVibe.Pics', noindex: true,
                     body: html`<header class="ovp-page-head"><h1>A picture on OpenVibe.Pics</h1><p class="muted">This is shared with specific people.</p></header>
-<div id="pic-gate"><p class="muted">This picture is shared with specific people on OpenVibe.Pics.</p><p>${signInLink(req.originalUrl)}</p></div>
-<script src="${ovServe.url('ov-share.js')}" defer></script>
-<script>
-window.addEventListener('DOMContentLoaded', function () {
-  var el = document.getElementById('pic-gate');
-  if (el && window.OVShare) OVShare.gate(el, { kind: 'picture', id: ${JSON.stringify(row.id)},
-    signedInAs: ${JSON.stringify(req.viewer && req.viewer.subject ? req.viewer.subject : '')}, signInUrl: ${JSON.stringify(`/auth/login?next=${encodeURIComponent(req.originalUrl)}`)} });
-});
-</script>`,
+<div id="share-gate" data-ov-share-gate data-kind="picture" data-id="${String(row.id)}" data-signed-in-as="${req.viewer && req.viewer.username ? req.viewer.username : ''}" data-sign-in-url="${`/auth/login?next=${encodeURIComponent(req.originalUrl)}`}">
+<p class="muted">This picture is shared with specific people on OpenVibe.Pics.</p><p>${signInLink(req.originalUrl)}</p></div>
+<link rel="stylesheet" href="${ovServe.url('ov-share.css')}">
+<script src="${ovServe.url('ov-share.js')}" defer></script>`,
                 }, 404);
             }
         }
@@ -570,7 +567,7 @@ ${albums.length ? html`<div class="ovp-albums">${albums.map((a) => html`<a class
             const share = await sharing.shareOf('album', album.id).catch(() => null);
             if (share && !await sharing.canView(req.viewer, 'album', album.id).catch(() => false)) return notFound(req, res);
         }
-        const rows = await store.albumImages(s, album.id, { visibleOnly: !owner });
+        const rows = (await store.albumImages(s, album.id, { visibleOnly: !owner })).filter((i) => owner || i.audience === 'public' || i.audience === 'link');
         return page(req, res, {
             title: album.title, noindex: true, scripts: ['js/pics.js'],
             image: rows[0] ? `${base}/i/${rows[0].slug}.${rows[0].ext}` : undefined,

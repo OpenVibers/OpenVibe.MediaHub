@@ -85,7 +85,28 @@ function createSharing({ db, config, outbox, now = Date.now, fetchImpl = globalT
         } catch (err) { log.warn('[Sharing] notification not sent:', err.message); }
     }
 
-    const shares = createShares({ db, network: { json: networkJson }, events: { publish: async (envelope) => await outbox.emit(envelope) }, notify });
+    let changedHook = null;
+    const shares = createShares({
+        db, network: { json: networkJson }, events: { publish: async (envelope) => await outbox.emit(envelope) }, notify,
+        // The audience word goes into the item's own column, the 1:1 mapping, so every gathered page that filters on
+        // it (the gallery, albums, the album page, the sitemap) stops listing an item the owner narrowed. An album's
+        // pictures follow the album (design 2026-11-06). Video's column is its old visibility word.
+        onAudienceChange: async (ref, audience, tx) => {
+            if (ref.kind === 'picture' || ref.kind === 'album') {
+                const table = ref.kind === 'picture' ? 'pics_images' : 'pics_albums';
+                await tx.exec(`UPDATE ${table} SET audience = $1 WHERE id = $2`, [audience, ref.id]);
+                if (ref.kind === 'album') {
+                    await tx.exec('UPDATE pics_images SET audience = $1 WHERE id IN (SELECT image_id FROM pics_album_images WHERE album_id = $2)', [audience, ref.id]);
+                    await tx.exec("UPDATE shares SET audience = $1, revision = revision + 1 WHERE service = $2 AND kind = 'picture' AND resource_id IN (SELECT image_id FROM pics_album_images WHERE album_id = $3)", [audience, SERVICE, ref.id]);
+                }
+            } else if (ref.kind === 'video') {
+                const vis = audience === 'public' ? 'public' : audience === 'link' ? 'unlisted' : 'private';
+                await tx.exec('UPDATE video_uploads SET visibility = $1 WHERE id = $2', [vis, ref.id]);
+            }
+            // After commit, let the service re-send Search what it may keep (a tombstone once a video leaves Everyone).
+            if (changedHook && tx.afterCommit) tx.afterCommit(() => { try { changedHook(ref, audience); } catch {} });
+        },
+    });
 
     const sv = (viewer) => shareViewer(viewer);
     const at = (kind, id) => refOf(kind, id);
@@ -103,6 +124,8 @@ function createSharing({ db, config, outbox, now = Date.now, fetchImpl = globalT
         canEdit: async (viewer, kind, id) => await shares.canEdit(sv(viewer), at(kind, id)),
         get: async (viewer, kind, id) => await shares.get(sv(viewer), at(kind, id)),
         getWithRevision: async (viewer, kind, id) => await shares.getWithRevision(sv(viewer), at(kind, id)),
+        /** Called after a change commits (the video search index kicks itself). */
+        onChanged: (fn) => { changedHook = fn; },
         setAudience: async (viewer, kind, id, audience) => await shares.setAudience(sv(viewer), at(kind, id), TO_SDK[audience] || 'public'),
         addMembers: async (viewer, kind, id, list) => await shares.addMembers(sv(viewer), at(kind, id), list),
         removeMember: async (viewer, kind, id, subject) => await shares.removeMember(sv(viewer), at(kind, id), subject),

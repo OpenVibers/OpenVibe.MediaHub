@@ -120,7 +120,7 @@ function multipart(fields, file) {
             assert.strictEqual(file.headers.get('content-type'), 'image/jpeg');
             assert.strictEqual(file.headers.get('x-content-type-options'), 'nosniff');
             assert.match(file.headers.get('content-security-policy'), /sandbox/);
-            assert.strictEqual(file.headers.get('cache-control'), 'public, max-age=600, s-maxage=600');
+            assert.strictEqual(file.headers.get('cache-control'), 'public, max-age=600, s-maxage=60');
             const meta = await sharp(file.buffer).metadata();
             assert.strictEqual(meta.exif, undefined, 'no EXIF block');
             assert.ok(!file.buffer.includes(Buffer.from('SecretCam')), 'the camera name is gone');
@@ -165,7 +165,7 @@ function multipart(fields, file) {
             const webp = await t.get(`/i/${slug}/w/320.webp`, { headers: PICS });
             assert.strictEqual(webp.status, 200);
             assert.strictEqual(webp.headers.get('content-type'), 'image/webp');
-            assert.strictEqual(webp.headers.get('cache-control'), 'public, max-age=600, s-maxage=600');
+            assert.strictEqual(webp.headers.get('cache-control'), 'public, max-age=600, s-maxage=60');
             const meta = await sharp(webp.buffer).metadata();
             assert.deepStrictEqual([meta.format, meta.width], ['webp', 320]);
             const png = await t.get(`/i/${slug}/w/640.png`, { headers: PICS });

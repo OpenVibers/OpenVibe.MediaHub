@@ -87,6 +87,7 @@ async function createApp(opts = {}) {
     const syncKeys = createSyncKeys({ s, config });
     const drops = createDrops({ s, media, config, uploads, log });
     const videoSearch = require('./video/search-index').createVideoSearchIndex({ s, config, videoAi, fetchImpl, log });
+    if (sharing.onChanged) sharing.onChanged((ref) => { if (ref.kind === 'video' && videoSearch) videoSearch.kick(); });
     const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, pics, picsDescribe, eventsOutbox, videoUploads, videoAi, videoCuts, syncKeys, drops, videoSearch, fetchImpl, log, sharing };
     // IndexNow for openvibe.video: off without a key; a malformed key warns and stays off rather than stopping the site.
     ctx.indexnow = opts.indexnow || (() => {
@@ -145,6 +146,8 @@ async function createApp(opts = {}) {
         crossOriginEmbedderPolicy: false,
         crossOriginResourcePolicy: { policy: 'same-site' },
         referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+        // No HSTS in tests: a test server speaks plain HTTP, and HSTS would upgrade the page's own assets.
+        ...(config.nodeEnv === 'test' ? { strictTransportSecurity: false } : {}),
     }));
     app.use(cookieParser());
 
