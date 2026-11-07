@@ -82,6 +82,9 @@ async function createApp(opts = {}) {
     const picsDescribe = opts.picsDescribe || require('./pics/describe').createPicDescriber({ s, media, config, fetchImpl, log });
     // OpenVibe.Video uploads (server/video/uploads.js): Media VODs in this tenant.
     const videoUploads = require('./video/uploads').createUploads({ s, media, config, log, events: eventsOutbox, sharing });
+    // Uploads written before their watch ids (migration 0024): fill them a batch at a time in the background, so a card
+    // and a page can name /watch?v=<id> without asking Media for every row. A Media refusal only leaves them for later.
+    if (media.enabled) videoUploads.backfillWatchIds({ limit: 200, log }).catch((err) => log.warn('[MediaHub] watch id backfill:', err.message));
     const videoAi = opts.videoAi || require('./video/ai-edit').createAiEdit({ s, media, config, fetchImpl, log });
     const videoCuts = require('./video/cut').createCuts({ s, media, uploads: videoUploads, videoAi, config, log, spawnImpl: opts.spawnImpl });
     const syncKeys = createSyncKeys({ s, config });

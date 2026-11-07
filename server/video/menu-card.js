@@ -74,7 +74,7 @@ function cardFrom(items, at = Date.now()) {
             const item = {
                 title: plain(it.title || (it.kind === 'clip' ? 'Clip' : 'Stream recording'), 80),
                 meta: `${n.toLocaleString('en-US')} ${n === 1 ? 'view' : 'views'} this week`,
-                url: `${BASE}/${it.kind === 'clip' ? 'c' : 'v'}/${Number(it.id)}`,
+                url: `${BASE}${it.watch_id ? `/watch?v=${it.watch_id}` : `/${it.kind === 'clip' ? 'c' : 'v'}/${Number(it.id)}`}`,
             };
             const image = imageOf(it);
             if (image) item.image = image;

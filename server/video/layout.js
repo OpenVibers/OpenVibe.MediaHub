@@ -56,7 +56,8 @@ function renderPage(o) {
     const viewer = o.viewer || { kind: 'anonymous' };
     const signedIn = viewer.kind === 'user';
     const pathNow = o.path || '/';
-    const canonical = `${String(o.baseUrl).replace(/\/+$/, '')}${pathNow.split('?')[0]}`;
+    // A watch page's address is /watch?v=<watch id>, so its canonical cannot drop the query (the default below does).
+    const canonical = o.canonical || `${String(o.baseUrl).replace(/\/+$/, '')}${pathNow.split('?')[0]}`;
     const crumbs = (o.crumbs || []).length
         ? html`<nav class="crumbs" aria-label="Breadcrumbs">${o.crumbs.map((c, i) => html`${i ? ' / ' : ''}${c.href ? html`<a href="${c.href}">${c.label}</a>` : c.label}`)}</nav>`
         : '';

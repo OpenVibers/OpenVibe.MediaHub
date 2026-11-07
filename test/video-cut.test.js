@@ -144,10 +144,11 @@ function probe(buf) {
         });
 
         await check('the pages: the original lists the cut with a link; the copy names its original; a copy is not cut again', async () => {
+            const copied = await s.db.maybe('SELECT watch_id FROM video_uploads WHERE id = $1', [copyId]);
             const orig = await t.get(`/u/${A}`, { as: kim, headers: V });
-            assert.ok(orig.text.includes('Pauses cut') && orig.text.includes(`href="/u/${copyId}"`) && orig.text.includes('1 pause out'));
-            const copy = await t.get(`/u/${copyId}`, { as: kim, headers: V });
-            assert.ok(copy.text.includes('An edited copy of') && copy.text.includes(`href="/u/${A}"`));
+            assert.ok(orig.text.includes('Pauses cut') && orig.text.includes(`href="/watch?v=${copied.watch_id}"`) && orig.text.includes('1 pause out'));
+            const copyPage = await t.get(`/watch?v=${copied.watch_id}`, { as: kim, headers: V });
+            assert.ok(copyPage.text.includes('An edited copy of') && copyPage.text.includes(`href="/u/${A}"`));
             await s.db.exec("UPDATE video_uploads SET status = 'ready', duration_seconds = 9.5 WHERE id = $1", [copyId]);
             const r = await t.get(`/api/v1/videos/${copyId}/cuts`, { as: kim, method: 'POST', json: { mode: 'pauses' }, headers: V });
             assert.deepStrictEqual([r.status, r.json().code], [409, 'cut.is_copy']);

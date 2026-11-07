@@ -98,7 +98,7 @@ function createUploadApi({ ctx, config }) {
         if (!row) return undefined;
         try {
             const out = await up.complete(row);
-            return res.status(202).json({ video: { id: out.id, status: out.status, url: `/u/${out.id}` } });
+            return res.status(202).json({ video: { id: out.id, status: out.status, url: out.watch_id ? `/watch?v=${out.watch_id}` : `/u/${out.id}` } });
         } catch (err) { return problem(res, err); }
     });
 
@@ -107,7 +107,7 @@ function createUploadApi({ ctx, config }) {
         id: c.id, mode: c.mode, status: c.status, progress: Number(c.progress) || 0, error: c.error || null,
         source_seconds: c.source_seconds == null ? null : Number(c.source_seconds), kept_seconds: c.kept_seconds == null ? null : Number(c.kept_seconds),
         removed_count: c.removed_count == null ? null : Number(c.removed_count),
-        result: c.result_upload_id && c.status === 'done' ? { id: c.result_upload_id, url: `/u/${c.result_upload_id}` } : null,
+        result: c.result_upload_id && c.status === 'done' ? { id: c.result_upload_id, url: c.result_watch_id ? `/watch?v=${c.result_watch_id}` : `/u/${c.result_upload_id}` } : null,
         created_at: c.created_at, finished_at: c.finished_at || null,
     });
     r.post('/:id/cuts', express.json({ limit: '4kb' }), async (req, res) => {
@@ -131,7 +131,7 @@ function createUploadApi({ ctx, config }) {
 
 /** The pages; `h` carries the video site's helpers (page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, cards). */
 function mountUploadPages(r, h) {
-    const { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt, playlistForm, upNext, whatItIs, shareButton } = h;
+    const { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt, playlistForm, upNext, whatItIs, shareButton, renderVod, renderClip } = h;
     const up = ctx.videoUploads;
     const cfg = ctx.config.videoUploads;
     const whoOf = (req) => ({ requester: signedIn(req) ? ownerOf(req) : null, staff: isStaff(req) });
@@ -148,7 +148,7 @@ function mountUploadPages(r, h) {
         if (c.status === 'done') {
             const shorter = c.source_seconds && c.kept_seconds ? html` · ${durationLabel(c.source_seconds)} → ${durationLabel(c.kept_seconds)}` : '';
             const count = c.removed_count ? html` · ${c.removed_count} pause${c.removed_count === 1 ? '' : 's'} out` : '';
-            return html`<li>${what}${shorter}${count} · ${c.result_upload_id ? html`<a href="/u/${c.result_upload_id}">open the copy</a>` : 'done'}</li>`;
+            return html`<li>${what}${shorter}${count} · ${c.result_upload_id ? html`<a href="${c.result_watch_id ? `/watch?v=${c.result_watch_id}` : `/u/${c.result_upload_id}`}">open the copy</a>` : 'done'}</li>`;
         }
         if (c.status === 'failed') return html`<li>${what} · not made: ${c.error || 'something went wrong'}</li>`;
         const pct = c.status === 'rendering' ? html` ${Math.round(Number(c.progress || 0) * 100)}%` : '';
@@ -226,23 +226,77 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
             body: html`<h1>Your videos</h1>
 <p><a class="ovv-btn ovv-btn--primary" href="/upload"><i class="fa-solid fa-upload" aria-hidden="true"></i> Upload a video</a></p>
 ${fresh.length ? html`<table class="ovv-table"><thead><tr><th scope="col">Video</th><th scope="col">State</th><th scope="col">Length</th><th scope="col">Views</th><th scope="col">Uploaded</th></tr></thead><tbody>
-${fresh.map((x) => html`<tr><td><a href="/u/${x.id}">${x.title}</a></td><td>${statusText(x)}</td><td>${x.duration_seconds ? durationLabel(x.duration_seconds) : ''}</td><td>${Number(x.views) || 0}</td><td>${dateLabel(x.created_at) || ''}</td></tr>`)}
+${fresh.map((x) => html`<tr><td><a href="${x.watch_id ? `/watch?v=${x.watch_id}` : `/u/${x.id}`}">${x.title}</a></td><td>${statusText(x)}</td><td>${x.duration_seconds ? durationLabel(x.duration_seconds) : ''}</td><td>${Number(x.views) || 0}</td><td>${dateLabel(x.created_at) || ''}</td></tr>`)}
 </tbody></table>` : html`<p class="muted">Nothing uploaded yet.</p>`}`,
         });
     });
 
+    // The numbered address answers 301 to the watch address, so an old link or card still lands on the video.
     r.get('/u/:id', async (req, res) => {
-        let row = await up.byId(req.params.id);
+        let row = await visibleUpload(req, res, String(req.params.id || ''));
+        if (!row) return undefined;
+        if (row.status === 'processing') row = await up.refresh(row);
+        const watchId = row.watch_id || await up.ensureWatchId(row);
+        if (!watchId) return renderUpload(req, res, row);
+        const tail = queryTail(req.query);
+        return res.redirect(301, `/watch?v=${watchId}${tail}`);
+    });
+
+    /** The upload a request may see (its owner, staff, a share's people, the public), or null (and 404). */
+    async function visibleUpload(req, res, id) {
+        const row = await up.byId(id);
         const who = whoOf(req);
-        if (!up.canSee(row, who)) return notFound(req, res);
+        if (!up.canSee(row, who)) { notFound(req, res); return null; }
         // Specific people and Only me: the share row decides, beside the old column. A row written before the
         // sharing model (an import, a cut) does not exist yet: the column still decides, failing closed for private.
-        const own = who.requester && row.owner === who.requester;
+        const own = Boolean(who.requester && row.owner === who.requester);
         if (!own && !who.staff && ctx.sharing) {
             const share = await ctx.sharing.shareOf('video', row.id).catch(() => null);
-            if (share && !await ctx.sharing.canView(req.viewer, 'video', row.id).catch(() => false)) return notFound(req, res);
+            if (share && !await ctx.sharing.canView(req.viewer, 'video', row.id).catch(() => false)) { notFound(req, res); return null; }
         }
-        if (row.status === 'processing') row = await up.refresh(row);
+        return row;
+    }
+
+    /** A query as the tail of /watch?v=<id> (its own ?v= is never carried): ?t= a moment, ?list= a playlist. */
+    function queryTail(query) {
+        const qs = new URLSearchParams();
+        for (const [k, v] of Object.entries(query || {})) {
+            if (k === 'v') continue;
+            for (const x of (Array.isArray(v) ? v : [v])) if (x != null) qs.append(k, String(x));
+        }
+        const s = qs.toString();
+        return s ? `&${s}` : '';
+    }
+
+    /**
+     * One watch root for recordings, clips and uploads: /watch?v=<watch id>. Media resolves an id to its VOD or clip
+     * (one id space across the two); an upload of this tenant is its Media VOD, so it renders the upload page, and a
+     * Live recording or clip renders as it did on /v/:id or /c/:id. A local row answers even when Media is unreachable.
+     */
+    r.get('/watch', async (req, res) => {
+        const watchId = String(req.query.v || '');
+        if (!/^[A-Za-z0-9_-]{11}$/.test(watchId)) return notFound(req, res);
+        let row = await up.byWatchId(watchId);
+        let ref = row ? { kind: 'vod', id: Number(row.media_vod_id) } : null;
+        if (!ref) {
+            const out = await ctx.media.watchResolve(watchId);
+            if (out.ok && out.data && (out.data.kind === 'vod' || out.data.kind === 'clip') && Number.isSafeInteger(Number(out.data.id))) ref = out.data;
+        }
+        if (!ref) return notFound(req, res);
+        if (ref.kind === 'clip') return h.renderClip(req, res, String(ref.id));
+        row = row || await up.byMediaVod(Number(ref.id));
+        if (row) {
+            const visible = await visibleUpload(req, res, row.id);
+            if (!visible) return undefined;
+            return renderUpload(req, res, visible);
+        }
+        return h.renderVod(req, res, String(ref.id));
+    });
+
+    /** An upload's watch page, rendered (as /watch?v=<watch id>, or by its /u/<id> until it has an id). */
+    async function renderUpload(req, res, row) {
+        const who = whoOf(req);
+        const own = Boolean(who.requester && row.owner === who.requester);
         const manage = own || who.staff;
         const ready = row.status === 'ready';
         const vod = ready ? await up.playback(row) : null;
@@ -261,6 +315,8 @@ ${fresh.map((x) => html`<tr><td><a href="/u/${x.id}">${x.title}</a></td><td>${st
             views: Number(row.views) || 0,
         });
         const thumb = httpsUrl(row.thumbnail_url);
+        // The page's one address: /watch?v=<watch id> (its /u/<id> redirects here until an id exists).
+        const watchPath = row.watch_id ? `/watch?v=${row.watch_id}` : `/u/${row.id}`;
         if (row.status === 'processing') res.set('Refresh', '15');   // the page reloads itself until Media is done
         // Playlists (kind upload, by seq): a ready video anyone else may watch can be saved, and ?list= plays the next one.
         const saveForm = ready && row.state === 'active' && row.visibility !== 'private' && playlistForm ? await playlistForm(req, 'upload', row.seq) : '';
@@ -287,6 +343,7 @@ ${fresh.map((x) => html`<tr><td><a href="/u/${x.id}">${x.title}</a></td><td>${st
             title: row.title,
             styles: ['kit.css'],
             description: about,
+            canonical: `${ctx.config.video.url}${watchPath}`,
             ...(listed && thumb ? { image: thumb, ogType: 'video.other' } : {}),
             scripts: ready ? ['js/video.js'] : [],
             player: !!(ready && vod),
@@ -295,7 +352,7 @@ ${fresh.map((x) => html`<tr><td><a href="/u/${x.id}">${x.title}</a></td><td>${st
 ${req.query.saved === '1' ? notice('Saved.', 'ok') : ''}${req.query.reported === '1' ? notice('Thanks: the report reached OpenVibe staff.', 'ok') : ''}
 ${row.state === 'hidden' ? notice('Hidden after reports: only you and OpenVibe staff can see it until staff decide.', 'warn') : ''}
 ${row.visibility === 'private' && ready ? notice('Private: only you (and OpenVibe staff) can see this video.', 'info') : ''}
-${original && original.state !== 'removed' ? html`<p class="ovv-fine ovv-edited-from">An edited copy of <a href="/u/${original.id}">${original.title}</a>, made by the AI cut.</p>` : ''}
+${original && original.state !== 'removed' ? html`<p class="ovv-fine ovv-edited-from">An edited copy of <a href="${original.watch_id ? `/watch?v=${original.watch_id}` : `/u/${original.id}`}">${original.title}</a>, made by the AI cut.</p>` : ''}
 ${ready && vod ? html`<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${thumb ? html` poster="${`${thumb}?w=1280&fmt=webp`}" data-ov-thumb="${`${thumb}?w=32&fmt=webp`}" data-ov-ambient` : ''} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${hlsAttrs(vod)}>${tracks}</video></div>`
         : html`<div class="ovv-player-wrap ovv-processing" role="status">${row.status === 'processing' ? html`<p><i class="fa-solid fa-gear fa-spin" aria-hidden="true"></i> Processing: OpenVibe.Media is making it playable. This page reloads by itself.</p>`
             : row.status === 'failed' ? html`<p>This upload could not be processed. ${row.error || ''}</p>`
@@ -306,7 +363,7 @@ ${what}
 ${channel ? html`<a class="ovv-avatar" href="/@${channel}" aria-hidden="true" tabindex="-1">${channel.slice(0, 1).toUpperCase()}${/^[A-Za-z0-9_]{1,32}$/.test(channel) ? html`<img src="${ctx.config.networkUrl}/avatar/${channel}" alt="" loading="lazy">` : ''}</a>` : ''}
 <div class="ovv-byline-text">${channel ? html`<a class="ovv-channel-name" href="/@${channel}">@${channel}</a>` : ''}
 </div>
-<div class="ovv-byline-actions">${saveForm}${raw(shareButton({ url: `${ctx.config.video.url}/u/${row.id}`, title: row.title, text: about, image: thumb || '', timeFrom: ready && vod ? '.ovv-player' : null }))}</div>
+<div class="ovv-byline-actions">${saveForm}${raw(shareButton({ url: `${ctx.config.video.url}${watchPath}`, title: row.title, text: about, image: thumb || '', timeFrom: ready && vod ? '.ovv-player' : null }))}</div>
 </div>
 ${row.description ? html`<section class="ovv-panel ovv-description"><p>${row.description}</p></section>` : ''}
 ${aiDone && ai.overview ? html`<section class="ovv-panel" aria-labelledby="h-ai"><h2 id="h-ai">About this video</h2><p>${ai.overview}</p><p class="ovv-fine">Written by AI from the video's sound and pictures (OpenVibe.AI, run on OpenVibe's own servers).</p>
@@ -326,7 +383,7 @@ ${manage ? html`<section class="ovv-panel ovv-owner" aria-labelledby="h-owner"><
 <form class="ovv-owner-delete" method="post" action="/u/${row.id}/delete"><label class="ovv-confirm"><input type="checkbox" name="confirm" value="1" required> I want to delete it for good</label> <button class="ovv-btn ovv-btn--danger" type="submit">Delete</button></form>
 </details></section>` : ''}
 ${cutsOn ? cutPanel(row, cuts, cutBusy, reel) : ''}
-${aiDone && ai.chapters.length > 1 ? html`<section class="ovv-panel ovv-chapters" aria-labelledby="h-chapters"><h2 id="h-chapters">Chapters</h2><ol>${ai.chapters.map((c) => html`<li><a href="/u/${row.id}?t=${c.start}" data-ovv-chapter="${c.start}"><span class="ovv-time">${vttTime(c.start).slice(0, 8)}</span><span>${c.title}</span></a></li>`)}</ol><p class="ovv-fine">From the video's highlights (AI).</p></section>` : ''}
+${aiDone && ai.chapters.length > 1 ? html`<section class="ovv-panel ovv-chapters" aria-labelledby="h-chapters"><h2 id="h-chapters">Chapters</h2><ol>${ai.chapters.map((c) => html`<li><a href="${watchPath}?t=${c.start}" data-ovv-chapter="${c.start}"><span class="ovv-time">${vttTime(c.start).slice(0, 8)}</span><span>${c.title}</span></a></li>`)}</ol><p class="ovv-fine">From the video's highlights (AI).</p></section>` : ''}
 ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report this video</summary>
 <form method="post" action="/u/${row.id}/report">
 <fieldset><legend>What is wrong?</legend>${Object.entries(REASON_TEXT).map(([k, t]) => html`<label class="ovv-radio"><input type="radio" name="reason" value="${k}" required> ${t}</label>`)}</fieldset>
@@ -336,7 +393,7 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
 </aside>
 </div>`,
         });
-    });
+    }
 
     // The AI's transcript and chapters as WebVTT tracks, for whoever may see the video.
     async function aiOf(req) {
@@ -364,7 +421,7 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
             await up.update(row, { title: b.title === undefined ? undefined : b.title, description: b.description, visibility: b.visibility === undefined ? undefined : b.visibility });
         } catch (err) {
             if (!(err instanceof UploadError)) throw err;
-            return page(req, res, { title: 'Not saved', body: html`<h1>Not saved</h1><p>${err.detail}</p><p><a href="/u/${row.id}">Back</a></p>` }, err.status);
+            return page(req, res, { title: 'Not saved', body: html`<h1>Not saved</h1><p>${err.detail}</p><p><a href="${row.watch_id ? `/watch?v=${row.watch_id}` : `/u/${row.id}`}">Back</a></p>` }, err.status);
         }
         if (ctx.videoSearch) ctx.videoSearch.kick();
         return res.redirect(303, `/u/${row.id}?saved=1`);
@@ -379,7 +436,7 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
             await ctx.videoCuts.request(row, who, String((req.body || {}).mode || 'pauses'));
         } catch (err) {
             if (!(err instanceof UploadError)) throw err;
-            return page(req, res, { title: 'Not started', body: html`<h1>The cut did not start</h1><p>${err.detail}</p><p><a href="/u/${row.id}">Back to the video</a></p>` }, err.status);
+            return page(req, res, { title: 'Not started', body: html`<h1>The cut did not start</h1><p>${err.detail}</p><p><a href="${row.watch_id ? `/watch?v=${row.watch_id}` : `/u/${row.id}`}">Back to the video</a></p>` }, err.status);
         }
         return res.redirect(303, `/u/${row.id}#h-cut`);
     });
@@ -404,7 +461,7 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
             await up.report(row, { reporter: signedIn(req) ? ownerOf(req) : up.addressId(req.ip), reason: String(b.reason || ''), note: b.note });
         } catch (err) {
             if (!(err instanceof UploadError)) throw err;
-            return page(req, res, { title: 'Not sent', body: html`<h1>Not sent</h1><p>${err.detail}</p><p><a href="/u/${row.id}">Back</a></p>` }, err.status);
+            return page(req, res, { title: 'Not sent', body: html`<h1>Not sent</h1><p>${err.detail}</p><p><a href="${row.watch_id ? `/watch?v=${row.watch_id}` : `/u/${row.id}`}">Back</a></p>` }, err.status);
         }
         if (ctx.videoSearch) ctx.videoSearch.kick();
         return res.redirect(303, `/u/${row.id}?reported=1`);
@@ -413,7 +470,7 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
     /** A card for an upload (home, channel). */
     return function uploadCard(x) {
         return card({
-            href: `/u/${x.id}`, thumb: httpsUrl(x.thumbnail_url), title: x.title,
+            href: x.watch_id ? `/watch?v=${x.watch_id}` : `/u/${x.id}`, thumb: httpsUrl(x.thumbnail_url), title: x.title,
             channel: x.owner_username || null, channelHref: x.owner_username ? `/@${x.owner_username}` : null,
             duration: x.duration_seconds ? durationLabel(x.duration_seconds) : null,
             date: dateLabel(x.ready_at || x.created_at) || null, iso: x.ready_at || x.created_at || null,

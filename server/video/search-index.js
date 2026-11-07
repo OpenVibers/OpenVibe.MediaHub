@@ -28,7 +28,7 @@ function documentFor(row, { videoUrl, ai = null }) {
     const transcript = ai && ai.status === 'done' && Array.isArray(ai.segments) ? ai.segments.map((x) => x.text).join(' ') : '';
     return {
         visibility: 'public',
-        canonical_url: `${videoUrl}/u/${row.id}`,
+        canonical_url: `${videoUrl}${row.watch_id ? `/watch?v=${row.watch_id}` : `/u/${row.id}`}`,
         title: String(row.title || 'Video').slice(0, 500),
         summary: String(row.description || overview || (channel ? `A video by @${channel} on OpenVibe.Video.` : 'A video on OpenVibe.Video.')).slice(0, 4000),
         body: [row.title, row.description, overview, transcript.slice(0, 20000)].filter(Boolean).join('\n').slice(0, 48000),

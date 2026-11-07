@@ -159,7 +159,10 @@ function downloadsFor(kind, id, what) {
  * null; `chapters` = [{ offset_seconds, description }]; `transcript` = [{ start, text }]; `long` = the video is an
  * hour or longer. Null when there is none of the three.
  */
-function companion({ kind, id, chat, chapters, transcript, long }) {
+function companion({ kind, id, watchId = null, chat, chapters, transcript, long }) {
+    // A chapter is a moment on the item's watch page: /watch?v=<watch id>&t=<seconds>, or the numbered page until it has
+    // an id (which redirects). The downloads below stay the numeric routes the files are served on.
+    const at = watchId ? `/watch?v=${watchId}` : `/${kind === 'clip' ? 'c' : 'v'}/${id}`;
     const tabs = [];
     if (chat && chat.rows.length) {
         const total = chat.rows.length + chat.leftOut;
@@ -173,7 +176,7 @@ function companion({ kind, id, chat, chapters, transcript, long }) {
         tabs.push({
             key: 'chapters', tab: 'Chapters', title: 'Chapters', count: chapters.length,
             note: 'Made by AI from the stream',
-            body: html`<ol class="ovv-tp-body ovv-chapter-list">${chapters.map((m) => html`<li><a href="/${kind === 'clip' ? 'c' : 'v'}/${id}?t=${m.offset_seconds}" data-ovv-chapter="${m.offset_seconds}" title="${m.description}"><span class="ovv-time">${clockOf(m.offset_seconds, long)}</span><span class="ovv-chapter-title">${m.description}</span></a></li>`)}</ol>`,
+            body: html`<ol class="ovv-tp-body ovv-chapter-list">${chapters.map((m) => html`<li><a href="${at}?t=${m.offset_seconds}" data-ovv-chapter="${m.offset_seconds}" title="${m.description}"><span class="ovv-time">${clockOf(m.offset_seconds, long)}</span><span class="ovv-chapter-title">${m.description}</span></a></li>`)}</ol>`,
         });
     }
     if (transcript && transcript.length) {
