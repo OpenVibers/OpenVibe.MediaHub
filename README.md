@@ -531,5 +531,5 @@ Part of the [OpenVibe network](https://openvibe.network). Built in the open by [
 <!-- versions:start -->
 - openvibe-contracts: v0.320.0
 - openvibe-sdk: v0.97.1
-- openvibe-shared: v4.137.0
+- openvibe-shared: v4.139.0
 <!-- versions:end -->
