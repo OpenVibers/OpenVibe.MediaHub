@@ -1,18 +1,18 @@
 'use strict';
 // The Markdown twins of openvibe.video's public pages (openvibe-shared/agent-layer): the home and the
-// watch pages of a recording (/v/:id) and a clip (/c/:id).
+// watch pages of a recording or clip, at /watch?v=<watch id> (and the numbered /v/:id, /c/:id pages it still answers).
 //
 // A twin is the page's own render: the video router answers the request in-process, signed out, so a
 // twin cannot drift from the page a browser gets and never carries a signed-in person's view. A page
 // that is not public (a private recording, a missing item) has no twin.
-const TWIN_PATH_RE = /^\/(?:v|c)\/\d+$/;
+const TWIN_PATH_RE = /^(?:\/(?:v|c)\/\d+|\/watch)$/;
 
 /** A request as an anonymous browser makes it: no session, no cookies, the video host. */
 function anonymousRequest(path, search, host) {
     const url = path + search;
     return {
         method: 'GET', url, originalUrl: url, path,
-        params: {}, query: {},
+        params: {}, query: Object.fromEntries(new URLSearchParams(String(search || '').replace(/^\?/, ''))),
         headers: { accept: 'text/html', host },
         cookies: {}, body: undefined, protocol: 'https', secure: true,
         ip: '127.0.0.1', ips: ['127.0.0.1'], hostname: host,

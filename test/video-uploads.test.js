@@ -37,7 +37,12 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         const req = http.request({ hostname: u.hostname, port: u.port, path: u.pathname + u.search, method, headers: h }, (res) => {
             const chunks = [];
             res.on('data', (c) => chunks.push(c));
-            res.on('end', () => { const text = Buffer.concat(chunks).toString('utf8'); resolve({ status: res.statusCode, headers: res.headers, text, json: () => JSON.parse(text) }); });
+            res.on('end', () => {
+                // A numbered watch page answers 301 to /watch?v=<id>: a GET follows it, as a browser does.
+                if (res.statusCode === 301 && method === 'GET' && res.headers.location) { vreq(base, res.headers.location, { cookie }).then(resolve, reject); return; }
+                const text = Buffer.concat(chunks).toString('utf8');
+                resolve({ status: res.statusCode, headers: res.headers, text, json: () => JSON.parse(text) });
+            });
         });
         req.on('error', reject);
         if (data) req.write(data);
@@ -87,7 +92,7 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         assert.strictEqual(vod.meta.owner_subject, kim.subject, 'the uploader is in the VOD\'s meta');
         const done1 = await vreq(t.base, `/api/v1/videos/${id}/complete`, { method: 'POST', cookie: kimCookie });
         assert.strictEqual(done1.status, 202);
-        assert.strictEqual(done1.json().video.url, `/u/${id}`);
+        assert.strictEqual(done1.json().video.url, `/watch?v=${[...t.media.vods.values()][0].watch_id}`);
     });
 
     await check('the watch page plays it from Media, and it is on the channel, the home page and the sitemap', async () => {
@@ -104,9 +109,10 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         assert.ok(page.text.includes('<a class="ovv-channel-name" href="/@kim">@kim</a>'));
         assert.ok(page.text.includes('Report this video'), 'others may report it');
         assert.ok(!page.text.includes('Manage this video'));
-        assert.ok((await vreq(t.base, '/')).text.includes(`href="/u/${id}"`), 'the home page');
-        assert.ok((await vreq(t.base, '/@kim')).text.includes(`href="/u/${id}"`), 'the channel');
-        assert.ok((await vreq(t.base, '/sitemap.xml')).text.includes(`https://openvibe.video/u/${id}`), 'the sitemap');
+        const wid = [...t.media.vods.values()][0].watch_id;
+        assert.ok((await vreq(t.base, '/')).text.includes(`href="/watch?v=${wid}"`), 'the home page');
+        assert.ok((await vreq(t.base, '/@kim')).text.includes(`href="/watch?v=${wid}"`), 'the channel');
+        assert.ok((await vreq(t.base, '/sitemap.xml')).text.includes(`https://openvibe.video/watch?v=${wid}`), 'the sitemap');
         const mine = await vreq(t.base, '/me/videos', { cookie: kimCookie });
         assert.ok(mine.text.includes('Trip to the coast') && mine.text.includes('Public'));
     });
@@ -122,8 +128,9 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         const listUrl = saved.headers.location;
         const listId = listUrl.split('/').pop();
         const list = await vreq(t.base, listUrl, { cookie: samCookie });
-        assert.ok(list.text.includes(`href="/u/${id}"`) && list.text.includes('Trip to the coast'), 'the playlist shows the upload');
-        assert.ok(list.text.includes(`href="/u/${id}?list=${listId}"`), 'Play all starts it');
+        const wid = [...t.media.vods.values()][0].watch_id;
+        assert.ok(list.text.includes(`href="/watch?v=${wid}"`) && list.text.includes('Trip to the coast'), 'the playlist shows the upload');
+        assert.ok(list.text.includes(`href="/watch?v=${wid}&amp;list=${listId}"`), 'Play all starts it');
         await vreq(t.base, `/playlists/${listId}/visibility`, { method: 'POST', cookie: samCookie, form: { visibility: 'public' } });
         await vreq(t.base, '/playlists/add', { method: 'POST', cookie: samCookie, form: { kind: 'vod', id: '101', playlist: listId } });
         const inList = await vreq(t.base, `/u/${id}?list=${listId}`);

@@ -126,8 +126,9 @@ function fakeRes() {
     const never = createMenuCardHandler({ feed: async () => { throw new Error('down'); }, now: () => t });
     const none = fakeRes();
     await never({}, none.res);
-    assert.strictEqual(none.status(), 503);
-    assert.strictEqual(none.body().error, 'menu_unavailable');
+    assert.strictEqual(none.status(), 200);
+    assert.deepStrictEqual(none.body(), [], 'a failed build answers [] (never a 500)');
+    assert.strictEqual(none.headers['Cache-Control'], 'no-store');
 
     console.log('video menu card: rows, week views, merge, cache, CORS, one source down and no card');
 })().catch((err) => { console.error(err); process.exit(1); });

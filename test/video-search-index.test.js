@@ -54,6 +54,7 @@ function startSearch() {
         [id, o.title || 'Trip to the coast', o.description || 'Waves and wind.', o.visibility || 'public', o.status || 'ready', o.state || 'active']);
     const ids = { pub: 'vup_01J0000000000000000000000A', priv: 'vup_01J0000000000000000000000B', proc: 'vup_01J0000000000000000000000C', hidden: 'vup_01J0000000000000000000000D' };
     await insert(ids.pub);
+    await s.db.exec("UPDATE video_uploads SET watch_id = $2 WHERE id = $1", [ids.pub, 'E'.repeat(11)]);
     await insert(ids.priv, { visibility: 'private' });
     await insert(ids.proc, { status: 'processing' });
     await insert(ids.hidden, { state: 'hidden' });
@@ -69,7 +70,7 @@ function startSearch() {
         assert.strictEqual(r.upserted, 1, JSON.stringify(r));
         assert.deepStrictEqual([...search.docs.keys()], [ids.pub]);
         const doc = search.docs.get(ids.pub);
-        assert.strictEqual(doc.canonical_url, `https://openvibe.video/u/${ids.pub}`);
+        assert.strictEqual(doc.canonical_url, `https://openvibe.video/watch?v=${'E'.repeat(11)}`);
         assert.strictEqual(doc.title, 'Trip to the coast');
         assert.deepStrictEqual(doc.facets, { kind: 'upload', channel: 'kim', minutes: 2 });
         assert.strictEqual(doc.revision, 1);

@@ -41,6 +41,8 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
     const deletedVods = [];
     const vodState = { duration: 42.5, completeFails: false };
     let vodSeq = 0;
+    // The id a row answers to at openvibe.video/watch?v=: 11 URL-safe base64 characters, minted once per VOD.
+    const watchIdOf = (id) => crypto.createHash('sha256').update(`watch:${id}`).digest('base64url').slice(0, 11);
     const state = { down: false, tokenRejects: false };
     let seq = 0;
 
@@ -116,9 +118,15 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
         if (path.startsWith('/api/v1/')) {
             if (state.tokenRejects || req.headers.authorization !== `Bearer ${SERVICE_TOKEN}`) return problem(res, 401, 'auth.required', 'Authentication required');
             const parts = path.split('/').filter(Boolean);   // api v1 :app vods [:id] [chunks|complete]
+            if (parts[3] === 'watch') {
+                // GET /api/v1/:app/watch/:watch_id → which item it is (a VOD here), or 404. One id space, as Media has.
+                const wanted = String(parts[4] || '');
+                const vod = [...vods.values()].find((v) => !v.deleted && v.watch_id === wanted);
+                return vod ? json(res, 200, { kind: 'vod', id: vod.id }) : problem(res, 404, 'media.watch.not_found', 'No such watch id');
+            }
             if (parts[3] !== 'vods') return problem(res, 404, 'route.not_found', 'no such route');
             const vodPublicOf = (v) => ({
-                id: v.id, title: v.title, visibility: v.visibility, user_id: v.user_id, is_recording: v.status !== 'ready',
+                id: v.id, watch_id: v.watch_id, title: v.title, visibility: v.visibility, user_id: v.user_id, is_recording: v.status !== 'ready',
                 duration_seconds: v.status === 'ready' ? vodState.duration : 0, file_size: v.bytes.length,
                 file_url: v.status === 'ready' ? `https://openvibe.media/v/vod-${v.id}.mp4` : null,
                 hls_url: v.status === 'ready' ? `https://openvibe.media/o/med_vod${v.id}/master.m3u8` : null,
@@ -129,7 +137,7 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
                 const body = JSON.parse(raw.toString('utf8') || '{}');
                 const id = ++vodSeq;
                 if (body.user_id != null && !/^\d+$/.test(String(body.user_id))) return problem(res, 500, 'vod.create', 'invalid input syntax for type bigint');   // as Media's column refuses it
-                vods.set(id, { id, title: body.title, visibility: body.visibility, user_id: body.user_id, meta: body.meta, bytes: Buffer.alloc(0), types: [], status: 'recording' });
+                vods.set(id, { id, watch_id: watchIdOf(id), title: body.title, visibility: body.visibility, user_id: body.user_id, meta: body.meta, bytes: Buffer.alloc(0), types: [], status: 'recording' });
                 return json(res, 201, { id });
             }
             const v = vods.get(Number(parts[4]));
