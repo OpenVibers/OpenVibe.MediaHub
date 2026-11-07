@@ -21,7 +21,7 @@ const SECRET = 'r'.repeat(48);
 function vget(base, path, cookie) {
     return new Promise((resolve, reject) => {
         const u = new URL(base + path);
-        const req = http.request({ hostname: u.hostname, port: u.port, path: u.pathname, headers: { Host: 'openvibe.video', ...(cookie ? { cookie } : {}) } }, (res) => {
+        const req = http.request({ hostname: u.hostname, port: u.port, path: u.pathname + u.search, headers: { Host: 'openvibe.video', ...(cookie ? { cookie } : {}) } }, (res) => {
             const chunks = [];
             res.on('data', (c) => chunks.push(c));
             res.on('end', () => resolve({ status: res.statusCode, text: Buffer.concat(chunks).toString('utf8') }));
@@ -93,13 +93,16 @@ function vget(base, path, cookie) {
 
     await check('it plays for its owner only, and their channel name is filled in when they open their videos', async () => {
         const [row] = await rows();
+        const watch = `/watch?v=${row.watch_id}`;
+        assert.match(row.watch_id, /^[A-Za-z0-9_-]{11}$/, 'the import got a watch id of its own');
         assert.strictEqual((await vget(t.base, `/u/${row.id}`)).status, 404, 'private: not for the signed-out');
         assert.strictEqual((await vget(t.base, `/u/${row.id}`, t.signIn(sam))).status, 404, 'nor for anyone else');
-        const page = await vget(t.base, `/u/${row.id}`, t.signIn(kim));
+        assert.strictEqual((await vget(t.base, `/u/${row.id}`, t.signIn(kim))).status, 301, 'the old address is a redirect');
+        const page = await vget(t.base, watch, t.signIn(kim));
         assert.strictEqual(page.status, 200);
         assert.match(page.text, /Morning take/);
         const mine = await vget(t.base, '/me/videos', t.signIn(kim));
-        assert.match(mine.text, new RegExp(`/u/${row.id}`));
+        assert.ok(mine.text.includes(watch), 'the video is listed at its watch address');
         assert.strictEqual((await db.maybe('SELECT owner_username FROM video_uploads WHERE id = $1', [row.id])).owner_username, 'kim');
     });
 
