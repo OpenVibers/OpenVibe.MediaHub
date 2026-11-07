@@ -349,6 +349,7 @@ ${folder ? html`<input type="hidden" name="folder" value="${folder.id}">` : ''}
             // The one page script: the chunked, resumable upload (many files, dropped anywhere, a tray), the view and
             // sort it remembers, the instant filter. Every form here works without it.
             scripts: ['js/upload.js'],
+            css: ['css/drive.css'],
             body: html`<div class="dr" data-drive data-place="${title}">
 <aside class="dr-side" aria-label="Your drive">
 <details class="dr-new" data-new><summary class="dr-new-btn">${ui.icon('plus')}<span>New</span></summary>
@@ -412,6 +413,7 @@ ${showShares ? html`<section class="dr-sec" id="shared" aria-labelledby="h-share
             title: row.name,
             styles: ['kit.css'],
             scripts: ['js/upload.js'],
+            css: ['css/drive.css'],
             body: html`<div class="fv" data-drive>
 ${pathBar(path, row.name)}
 <div class="fv-grid">

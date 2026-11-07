@@ -48,7 +48,8 @@ function setRelease(id) { if (id) RELEASE = String(id); }
 
 /**
  * o: title, description, body (html), viewer, config, path, index (default false), scripts [rel],
- *    crumbs [{ label, href }], jsonLd [nodes] (serialised by openvibe-shared/seo), styles [openvibe-shared stylesheet names]
+ *    crumbs [{ label, href }], jsonLd [nodes] (serialised by openvibe-shared/seo), styles [openvibe-shared stylesheet names],
+ *    css [this site's own extra stylesheets, e.g. 'css/drive.css']
  */
 function renderPage(o) {
     const viewer = o.viewer || { kind: 'anonymous' };
@@ -96,6 +97,7 @@ function renderPage(o) {
 ${appIcon.headTags({ site: 'media-hub' })}
 <link rel="stylesheet" href="${asset('css/app.css')}">
 ${(o.styles || []).map((name) => `<link rel="stylesheet" href="${esc(ovServe.url(name))}">`).join('\n')}
+${(o.css || []).map((rel) => `<link rel="stylesheet" href="${asset(rel)}">`).join('\n')}
 ${render(scripts)}
 <meta name="ov-boost" content="media-hub@${esc(RELEASE)}">
 <script src="${ovServe.url('boost.js')}" data-main="#main" defer></script>`,

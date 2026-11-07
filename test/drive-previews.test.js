@@ -22,12 +22,14 @@ const { bytes, upload, share } = require('./helpers/drive');
     await check('the list shows a picture of each image and the type of everything else', async () => {
         const page = await t.get('/files', { as: kim });
         assert.strictEqual(page.status, 200);
-        assert.ok(page.text.includes(`<img class="file-thumb" src="/files/${photo.id}/preview?w=96" alt="" width="48" height="48" loading="lazy" decoding="async">`));
-        assert.match(page.text, /<span class="file-thumb file-thumb-type" aria-hidden="true">TXT<\/span>/);
-        assert.match(page.text, /<span class="file-thumb file-thumb-type" aria-hidden="true">SVG<\/span>/, 'an SVG is never rendered: its type, not a picture');
+        // The drive's cards (2026-11-07): an image is its own picture, anything else a tile of its kind with its extension.
+        assert.ok(page.text.includes(`<span class="dr-thumb is-pic" data-kind="image"><img src="/files/${photo.id}/preview?w=640" alt="" loading="lazy" decoding="async"></span>`));
+        assert.match(page.text, /<span class="dr-thumb" data-kind="doc"><svg[^>]*>.*?<\/svg><b>txt<\/b><\/span>/);
+        assert.match(page.text, /<span class="dr-thumb" data-kind="image"><svg[^>]*>.*?<\/svg><b>svg<\/b><\/span>/, 'an SVG is never rendered: its type, not a picture');
+        assert.ok(!page.text.includes(`/files/${vector.id}/preview`), 'and no preview is asked for');
         const one = await t.get(`/files/${photo.id}`, { as: kim });
-        assert.ok(one.text.includes(`<figure class="file-preview"><img src="/files/${photo.id}/preview?w=640" alt="holiday.png" decoding="async"></figure>`));
-        assert.ok(!(await t.get(`/files/${notes.id}`, { as: kim })).text.includes('file-preview'));
+        assert.ok(one.text.includes(`<figure class="fv-stage is-pic" data-kind="image"><img src="/files/${photo.id}/preview?w=640" alt="holiday.png" decoding="async"></figure>`));
+        assert.ok(!(await t.get(`/files/${notes.id}`, { as: kim })).text.includes('/preview?w=640'));
     });
 
     await check('a preview is Media\'s signed WebP variant, private to the browser and never an attachment', async () => {
