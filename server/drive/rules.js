@@ -48,6 +48,9 @@ const EXPIRY_MIN_HOURS = 1;
 const EXPIRY_MAX_HOURS = 30 * 24;
 const EXPIRY_DEFAULT_HOURS = 7 * 24;
 
+// A deleted file waits in the bin this long before the due purge deletes it and asks Media to delete the object.
+const BIN_DAYS = 30;
+
 /** The declared content type, normalised, or null when it is not a media type at all. */
 function normalizeType(value) {
     const t = String(value == null ? '' : value).split(';')[0].trim().toLowerCase();
@@ -147,5 +150,6 @@ module.exports = {
     ID_RE, SLUG_RE, isFileId, isFolderId, isUploadId, isSlug, isUsername,
     NAME_MAX, FOLDER_NAME_MAX, REASONS, REASON_TEXT, SUSPEND_AT_REPORTS, SUSPEND_IMMEDIATELY,
     EXPIRY_MIN_HOURS, EXPIRY_MAX_HOURS, EXPIRY_DEFAULT_HOURS, EXPIRY_CHOICES,
+    BIN_DAYS,
     normalizeType, safeContentType, cleanName, cleanText, fileName, headerSafeName, contentDisposition, expiryHours, formatBytes,
 };

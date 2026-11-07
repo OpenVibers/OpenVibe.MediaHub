@@ -6,7 +6,7 @@
 module.exports = {
     id: 'download',
     name: 'OpenVibe.Download',
-    purpose: 'A private drive on the OpenVibe network: keep your own files in your account, share them with a link that expires, and back up a folder from your computer.',
+    purpose: 'A private drive on the OpenVibe network: keep your own files in your account, rename and move them, delete them to a 30-day bin, share them with a link that expires, and back up a folder from your computer.',
     home: 'https://openvibe.download',
     site: 'openvibe.download',
     api: '/api/v1',

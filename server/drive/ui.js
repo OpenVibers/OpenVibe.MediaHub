@@ -37,6 +37,7 @@ const PATHS = {
     pencil: 'M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16zM13.5 6.5l4 4',
     move: 'M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.2h7.5A2.5 2.5 0 0 1 21 9.7v7.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5zM9 13.5h6.5M13 11l2.5 2.5L13 16',
     trash: 'M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5',
+    restore: 'M4 10a8 8 0 1 1 2.3 6M4 4.5V10h5.5',
     home: 'M4 11 12 4l8 7v8.5a.5.5 0 0 1-.5.5H15v-6H9v6H4.5a.5.5 0 0 1-.5-.5z',
     drive: 'M3.5 14.5 7 5h10l3.5 9.5M3.5 14.5h17V19a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1zM16.5 17.25h.01',
     chevron: 'M9.5 6l6 6-6 6',
@@ -125,7 +126,18 @@ function folderTile(f, { count = null } = {}) {
 }
 
 /** A file card (the grid) that is also a row (the list): the same markup, laid out by the view. */
-function fileCard(row, { where = null } = {}) {
+function fileCard(row, { where = null, bin = false } = {}) {
+    // In the bin the card is not a link to a file page: the file is out of the drive until it is restored.
+    if (bin) {
+        return html`<li class="dr-file" data-name="${String(row.name).toLowerCase()}" data-time="${row.created_at || ''}" data-size="${Number(row.size) || 0}" data-kind="${kindOf(row)}">
+${thumb(row, { big: true })}
+<span class="dr-file-text"><span class="dr-name">${row.name}</span>
+<span class="dr-meta"><span>${rules.formatBytes(row.size)}</span><span>Deleted ${when(row.binned_at)}</span>${where ? html`<span class="dr-where">${icon('folder')}${where}</span>` : ''}</span></span>
+<div class="dr-bin-actions">
+<form method="post" action="/files/${row.id}/restore"><button class="dr-btn is-quiet" type="submit">${icon('restore')}Restore</button></form>
+<form method="post" action="/files/${row.id}/purge" data-confirm="Delete “${row.name}” forever? Its bytes are deleted from OpenVibe.Media and this cannot be undone."><button class="dr-btn is-quiet is-danger" type="submit">${icon('trash')}Delete forever</button></form>
+</div></li>`;
+    }
     return html`<li class="dr-file" data-name="${String(row.name).toLowerCase()}" data-time="${row.created_at || ''}" data-size="${Number(row.size) || 0}" data-kind="${kindOf(row)}">
 <a class="dr-file-open" href="/files/${row.id}">${thumb(row, { big: true })}
 <span class="dr-file-text"><span class="dr-name">${row.name}</span>
@@ -136,7 +148,7 @@ function fileCard(row, { where = null } = {}) {
 <a href="/files/${row.id}#share">${icon('link')}Share a link</a>
 <a href="/files/${row.id}#move">${icon('move')}Move to…</a>
 <form class="dr-rename" method="post" action="/files/${row.id}/rename"><label>${icon('pencil')}<span class="sr-only">New name for ${row.name}</span><input name="name" type="text" value="${row.name}" maxlength="${rules.NAME_MAX}" required></label><button type="submit">Rename</button></form>
-<form method="post" action="/files/${row.id}/delete" data-confirm="Delete “${row.name}”? Its share links stop working, and this cannot be undone."><button class="is-danger" type="submit">${icon('trash')}Delete</button></form>
+<form method="post" action="/files/${row.id}/delete" data-confirm="Delete “${row.name}”? It goes to the bin for ${rules.BIN_DAYS} days, and its share links stop working at once."><button class="is-danger" type="submit">${icon('trash')}Delete</button></form>
 </div></details></li>`;
 }
 

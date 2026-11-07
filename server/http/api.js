@@ -6,12 +6,16 @@
  * in ./principal.js). A write made with the session cookie must come from openvibe.download itself (same-origin).
  *
  *   GET    /ping                                  anyone   liveness
- *   GET    /files?folder_id=&limit=&before=       person   your drive (one folder, or the root)
+ *   GET    /files?folder_id=&limit=&before=&q=    person   your drive (one folder, the root, or every folder by name)
  *   POST   /files                                 person   start an upload: { name, size, content_type, folder_id }
  *   GET    /files/:id                             person   one of your files
- *   DELETE /files/:id                             person   delete it (and ask Media to delete the object)
+ *   PATCH  /files/:id                             person   { name?, folder_id? (null = the top) }
+ *   DELETE /files/:id                             person   put it in the bin (or ?forever=1: delete a binned file now)
+ *   POST   /files/:id/restore                     person   take a file back out of the bin
  *   GET    /folders                               person   your folders
  *   POST   /folders                               person   make one: { name, parent_id }
+ *   PATCH  /folders/:id                           person   rename it: { name }
+ *   DELETE /folders/:id                           person   delete an empty one (a sync key may not)
  *   POST   /shares                                person   share a file or a folder: { file_id|folder_id, hours, usernames }
  *   DELETE /shares/:slug                          person   revoke one
  *   GET    /usage                                 person   what you hold and what is left
@@ -177,6 +181,7 @@ function createApi(ctx) {
     const wireFile = (row) => ({
         id: row.id, name: row.name, size: Number(row.size), content_type: row.content_type,
         sha256: row.sha256, folder_id: row.folder_id, created_at: row.created_at,
+        binned_at: row.binned_at ? new Date(row.binned_at).toISOString() : null,
         object: { media_object_id: row.object_id },
     });
     const wireFolder = (row) => ({ id: row.id, name: row.name, parent_id: row.parent_id, created_at: row.created_at });
@@ -197,18 +202,21 @@ function createApi(ctx) {
     // ── Files ───────────────────────────────────────────────
     r.get('/files', person, limits.reads('media-hub.file.read'), async (req, res) => {
         const owner = personOf(req);
+        // `q` searches every folder; folder_id is ignored then. Without it, one folder (or the root) is listed.
+        const q = rules.cleanText(req.query.q || '', 100);
         const folderId = req.query.folder_id ? String(req.query.folder_id) : null;
-        if (folderId && !rules.isFolderId(folderId)) return problem(req, res, 422, 'folder.invalid', 'folder_id must be a folder id.');
+        if (!q && folderId && !rules.isFolderId(folderId)) return problem(req, res, 422, 'folder.invalid', 'folder_id must be a folder id.');
         const limit = Math.min(200, Math.max(1, Number.parseInt(req.query.limit, 10) || 100));
         const before = rules.isFileId(req.query.before) ? String(req.query.before) : null;
-        const rows = await drive.listFiles(owner, { folderId, limit, before });
-        const folders = await drive.listFolders(owner);
+        const rows = q ? await drive.searchFiles(owner, q, { limit }) : await drive.listFiles(owner, { folderId, limit, before });
+        const folders = q ? [] : (await drive.listFolders(owner)).filter((f) => (f.parent_id || null) === folderId);
         return res.json({
-            folder_id: folderId,
-            folders: folders.filter((f) => (f.parent_id || null) === folderId).map(wireFolder),
+            folder_id: q ? null : folderId,
+            ...(q ? { q } : {}),
+            folders: folders.map(wireFolder),
             files: rows.map(wireFile),
             usage: await drive.usage(owner),
-            note: 'Your files only. A file is private until you make a share link for it.',
+            note: q ? 'Search covers every folder; files in the bin are not listed.' : 'Your files only. A file is private until you make a share link for it.',
         });
     });
 
@@ -244,10 +252,35 @@ function createApi(ctx) {
         return res.json({ file: wireFile(row), shares: (await drive.listShares(row.owner)).filter((x) => x.file_id === row.id).map(wireShare) });
     });
 
+    r.patch('/files/:id', person, async (req, res) => {
+        const b = req.body || {};
+        if (b.name === undefined && b.folder_id === undefined) return problem(req, res, 422, 'file.invalid', 'Nothing to change: send a name, a folder_id, or both.');
+        if (b.folder_id !== undefined && b.folder_id !== null && !rules.isFolderId(b.folder_id)) return problem(req, res, 422, 'folder.invalid', 'folder_id must be a folder id, or null for the top.');
+        const out = await drive.updateFile(personOf(req), String(req.params.id || ''), {
+            name: b.name,
+            folderId: b.folder_id === undefined ? undefined : (b.folder_id ? String(b.folder_id) : null),
+        });
+        if (out.error) return problem(req, res, refused(out.error), out.error, out.detail);
+        return res.json({ file: wireFile(out.file) });
+    });
+
     r.delete('/files/:id', person, async (req, res) => {
-        const out = await drive.deleteFile(personOf(req), String(req.params.id || ''));
+        const id = String(req.params.id || '');
+        const forever = req.query.forever === '1' || req.query.forever === 'true';
+        if (forever) {
+            const out = await drive.purgeFile(personOf(req), id);
+            if (out.error) return problem(req, res, 404, 'file.not_found', out.detail || 'No such file in the bin.');
+            return res.status(204).end();
+        }
+        const out = await drive.deleteFile(personOf(req), id);
         if (out.error) return problem(req, res, 404, 'file.not_found', 'No such file.');
         return res.status(204).end();
+    });
+
+    r.post('/files/:id/restore', person, async (req, res) => {
+        const out = await drive.restoreFile(personOf(req), String(req.params.id || ''));
+        if (out.error) return problem(req, res, 404, 'file.not_found', out.detail || 'No such file in the bin.');
+        return res.json({ file: wireFile(out.file) });
     });
 
     // ── Folders ─────────────────────────────────────────────
@@ -264,6 +297,19 @@ function createApi(ctx) {
         if (out.error) return problem(req, res, out.error === 'folder.exists' ? 409 : 422, out.error, out.detail);
         res.set('Location', `/api/v1/folders/${out.folder.id}`);
         return res.status(201).json({ folder: wireFolder(out.folder) });
+    });
+
+    r.patch('/folders/:id', person, async (req, res) => {
+        const out = await drive.renameFolder(personOf(req), String(req.params.id || ''), (req.body || {}).name);
+        if (out.error) return problem(req, res, out.error === 'folder.not_found' ? 404 : out.error === 'folder.exists' ? 409 : 422, out.error, out.detail);
+        return res.json({ folder: wireFolder(out.folder) });
+    });
+
+    /** A sync key backs files up: it may rename or move, but deleting a folder is the person's own call. */
+    r.delete('/folders/:id', person, notSyncKey, async (req, res) => {
+        const out = await drive.deleteFolder(personOf(req), String(req.params.id || ''));
+        if (out.error) return problem(req, res, out.error === 'folder.not_found' ? 404 : 409, out.error, out.detail);
+        return res.status(204).end();
     });
 
     // ── Shares ──────────────────────────────────────────────
@@ -304,7 +350,7 @@ function createApi(ctx) {
         return res.json({
             usage: await drive.usage(owner),
             days: (await drive.usageDays(owner)).map((d) => ({ day: d.day, uploads: Number(d.uploads) })),
-            note: 'Media\'s own quotas are per tenant (this whole service); these numbers are per person.',
+            note: 'Media\'s own quotas are per tenant (this whole service); these numbers are per person. Bytes in the bin still count against storage until they are purged.',
         });
     });
 

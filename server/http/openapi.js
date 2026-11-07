@@ -68,11 +68,11 @@ route('get', '/ping', {
 
 // ── Files ──────────────────────────────────────────────────────────────────────────────────────
 route('get', '/files', {
-    operationId: 'listFiles', summary: 'One folder of your drive (or the root)', tags: ['files'], security: PERSON,
-    description: 'A person\'s own files: no app, agent or service token can hold them. `before` is the last file id of the previous page.',
-    parameters: [query('folder_id', str(), 'A folder id; absent for the root'), query('limit', integer({ minimum: 1, maximum: 200, default: 100 })), query('before', str(), 'The last file id of the previous page')],
-    responses: { 200: json('The folder, its subfolders, files and usage', { type: 'object', properties: {
-        folder_id: nullable('string'), folders: arrayOf(ref('Folder')), files: arrayOf(ref('File')), usage: ref('Usage'), note: str(),
+    operationId: 'listFiles', summary: 'One folder of your drive (or the root), or a search of every folder', tags: ['files'], security: PERSON,
+    description: 'A person\'s own files: no app, agent or service token can hold them. `before` is the last file id of the previous page. With `q`, every folder is searched and `folder_id` is ignored; files in the bin are never listed.',
+    parameters: [query('folder_id', str(), 'A folder id; absent for the root'), query('limit', integer({ minimum: 1, maximum: 200, default: 100 })), query('before', str(), 'The last file id of the previous page'), query('q', str(), 'Words a file\'s name holds, searched in every folder')],
+    responses: { 200: json('The folder, its subfolders, files and usage (the search answer has q and no folders)', { type: 'object', properties: {
+        folder_id: nullable('string'), q: str(), folders: arrayOf(ref('Folder')), files: arrayOf(ref('File')), usage: ref('Usage'), note: str(),
     } }), ...errors() },
 });
 route('post', '/files', {
@@ -88,10 +88,24 @@ route('get', '/files/{id}', {
     parameters: [path('id', str())],
     responses: { 200: json('The file and its shares', { type: 'object', properties: { file: ref('File'), shares: arrayOf(ref('Share')) } }), ...errors() },
 });
-route('delete', '/files/{id}', {
-    operationId: 'deleteFile', summary: 'Delete one of your files (and ask Media to delete the object)', tags: ['files'], security: PERSON,
+route('patch', '/files/{id}', {
+    operationId: 'updateFile', summary: 'Rename or move one of your files', tags: ['files'], security: PERSON,
+    description: 'Send a name, a folder_id, or both. `folder_id: null` moves the file to the top of the drive. A sync key may rename and move its owner\'s files.',
     parameters: [path('id', str())],
-    responses: { 204: { description: 'Deleted' }, ...errors([401, 403, 404, 429]) },
+    requestBody: body({ type: 'object', properties: { name: str(), folder_id: nullable('string') } }),
+    responses: { 200: json('The file', { type: 'object', properties: { file: ref('File') } }), ...errors([401, 403, 404, 422, 429]) },
+});
+route('delete', '/files/{id}', {
+    operationId: 'deleteFile', summary: 'Put one of your files in the bin, or delete a binned file forever', tags: ['files'], security: PERSON,
+    description: 'Without `forever`, the file goes to the bin for 30 days: its share links stop at once and the bytes stay in Media, still counted against storage. With `forever=1`, a file already in the bin is deleted for good and Media is asked to delete the object.',
+    parameters: [path('id', str()), query('forever', { type: 'boolean' }, 'Delete a binned file now instead of binning it (1 or true)')],
+    responses: { 204: { description: 'Binned (or deleted forever)' }, ...errors([401, 403, 404, 429]) },
+});
+route('post', '/files/{id}/restore', {
+    operationId: 'restoreFile', summary: 'Take a file back out of the bin', tags: ['files'], security: PERSON,
+    description: 'Restores a binned file. Its share links stay revoked; if its folder is gone it comes back at the top of the drive.',
+    parameters: [path('id', str())],
+    responses: { 200: json('The restored file', { type: 'object', properties: { file: ref('File') } }), ...errors([401, 403, 404, 429]) },
 });
 
 // ── Folders ────────────────────────────────────────────────────────────────────────────────────
@@ -103,6 +117,18 @@ route('post', '/folders', {
     operationId: 'createFolder', summary: 'Make a folder', tags: ['folders'], security: PERSON,
     requestBody: body({ type: 'object', required: ['name'], properties: { name: str(), parent_id: str() } }),
     responses: { 201: json('The folder', { type: 'object', properties: { folder: ref('Folder') } }), ...errors([401, 403, 409, 422, 429]) },
+});
+route('patch', '/folders/{id}', {
+    operationId: 'renameFolder', summary: 'Rename one of your folders', tags: ['folders'], security: PERSON,
+    parameters: [path('id', str())],
+    requestBody: body({ type: 'object', required: ['name'], properties: { name: str() } }),
+    responses: { 200: json('The folder', { type: 'object', properties: { folder: ref('Folder') } }), ...errors([401, 403, 404, 409, 422, 429]) },
+});
+route('delete', '/folders/{id}', {
+    operationId: 'deleteFolder', summary: 'Delete an empty folder', tags: ['folders'], security: PERSON,
+    description: 'A folder that still holds a file or a folder answers 409 folder.not_empty: empty it first. A sync key may not delete folders.',
+    parameters: [path('id', str())],
+    responses: { 204: { description: 'Deleted' }, ...errors([401, 403, 404, 409, 429]) },
 });
 
 // ── Shares ────────────────────────────────────────────────────────────────────────────────────
@@ -202,7 +228,7 @@ function openapi({ servers = DEFAULT_SERVERS } = {}) {
             schemas: {
                 File: { type: 'object', required: ['id', 'name', 'size', 'content_type'], properties: {
                     id: str(), name: str(), size: integer(), content_type: str(), sha256: nullable('string'), folder_id: nullable('string'),
-                    created_at: str(), object: { type: 'object', properties: { media_object_id: nullable('string') } },
+                    created_at: str(), binned_at: nullable('string', { format: 'date-time' }), object: { type: 'object', properties: { media_object_id: nullable('string') } },
                 } },
                 Folder: { type: 'object', required: ['id', 'name'], properties: {
                     id: str(), name: str(), parent_id: nullable('string'), created_at: str(),

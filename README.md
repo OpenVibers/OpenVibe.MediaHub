@@ -137,6 +137,12 @@ calls Media server-side only, naming the person with `X-OV-Subject`, and never h
   resume after a dropped connection.
 - **Downloads:** MediaHub checks access, then streams from Media with its own headers. Range requests pass through,
   so downloads resume.
+- **The bin:** `DELETE /api/v1/files/:id` (or the page's Delete) sets `binned_at` and revokes the file's share links;
+  the bytes stay in Media and still count against storage for 30 days. `POST /api/v1/files/:id/restore` brings it
+  back; `DELETE /api/v1/files/:id?forever=1` deletes it now. A due job (`server/drive/bin.js`) purges files binned
+  more than 30 days ago, 200 at a time. `PATCH /api/v1/files/:id` renames/moves, `PATCH`/`DELETE /api/v1/folders/:id`
+  rename/delete an empty folder, and `GET /api/v1/files?q=` searches every folder. All of it is documented in
+  `/openapi.json` and migration `0023_files_bin.sql` adds the column and its index.
 
 MediaHub owns the drive: `mh_files`, `mh_folders`, `mh_shares`, `mh_reports`, `mh_usage` (migrations/0002_mediahub.sql).
 

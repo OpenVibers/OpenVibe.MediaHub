@@ -155,15 +155,16 @@ const HOUR = 3_600_000;
         assert.strictEqual((await share(t, nia, { file_id: f.id, hours: 1 })).status, 201);
     });
 
-    await check('deleting a file takes its share links with it', async () => {
+    await check('deleting a file takes its share links with it and puts it in the bin', async () => {
         const ola = t.network.addUser('ola');
         const f = await put(ola, 'doomed.bin');
         const slug = (await share(t, ola, { file_id: f.id, hours: 24 })).json().share.slug;
         assert.strictEqual((await t.get(`/s/${slug}`, { as: sam })).status, 200);
+        const before = t.media.deleted.length;
         assert.strictEqual((await t.get(`/api/v1/files/${f.id}`, { as: ola, method: 'DELETE', headers: SAME })).status, 204);
         assert.strictEqual((await t.get(`/s/${slug}`, { as: sam })).status, 404);
         assert.strictEqual((await t.get(`/api/v1/files/${f.id}`, { as: ola })).status, 404, 'and the file is gone for its owner too');
-        assert.ok(t.media.deleted.length > 0, 'Media was asked to delete the object');
+        assert.strictEqual(t.media.deleted.length, before, 'Media keeps the bytes: it is only in the bin');
     });
 
     await t.close();

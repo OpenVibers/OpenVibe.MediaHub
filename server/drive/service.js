@@ -124,25 +124,84 @@ function createService({ s, media, identity, config, log = console }) {
         return row;
     }
 
-    /** One of the person's own files, or null. A file is private: nobody else's id resolves here. */
+    /** One of the person's own live files, or null. A file is private: nobody else's id resolves here. */
     const ownFile = async (owner, id) => {
         if (!rules.isFileId(id)) return null;
         const row = await store.getFile(s, id);
-        return row && row.owner === owner && !row.deleted_at ? row : null;
+        return row && row.owner === owner && !row.deleted_at && !row.binned_at ? row : null;
+    };
+
+    /** One of the person's own files in the bin, or null. */
+    const ownBinnedFile = async (owner, id) => {
+        if (!rules.isFileId(id)) return null;
+        const row = await store.getFile(s, id);
+        return row && row.owner === owner && !row.deleted_at && row.binned_at ? row : null;
     };
 
     /**
-     * Delete a file: its shares go at once, the row is soft-deleted here and the object is deleted in Media.
-     * The bytes are Media's to keep or purge (Media's own retention), so this does not claim they are gone.
+     * Delete a file: its share links go at once, and the row goes to the bin for 30 days. The bytes stay in Media
+     * until the due purge takes it, so a restore costs nothing. A binned row still counts against storage.
      */
-    async function deleteFile(owner, id, { by = null } = {}) {
+    async function deleteFile(owner, id) {
         const row = await ownFile(owner, id);
         if (!row) return { error: 'file.not_found' };
         await store.deleteSharesForFile(s, id);
-        await store.softDeleteFile(s, id, nowIso());
+        await store.binFile(s, id, nowIso());
+        return { file: await store.getFile(s, id) };
+    }
+
+    /** Put a binned file back in the drive. Its share links are gone for good; its folder may be too. */
+    async function restoreFile(owner, id) {
+        const row = await ownBinnedFile(owner, id);
+        if (!row) return { error: 'file.not_found', detail: 'No such file in the bin.' };
+        await store.restoreFile(s, id);
+        // The folder may have been deleted while the file sat in the bin; put it back at the top rather than nowhere.
+        if (row.folder_id && !await store.getFolder(s, row.folder_id)) await store.moveFile(s, id, owner, null);
+        return { file: await store.getFile(s, id) };
+    }
+
+    /** What deleteFile did before the bin: the shares go, the row is soft-deleted and Media is asked for the object. */
+    async function hardDelete(row) {
+        await store.deleteSharesForFile(s, row.id);
+        await store.softDeleteFile(s, row.id, nowIso());
         const removed = await media.remove(row.object_id);
         if (!removed.ok) log.warn(`[MediaHub] Media refused to delete ${row.object_id}: ${removed.status} ${removed.code}`);
         return { file: row, media: removed };
+    }
+
+    /** Delete one binned file forever. Only a file already in the bin resolves here. */
+    async function purgeFile(owner, id) {
+        const row = await ownBinnedFile(owner, id);
+        if (!row) return { error: 'file.not_found', detail: 'No such file in the bin.' };
+        return hardDelete(row);
+    }
+
+    /** Empty this person's bin, a batch at a time. */
+    async function emptyBin(owner, { batch = 200 } = {}) {
+        let total = 0;
+        for (;;) {
+            const rows = await store.listBinned(s, owner, { limit: batch });
+            if (!rows.length) return total;
+            for (const row of rows) await hardDelete(row);
+            total += rows.length;
+            if (rows.length < batch) return total;
+        }
+    }
+
+    /**
+     * The due purge: every file binned more than BIN_DAYS ago is deleted forever, in batches of `batch` (the job asks
+     * for 200). Returns how many went. The clock is the store's, so a test can move it.
+     */
+    async function purgeDue({ batch = 200 } = {}) {
+        const cutoff = new Date(s.now() - rules.BIN_DAYS * DAY_MS).toISOString();
+        let total = 0;
+        for (;;) {
+            const rows = await store.dueBinned(s, cutoff, batch);
+            if (!rows.length) return total;
+            for (const row of rows) await hardDelete(row);
+            total += rows.length;
+            if (rows.length < batch) return total;
+        }
     }
 
     /** Rename one of the person's files. The name follows the same rule as an upload's. */
@@ -161,6 +220,27 @@ function createService({ s, media, identity, config, log = console }) {
         if (!row) return { error: 'file.not_found' };
         if (folderId && !await ownFolder(owner, folderId)) return { error: 'folder.not_found', detail: 'That folder does not exist.' };
         await store.moveFile(s, row.id, owner, folderId || null);
+        return { file: await store.getFile(s, row.id) };
+    }
+
+    /**
+     * The API's PATCH /files/:id: a new name and/or a new folder, in one write. An absent field is left alone; a
+     * folder_id of null moves the file to the top.
+     */
+    async function updateFile(owner, id, { name, folderId } = {}) {
+        const row = await ownFile(owner, id);
+        if (!row) return { error: 'file.not_found' };
+        let clean = row.name;
+        if (name !== undefined) {
+            clean = rules.cleanName(name);
+            if (!clean) return { error: 'file.invalid_name', detail: 'A file needs a name.' };
+        }
+        let target = row.folder_id || null;
+        if (folderId !== undefined) {
+            if (folderId && !await ownFolder(owner, folderId)) return { error: 'folder.not_found', detail: 'That folder does not exist.' };
+            target = folderId || null;
+        }
+        await store.updateFile(s, row.id, owner, { name: clean, folderId: target });
         return { file: await store.getFile(s, row.id) };
     }
 
@@ -205,8 +285,8 @@ function createService({ s, media, identity, config, log = console }) {
     }
 
     /**
-     * Delete an empty folder. A folder that still holds something is refused rather than emptied: there is no bin
-     * yet, and a file deleted here is deleted in Media too.
+     * Delete an empty folder. A folder that still holds something is refused rather than emptied: a file in the bin
+     * is already out of the folder, so an emptied folder can go and a restore puts the file back at the top.
      */
     async function deleteFolder(owner, id) {
         const folder = await ownFolder(owner, id);
@@ -318,11 +398,8 @@ function createService({ s, media, identity, config, log = console }) {
         if (share.file_id) {
             const file = await store.getFile(s, share.file_id);
             if (!file) return { error: 'file.not_found' };
-            await store.deleteSharesForFile(s, file.id);
-            await store.softDeleteFile(s, file.id, nowIso());
-            const removed = await media.remove(file.object_id);
-            if (!removed.ok) log.warn(`[MediaHub] Media refused to delete ${file.object_id}: ${removed.status} ${removed.code}`);
-            return { kind: 'file', file, media: removed };
+            const out = await hardDelete(file);
+            return { kind: 'file', ...out };
         }
         const files = await store.listFiles(s, share.owner, { folderId: share.folder_id, limit: 1000 });
         await store.deleteSharesForFolder(s, share.folder_id);
@@ -337,6 +414,8 @@ function createService({ s, media, identity, config, log = console }) {
 
     // ── Reads the pages and the API both need (no SQL outside this module) ──
     const listFiles = (owner, opts) => store.listFiles(s, owner, opts);
+    const listBinned = (owner, opts) => store.listBinned(s, owner, opts);
+    const binCount = (owner) => store.countBinned(s, owner);
     const listFolders = (owner) => store.listFolders(s, owner);
     const listShares = (owner) => store.listShares(s, owner);
     const usageDays = (owner) => store.usageFor(s, owner);
@@ -345,8 +424,9 @@ function createService({ s, media, identity, config, log = console }) {
 
     return {
         uploadAllowed, shareAllowed, usage, dayOf,
-        recordFile, ownFile, deleteFile, renameFile, moveFile, searchFiles,
-        listFiles, listFolders, listShares, usageDays, shareBySlug, reportsFor,
+        recordFile, ownFile, ownBinnedFile, deleteFile, restoreFile, purgeFile, purgeDue, emptyBin, updateFile,
+        renameFile, moveFile, searchFiles,
+        listFiles, listBinned, binCount, listFolders, listShares, usageDays, shareBySlug, reportsFor,
         ownFolder, createFolder, renameFolder, deleteFolder, folderPath,
         createShare, ownShare, revokeShare,
         report, restoreShare, removeShared,

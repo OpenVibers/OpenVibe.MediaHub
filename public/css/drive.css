@@ -272,6 +272,10 @@
 .fv-facts dd { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
 .fv-facts code { font-size: 12px; }
 
+/* The bin: the same card, without the file link, with Restore and Delete forever under it. */
+.dr-bin-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 12px 12px; }
+.dr-bin-note { margin: 0 0 18px; font-size: 13.5px; line-height: 1.5; color: var(--dr-muted); }
+
 /* Phones and narrow tablets: the files first and full width, New as a floating button over a bottom sheet. */
 @media (max-width: 759px) {
   .dr { grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 0; }
