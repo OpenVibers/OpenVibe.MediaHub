@@ -39,7 +39,7 @@ const { asyncRouter } = require('./router');
 const { createDiscoveryRoutes, homeJsonLd, homeDescription } = require('./discovery');
 const { TWIN_PATHS } = require('../drive/agent-pages');
 const { sameOrigin } = require('./principal');
-const { html, raw, table, notice, time, badge, shareButton } = require('../render/html');
+const { html, raw, table, notice, time, badge, shareButton, askAgent } = require('../render/html');
 const { send } = require('../render/layout');
 const rules = require('../drive/rules');
 const ui = require('../drive/ui');
@@ -463,7 +463,7 @@ ${pathBar(path, row.name)}
 <div class="fv-side">
 <h1 class="fv-name">${row.name}</h1>
 <p class="fv-sub"><span class="fv-kind" data-kind="${kind}">${ui.icon(ui.KINDS[kind].icon)}${ui.kindWord(row)}</span><span>${fileSize(row)}</span><span>Added ${ui.when(row.created_at)}</span></p>
-<div class="fv-actions"><a class="dr-btn is-primary" href="/files/${row.id}/download">${ui.icon('download')}Download</a>${raw(shareButton({ url: `${config.baseUrl}/files/${row.id}`, title: row.name, text: `${row.name} — a file on ${SITE_NAME}.`, image: pic ? `${config.baseUrl}/files/${row.id}/preview?w=640` : '', cls: 'dr-btn' }))}</div>
+<div class="fv-actions"><a class="dr-btn is-primary" href="/files/${row.id}/download">${ui.icon('download')}Download</a>${raw(shareButton({ url: `${config.baseUrl}/files/${row.id}`, title: row.name, text: `${row.name} — a file on ${SITE_NAME}.`, image: pic ? `${config.baseUrl}/files/${row.id}/preview?w=640` : '', cls: 'dr-btn' }))}${raw(askAgent({ text: `About my file “${row.name}” (${ui.kindWord(row)}, ${fileSize(row)}): ` }))}</div>
 
 <section class="fv-card" id="share" aria-labelledby="h-share"><h2 id="h-share">${ui.icon('link')}Share a link</h2>
 <form class="fv-share" method="post" action="/files/${row.id}/share">
