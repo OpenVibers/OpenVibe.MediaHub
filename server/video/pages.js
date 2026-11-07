@@ -569,7 +569,7 @@ ${meta([channel, o.extra || null, o.views ? viewsLabel(o.views) : null, o.date ?
 }
 
 function feedCard(item, { views = false } = {}) {
-    const href = item.kind === 'clip' ? `/c/${item.id}` : `/v/${item.id}`;
+    const href = watchHref(item.kind, item.id, item.watch_id);
     return card({
         href,
         kind: item.kind,

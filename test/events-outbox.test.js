@@ -56,8 +56,8 @@ function picsClient(t) {
 
         await check('an upload\'s first time public and ready writes mediahub.video.published once', async () => {
             const up = t0.ctx.videoUploads;
-            const ins = (id, visibility) => s.db.exec(`INSERT INTO video_uploads (id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, parts_received, status, state, created_at, updated_at, ready_at)
-                VALUES ($1, $2, 'kim', 'A walk on the coast', '', $3, 1, 'video/mp4', 10, 10, 1, 1, 'ready', 'active', $4, $4, $4)`, [id, `user:${kim.subject}`, visibility, s.iso()]);
+            const ins = (id, visibility) => s.db.exec(`INSERT INTO video_uploads (id, watch_id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, parts_received, status, state, created_at, updated_at, ready_at)
+                VALUES ($1, 'watchAAAAAA', $2, 'kim', 'A walk on the coast', '', $3, 1, 'video/mp4', 10, 10, 1, 1, 'ready', 'active', $4, $4, $4)`, [id, `user:${kim.subject}`, visibility, s.iso()]);
             const A = 'vup_01J0000000000000000000000A';
             await ins(A, 'private');
             let row = await up.update(await up.byId(A), { title: 'A walk on the coast' });
@@ -66,7 +66,7 @@ function picsClient(t) {
             let ev = await rows('mediahub.video.published');
             assert.strictEqual(ev.length, 1);
             assert.ok(row.published_at);
-            assert.deepStrictEqual([ev[0].visibility, ev[0].payload.url, ev[0].payload.upload], ['public', `https://openvibe.video/u/${A}`, A]);
+            assert.deepStrictEqual([ev[0].visibility, ev[0].payload.url, ev[0].payload.upload], ['public', 'https://openvibe.video/watch?v=watchAAAAAA', A]);
             assert.ok(validate('mediahub.video.published@1', ev[0].payload).valid);
             row = await up.update(row, { visibility: 'private' });
             await up.update(row, { visibility: 'public' });
