@@ -658,7 +658,13 @@ function createVideoRoutes(ctx) {
     const videoHostname = (() => { try { return new URL(config.video.url).hostname; } catch { return 'openvibe.video'; } })();
     // Watch together (Party watch v1, plan R1): the same page as a watch party on openvibe.party, which plays OpenVibe
     // media in step for everyone there. The party takes the page's own address as its media and the item's title.
-    const partyLink = (path, title) => html`<a class="ovv-btn" href="https://openvibe.party/new?media=${encodeURIComponent(`${base}${path}`)}&title=${encodeURIComponent(String(title || 'Watch party'))}"><i class="fa-solid fa-users" aria-hidden="true"></i> Watch together</a>`;
+    // The party plays the item's own file (on openvibe.media, a host the Contracts manifests name); the watch page goes
+    // with it as the party's source. No file yet (still cutting or processing), no button.
+    const partyLink = (path, title, item) => {
+        const file = item ? fileOf(item) : null;
+        if (!file) return '';
+        return html`<a class="ovv-btn" href="https://openvibe.party/new?media=${encodeURIComponent(file)}&source_url=${encodeURIComponent(`${base}${path}`)}&title=${encodeURIComponent(String(title || 'Watch party'))}"><i class="fa-solid fa-users" aria-hidden="true"></i> Watch together</a>`;
+    };
 
     const hasSessionCookie = (req) => Boolean(req.cookies && (req.cookies[ACCESS_COOKIE] || req.cookies[REFRESH_COOKIE]));
     const page = (req, res, o, status = 200) => send(res, status, {
@@ -1378,7 +1384,7 @@ ${channelName ? html`<a class="ovv-avatar" href="${localChannel || liveChannel}"
 <div class="ovv-byline-text">${channelName ? (localChannel ? html`<a class="ovv-channel-name" href="${localChannel}">@${channelName}</a>` : html`<span class="ovv-channel-name">@${channelName}</span>`) : ''}
 ${metaParts.length ? html`<span class="ovv-meta">${metaParts.map((p, i) => (i === 0 ? p : [html` · `, p]))}</span>` : ''}</div>
 </div>
-<div class="ovv-actions">${manageable ? editButton('recording') : ''}${saveForm}${partyLink(watchPath, vod.title || 'Stream recording')}${ownOnly ? '' : clipAction(req, id, vod)}${downloadMenu({ kind: 'vod', id, item: vod, has: { transcript: segs.length, chat: chatRows ? chatRows.rows.length + chatRows.leftOut : 0, chapters: mems.length } })}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: vod.title || 'Stream recording', text: about, image: httpsUrl(vod.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${raw(askAgent({ text: `About the video “${vod.title || 'Stream recording'}” on OpenVibe.Video (${base}${watchPath}): ` }))}${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
+<div class="ovv-actions">${manageable ? editButton('recording') : ''}${saveForm}${partyLink(watchPath, vod.title || 'Stream recording', vod)}${ownOnly ? '' : clipAction(req, id, vod)}${downloadMenu({ kind: 'vod', id, item: vod, has: { transcript: segs.length, chat: chatRows ? chatRows.rows.length + chatRows.leftOut : 0, chapters: mems.length } })}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: vod.title || 'Stream recording', text: about, image: httpsUrl(vod.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${raw(askAgent({ text: `About the video “${vod.title || 'Stream recording'}” on OpenVibe.Video (${base}${watchPath}): ` }))}${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
 </div>
 ${vod.is_recording ? html`<p class="ovv-recording" role="status"><i class="fa-solid fa-circle" aria-hidden="true"></i> This recording is still in progress. <a href="${liveChannel}">Watch the live channel</a>.</p>` : ''}
 </div>
@@ -1516,7 +1522,7 @@ ${clipCredit}
 <div class="ovv-head-row">
 <div class="ovv-byline"><div class="ovv-byline-text"><span class="ovv-channel-name">${clip.auto_generated ? html`<span class="ovv-tag ovv-tag--inline">AI clip</span> ` : ''}${attribution}</span>
 ${clip.created_at ? html`<span class="ovv-meta"><time datetime="${clip.created_at}">${dateLabel(clip.created_at)}</time>${manageable ? html` · ${visibilityBadge(clip.visibility)}` : ''}</span>` : ''}</div></div>
-<div class="ovv-actions">${manageable ? editButton('clip') : ''}${fullRecording ? html`<a class="ovv-btn ovv-btn--primary" href="${fullRecording}" title="Watch the recording it was cut from, from this moment"><i class="fa-solid fa-film" aria-hidden="true"></i> Full recording</a>` : ''}${saveForm}${partyLink(watchPath, clip.title || 'Clip')}${cutting ? '' : downloadMenu({ kind: 'clip', id, item: clip, has: { transcript: segs.length } })}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: clip.title || 'Clip', text: clip.ai_overview || attribution, image: httpsUrl(clip.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${raw(askAgent({ text: `About the clip “${clip.title || 'Clip'}” on OpenVibe.Video (${base}${watchPath}): ` }))}${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
+<div class="ovv-actions">${manageable ? editButton('clip') : ''}${fullRecording ? html`<a class="ovv-btn ovv-btn--primary" href="${fullRecording}" title="Watch the recording it was cut from, from this moment"><i class="fa-solid fa-film" aria-hidden="true"></i> Full recording</a>` : ''}${saveForm}${cutting ? '' : partyLink(watchPath, clip.title || 'Clip', clip)}${cutting ? '' : downloadMenu({ kind: 'clip', id, item: clip, has: { transcript: segs.length } })}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: clip.title || 'Clip', text: clip.ai_overview || attribution, image: httpsUrl(clip.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${raw(askAgent({ text: `About the clip “${clip.title || 'Clip'}” on OpenVibe.Video (${base}${watchPath}): ` }))}${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
 </div>
 </div>
 </div>
