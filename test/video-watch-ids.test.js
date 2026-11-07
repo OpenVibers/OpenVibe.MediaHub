@@ -111,6 +111,8 @@ function request(base, path, host) {
         const r = await getVideo(`/watch?v=${UPLOAD_ONE}`);
         assert.strictEqual(r.status, 200);
         assert.ok(r.text.includes(`<link rel="canonical" href="https://openvibe.video/watch?v=${UPLOAD_ONE}">`), 'canonical');
+        // Its Share button is one of the byline row's own buttons (it was an unstyled class="" box until 11-07).
+        assert.match(r.text, /<button type="button" class="ovv-btn" data-ov-share-sheet/, 'the Share button has the row\'s style');
         assert.ok(r.text.includes(`data-url="https://openvibe.video/watch?v=${UPLOAD_ONE}"`), 'share sheet');
     });
 

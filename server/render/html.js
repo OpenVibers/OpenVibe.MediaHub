@@ -26,23 +26,6 @@ const kit = require('openvibe-shared/kit');
 const code = (s) => html`<code>${s}</code>`;
 
 /**
- * The Share button, built by the shared kit (openvibe-shared 4.114.0): the same quiet button with the same share
- * icon on every OpenVibe site. The navbar fetches the sheet the first time the button is pressed.
- *
- *   url:      the page's own public address — the link that is shared
- *   title:    what the thing is called
- *   text:     a line sent with it (the thing's own summary)
- *   image:    a picture of it (a thumbnail), for the places that take one
- *   embed:    an embeddable player address, for the places that take one
- *   timeFrom: the player whose moment can be shared (a selector), so the sheet can offer "Start at …"
- */
-function shareButton({ title = '', url = '', text = '', image = '', embed = '', timeFrom = null, small = false }) {
-    const line = String(text || '').trim().replace(/\s+/g, ' ').slice(0, 240);
-    const button = kit.share({ title, url, text: line, image, embed, small });
-    return timeFrom ? button.replace('data-ov-share-sheet', `data-ov-share-sheet data-time-from="${esc(timeFrom)}"`) : button;
-}
-
-/**
  * The Share button: the one share sheet every OpenVibe site opens (openvibe-shared 4.114.0). The navbar fetches
  * the sheet the first time the button is pressed, so the button itself only says what is being shared:
  *
@@ -54,7 +37,9 @@ function shareButton({ title = '', url = '', text = '', image = '', embed = '', 
  *
  * Nothing is stored and no clip is made: a moment is the page's own address with a time on it.
  */
-function shareButton({ url = '', title = '', text = '', image = '', timeFrom = null, kind = null, id = null, cls = '', label = 'Share', icon = 'fa-solid fa-share-nodes' }) {
+// A caller with no class of its own gets the kit's quiet button (kit.css is on every page that shows one): an empty class
+// drew an unstyled grey box beside the row's buttons (11-07).
+function shareButton({ url = '', title = '', text = '', image = '', timeFrom = null, kind = null, id = null, cls = 'ovk-btn ovk-btn--quiet', label = 'Share', icon = 'fa-solid fa-share-nodes' }) {
     const line = String(text || '').trim().replace(/\s+/g, ' ');
     const summary = line.length > 240 ? `${line.slice(0, 237).trimEnd()}…` : line;
     return html`<button type="button" class="${cls}" data-ov-share-sheet${url ? html` data-url="${url}"` : ''}${title ? html` data-title="${title}"` : ''}${summary ? html` data-text="${summary}"` : ''}${image ? html` data-image="${image}"` : ''}${timeFrom ? html` data-time-from="${timeFrom}"` : ''}${kind && id ? html` data-kind="${kind}" data-id="${id}"` : ''}><i class="${icon}" aria-hidden="true"></i> ${label}</button>`;
