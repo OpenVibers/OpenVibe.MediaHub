@@ -134,7 +134,8 @@ async function createApp(opts = {}) {
                 // playlist and segments from openvibe.media.
                 mediaSrc: ["'self'", 'blob:', ...MEDIA_ORIGINS],
                 // The watch page counts a view on OpenVibe.Live with a beacon (Live's /api/views).
-                connectSrc: ["'self'", 'https://openvibe.network', 'https://cloudflareinsights.com', 'https://openvibe.events', ...MEDIA_ORIGINS, liveOrigin],
+                // The navbar's Messages count asks Chat (openvibe-shared 4.130.0).
+                connectSrc: ["'self'", 'https://openvibe.chat', 'https://openvibe.network', 'https://cloudflareinsights.com', 'https://openvibe.events', ...MEDIA_ORIGINS, liveOrigin],
                 frameSrc: ["'self'", 'https://openvibe.network'],
                 frameAncestors: ["'none'"],
                 objectSrc: ["'none'"],
