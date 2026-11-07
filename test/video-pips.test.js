@@ -85,6 +85,11 @@ const get = (base, p) => new Promise((resolve, reject) => {
         assert.ok(js.includes("const key = 'ovv-pip-' + window.location.pathname;"), 'where a viewer put it is remembered for this recording');
         const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'video.css'), 'utf8');
         assert.ok(/\.ovv-pip \{ position: absolute; z-index: 2;/.test(css), 'above the picture, under the controls (3)');
+        // Its own shape (2026-11-07: a portrait camera was cut to 16:9): the box follows the video, the video is contained.
+        assert.ok(/\.ovv-pip-video \{[^}]*object-fit: contain/.test(css) && !/\.ovv-pip-video \{[^}]*object-fit: cover/.test(css), 'the recording is shown whole, never cropped');
+        assert.ok(js.includes("v.addEventListener('loadedmetadata', readShape);") && js.includes("v.addEventListener('resize', readShape);"), 'the shape comes from the video, and follows a turned phone');
+        assert.ok(js.includes('box.style.aspectRatio = String(b.a);'), 'the box takes that shape');
+        assert.ok(js.includes('0.85 * r.height'), 'never taller than 85% of the player');
     });
 
     await t.close();
