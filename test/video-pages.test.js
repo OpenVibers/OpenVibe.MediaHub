@@ -434,6 +434,7 @@ function countOccurrences(haystack, needle) {
         const buttons = r.text.match(/<button[^>]*data-ov-share-sheet[^>]*>/g) || [];
         assert.strictEqual(buttons.length, 1, 'one Share button: ' + buttons.join(' | '));
         assert.ok(buttons[0].includes('data-url="https://openvibe.video/@streamer"'), buttons[0]);
+        assert.ok(!/class=""/.test(buttons[0]), 'a styled button, never class="": ' + buttons[0]);
     });
 
     await check('an unknown /api path on the video host is a JSON 404, not a page', async () => {

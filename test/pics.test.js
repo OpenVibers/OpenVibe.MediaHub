@@ -155,6 +155,7 @@ function multipart(fields, file) {
             assert.strictEqual(buttons.length, 1, 'one Share button: ' + buttons.join(' | '));
             assert.ok(buttons[0].includes(`data-url="https://openvibe.pics/i/${slug}"`), buttons[0]);
             assert.ok(buttons[0].includes(`data-image="https://openvibe.pics${direct}"`), buttons[0]);
+            assert.ok(buttons[0].includes('class="ovk-btn ovk-btn--quiet"'), 'a styled button, never class="": ' + buttons[0]);
             assert.ok((await t.get(`/i/${slug}`, { headers: PICS, as: kim })).text.includes('Delete this picture'));
         });
 
