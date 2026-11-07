@@ -47,7 +47,7 @@ const cleanText = (v, max) => String(v == null ? '' : v).replace(/\r\n?/g, '\n')
 /** A hash with too few or too many set bits is a near-flat picture: its dHash is noise, not an identity. */
 const distinctive = (h) => { const n = images.distance(h, '0000000000000000'); return n >= 8 && n <= 56; };
 
-function createPics({ s, media, config, log = console, events = null }) {
+function createPics({ s, media, config, log = console, events = null, sharing = null }) {
     const cfg = config.pics;
     const addressKey = crypto.createHash('sha256').update(`pics-address:${config.oauth.clientSecret || 'dev'}`).digest();
 
@@ -136,6 +136,8 @@ function createPics({ s, media, config, log = console, events = null }) {
         });
         if (events && !anonymous) await events.pictureUploaded(r);
         return r; });
+        // Everyone by default: a picture has always been reachable by its link. The person can narrow it in the sheet.
+        if (sharing) await sharing.register(row.owner, 'picture', row.id, 'public');
         return { ok: true, image: row, ...(deleteKey ? { deleteKey } : {}), ...(similar ? { similar: { id: similar.id, slug: similar.slug } } : {}) };
     }
 
@@ -228,6 +230,7 @@ function createPics({ s, media, config, log = console, events = null }) {
         if (!t) return { ok: false, status: 422, code: 'pics.album_title', detail: 'Give the album a name.' };
         if (await store.albumCount(s, owner) >= cfg.albumsMax) return { ok: false, status: 409, code: 'pics.album_limit', detail: `You have ${cfg.albumsMax} albums, the most you can.` };
         const row = await store.insertAlbum(s, { id: s.newId('alb'), slug: slug(), owner, title: t, description: cleanText(description, LIMITS.description), created_at: s.iso() });
+        if (sharing) await sharing.register(owner, 'album', row.id, 'public');
         return { ok: true, album: row };
     }
 
