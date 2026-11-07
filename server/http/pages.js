@@ -393,6 +393,7 @@ ${folders.length ? html`<section class="dr-sec" aria-labelledby="h-folders"><h2 
 <ul class="dr-folders" data-items>${folders.map((f) => ui.folderTile(f))}</ul></section>` : ''}
 ${files.length ? html`<section class="dr-sec" aria-labelledby="h-files"><h2 id="h-files" class="dr-h">Files <span>${files.length}</span></h2>
 <ul class="dr-files" data-items>${files.map((row) => ui.fileCard(row, { where: q ? (row.folder_id ? labels.get(row.folder_id) || 'A folder' : 'My files') : null }))}</ul></section>` : ''}
+${!empty && !files.length && !q ? html`<label class="dr-empty is-slim" for="file">${ui.icon('upload')}<span><b>No loose files here</b> Drop them anywhere, or tap to choose.</span></label>` : ''}
 <p class="dr-nomatch" data-nomatch hidden>Nothing in this view matches. Press Enter to search every folder.</p>
 ${showShares ? html`<section class="dr-sec" id="shared" aria-labelledby="h-shares"><h2 id="h-shares" class="dr-h">Live share links <span>${liveShares.length}</span></h2>
 <ul class="dr-links">${liveShares.map((sh) => { const [ic, who] = whoOf(sh); return html`<li class="dr-link">${ui.icon(ic)}<span class="dr-link-main"><a href="/s/${sh.slug}">${shareNames.get(sh.slug) || `/s/${sh.slug}`}</a>

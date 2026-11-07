@@ -74,6 +74,13 @@ const { SAME, bytes, upload, share } = require('./helpers/drive');
         assert.ok(!root.text.includes('return.pdf'), 'and not in the root');
         assert.ok(root.text.includes('Taxes 2026'), 'where the folder is listed');
         assert.strictEqual((await t.get(`/files/${file.id}`, { as: kim })).status, 200);
+        // Folders and no loose files: one slim drop line under the folders, never the big empty card or a blank band.
+        const lea = t.network.addUser('lea');
+        await t.get('/folders', { as: lea, form: { name: 'Photos' }, headers: SAME });
+        const only = await t.get('/files', { as: lea });
+        assert.ok(only.text.includes('Photos'), 'her folder is listed');
+        assert.ok(only.text.includes('class="dr-empty is-slim"') && only.text.includes('No loose files here'), 'with the slim drop line');
+        assert.ok(!only.text.includes('Your drive is empty'), 'not the empty-drive card');
     });
 
     await check('the file page carries one Share button, with the file page\'s own address', async () => {

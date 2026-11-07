@@ -184,6 +184,10 @@
 .dr-empty:hover { border-color: color-mix(in srgb, var(--dr-acc) 60%, transparent); background: color-mix(in srgb, var(--dr-acc) 5%, transparent); }
 .dr-empty .dr-i { width: 54px; height: 54px; padding: 12px; border-radius: 16px; color: var(--dr-acc); background: color-mix(in srgb, var(--dr-acc) 14%, transparent); margin-bottom: 6px; }
 .dr-empty b { font-size: 1.15rem; color: var(--dr-text); }
+/* Folders but no loose files: one dashed line under them, not the big empty card and not a blank gap. */
+.dr-empty.is-slim { grid-auto-flow: column; justify-content: start; align-items: center; gap: 12px; margin-top: 18px; padding: 14px 18px; border-radius: 14px; text-align: left; }
+.dr-empty.is-slim .dr-i { width: 36px; height: 36px; padding: 8px; border-radius: 11px; margin: 0; }
+.dr-empty.is-slim b { font-size: 1rem; margin-right: 4px; }
 .dr-nomatch { padding: 24px 8px; text-align: center; color: var(--dr-muted); }
 
 .dr-links { display: grid; gap: 8px; }
@@ -291,7 +295,9 @@
     border-radius: 24px 24px 0 0; border-bottom: 0; box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .5), var(--dr-shadow); animation: dr-sheet .24s cubic-bezier(.2, .8, .2, 1); }
   .dr-new-panel::before { content: ""; justify-self: center; width: 40px; height: 4px; margin: 2px 0 8px; border-radius: 99px; background: color-mix(in srgb, var(--dr-text) 25%, transparent); }
   .dr-pick, .dr-new-row { min-height: 60px; }
-  .dr-main { order: 1; padding-bottom: 72px; }
+  /* Room for the floating New at the page's end, not between the files and the places (it left a blank band). */
+  .dr { padding-bottom: 72px; }
+  .dr-main { order: 1; }
   .dr-bar-row { margin-bottom: 16px; }
   .dr-title { flex-basis: 100%; }
   .dr-tools { flex: 1 1 100%; }
