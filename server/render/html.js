@@ -44,6 +44,12 @@ function shareButton({ url = '', title = '', text = '', image = '', timeFrom = n
     const summary = line.length > 240 ? `${line.slice(0, 237).trimEnd()}…` : line;
     return html`<button type="button" class="${cls}" data-ov-share-sheet${url ? html` data-url="${url}"` : ''}${title ? html` data-title="${title}"` : ''}${summary ? html` data-text="${summary}"` : ''}${image ? html` data-image="${image}"` : ''}${timeFrom ? html` data-time-from="${timeFrom}"` : ''}${kind && id ? html` data-kind="${kind}" data-id="${id}"` : ''}><i class="${icon}" aria-hidden="true"></i> ${label}</button>`;
 }
+
+/**
+ * "Ask your agent" (openvibe-shared 4.135.0, plan Z3): one chip beside Share. A tap opens the person's Vibe in the
+ * Dock with this page's context waiting in its box, unsent. text is escaped by kit.askAgent.
+ */
+function askAgent({ text = '' }) { return kit.askAgent({ text }); }
 const time = (iso) => (iso ? html`<time datetime="${iso}">${String(iso).replace('T', ' ').replace(/\.\d+Z$/, ' UTC').replace(/Z$/, ' UTC')}</time>` : '—');
 
 /** A <table> from headers and rows of cells (cells are already html or plain values). Each cell names its column
@@ -65,4 +71,4 @@ const notice = (text, kind = 'info') => html`<div class="notice ${kind}" role="s
 const csrfField = (token) => html`<input type="hidden" name="csrf" value="${token}">`;
 const badge = (text, kind = '') => html`<span class="badge ${kind}">${text}</span>`;
 
-module.exports = { esc, html, raw, Raw, render, code, time, table, problemBox, notice, csrfField, badge, shareButton };
+module.exports = { esc, html, raw, Raw, render, code, time, table, problemBox, notice, csrfField, badge, shareButton, askAgent };

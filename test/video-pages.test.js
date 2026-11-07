@@ -379,6 +379,11 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('Discuss on OpenVibe.Community'));
         assert.ok(r.text.includes('data-ovv-chapter'));
         assert.ok(r.text.includes('data-ovv-seek'));
+        // The Ask your agent chip (openvibe-shared 4.135.0): beside Share, the video's title and public address.
+        const asks = r.text.match(/<button[^>]*data-ov-ask[^>]*>/g) || [];
+        assert.strictEqual(asks.length, 1, 'one Ask your agent chip: ' + asks.join(' | '));
+        assert.ok(asks[0].includes('data-ov-ask="About the video “A public recording” on OpenVibe.Video (https://openvibe.video/v/101): "'), asks[0]);
+        assert.ok(asks[0].includes('class="ovk-ask ovk-btn'), 'the shared kit chip');
     });
 
     await check('the clip watch page attributes its maker and links the full recording', async () => {

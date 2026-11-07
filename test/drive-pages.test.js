@@ -115,6 +115,15 @@ const { SAME, bytes, upload, share } = require('./helpers/drive');
             assert.ok(r.text.includes('&lt;script&gt;') || r.text.includes('&lt;img src=x'), `${where} does not show it at all`);
         }
 
+        // The file page's Ask your agent chip (openvibe-shared 4.135.0): the typed name is escaped, and no link is in it.
+        const filePage = await t.get(`/files/${file.id}`, { as: kim });
+        const asks = filePage.text.match(/<button[^>]*data-ov-ask[^>]*>/g) || [];
+        assert.strictEqual(asks.length, 1, 'one Ask your agent chip: ' + asks.join(' | '));
+        assert.ok(asks[0].includes('data-ov-ask="About my file “&lt;script&gt;alert(&quot;x&quot;)') && asks[0].includes('” (Document, 50 B): "'), asks[0]);
+        assert.ok(!asks[0].includes('<script>'), 'the file name is escaped in the chip');
+        assert.ok(!asks[0].includes('http') && !asks[0].includes('/files/'), 'no link to the file in the chip');
+        assert.ok(asks[0].includes('class="ovk-ask ovk-btn'), 'the shared kit chip');
+
         // A report note is text somebody typed, and it is escaped where staff read it.
         const queue = await t.get('/staff', { as: t.network.addUser('mod', { role: 'global_mod' }) });
         assert.ok(queue.text.includes('&lt;b&gt;not bold&lt;/b&gt;'), 'the note is escaped in the queue');
