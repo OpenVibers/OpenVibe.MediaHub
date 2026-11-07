@@ -51,6 +51,16 @@ const liveFileCount = (s, owner) => s.db.value(`SELECT count(*) FROM ${FILES} WH
 /** Soft delete: the row stays (it is what the Media object is written from), the person stops seeing it. */
 const softDeleteFile = (s, id, at) => s.db.exec(`UPDATE ${FILES} SET deleted_at = $2 WHERE id = $1 AND deleted_at IS NULL`, [id, at]);
 
+/** Rename or move one of the person's live files (the owner is in the WHERE: nobody else's file changes). */
+const renameFile = (s, id, owner, name) => s.db.exec(`UPDATE ${FILES} SET name = $3 WHERE id = $1 AND owner = $2 AND deleted_at IS NULL`, [id, owner, name]);
+const moveFile = (s, id, owner, folderId) => s.db.exec(`UPDATE ${FILES} SET folder_id = $3 WHERE id = $1 AND owner = $2 AND deleted_at IS NULL`, [id, owner, folderId]);
+
+/** This person's live files whose name holds the words, in every folder, newest first. */
+function searchFiles(s, owner, words, { limit = 100 } = {}) {
+    const like = `%${String(words).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    return s.db.many(`SELECT * FROM ${FILES} WHERE owner = $1 AND deleted_at IS NULL AND name ILIKE $2 ORDER BY id DESC LIMIT $3`, [owner, like, limit]);
+}
+
 // ── Folders ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 async function insertFolder(s, row) {
@@ -62,6 +72,10 @@ async function insertFolder(s, row) {
 const getFolder = (s, id) => s.db.maybe(`SELECT * FROM ${FOLDERS} WHERE id = $1`, [id]);
 const listFolders = (s, owner) => s.db.many(`SELECT * FROM ${FOLDERS} WHERE owner = $1 ORDER BY lower(name) ASC, id ASC`, [owner]);
 const countFolders = (s, owner) => s.db.value(`SELECT count(*) FROM ${FOLDERS} WHERE owner = $1`, [owner]).then(Number);
+const renameFolder = (s, id, owner, name) => s.db.exec(`UPDATE ${FOLDERS} SET name = $3 WHERE id = $1 AND owner = $2`, [id, owner, name]);
+/** Whether a folder still holds a live file or a folder. */
+const folderInUse = (s, id) => s.db.value(
+    `SELECT EXISTS (SELECT 1 FROM ${FILES} WHERE folder_id = $1 AND deleted_at IS NULL) OR EXISTS (SELECT 1 FROM ${FOLDERS} WHERE parent_id = $1)`, [id]);
 const deleteFolder = (s, id, owner) => s.db.exec(`DELETE FROM ${FOLDERS} WHERE id = $1 AND owner = $2`, [id, owner]);
 
 // ── Shares ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -162,8 +176,8 @@ const setUploadFile = (s, id, fileId) => s.db.exec(`UPDATE ${UPLOADS} SET file_i
 const dropUpload = (s, id) => s.db.exec(`DELETE FROM ${UPLOADS} WHERE id = $1`, [id]);
 
 module.exports = {
-    insertFile, getFile, listFiles, storedBytes, liveFileCount, softDeleteFile,
-    insertFolder, getFolder, listFolders, countFolders, deleteFolder,
+    insertFile, getFile, listFiles, storedBytes, liveFileCount, softDeleteFile, renameFile, moveFile, searchFiles,
+    insertFolder, getFolder, listFolders, countFolders, deleteFolder, renameFolder, folderInUse,
     insertShare, getShare, listShares, countLiveShares, revokeShare, suspendShare, restoreShare, countDownload,
     deleteSharesForFile, deleteSharesForFolder,
     addReport, reportsFor, reportCount, bumpReportCount, staffQueue, staffCounts,

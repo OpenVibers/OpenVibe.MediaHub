@@ -42,6 +42,7 @@ const { sameOrigin } = require('./principal');
 const { html, raw, table, notice, time, badge, shareButton } = require('../render/html');
 const { send } = require('../render/layout');
 const rules = require('../drive/rules');
+const ui = require('../drive/ui');
 const { isStaff } = require('../drive/staff');
 const { boundaryOf, readFormData } = require('./form-upload');
 
@@ -273,48 +274,125 @@ ${raw(showcase.cta({ title: 'Before you upload', text: 'Read the rules: what is 
         return { folder, path: await drive.folderPath(requesterOf(req), folder.id) };
     }
 
-    const uploadForm = (folder) => html`<form class="card upload" method="post" action="/files/upload" enctype="multipart/form-data" data-upload>
-<h2>Upload a file</h2>
+    // ── The drive's page (the Drive-like redesign, 2026-11-07; markup pieces in server/drive/ui.js) ──
+    const SORTS = { new: 'Newest first', old: 'Oldest first', name: 'Name A–Z', size: 'Largest first' };
+    function sortRows(rows, sort) {
+        const out = rows.slice();
+        if (sort === 'old') out.reverse();
+        else if (sort === 'name') out.sort((a, b) => String(a.name).localeCompare(String(b.name), 'en', { numeric: true, sensitivity: 'base' }));
+        else if (sort === 'size') out.sort((a, b) => (Number(b.size) || 0) - (Number(a.size) || 0));
+        return out;
+    }
+    const folderHref = (id) => (id ? `/files?folder=${encodeURIComponent(id)}` : '/files');
+    /** "Taxes / 2026": a folder named by its path, for the Move picker and search results. */
+    function folderLabels(all) {
+        const byId = new Map(all.map((f) => [f.id, f]));
+        const label = (f) => {
+            const names = [];
+            let cursor = f;
+            let guard = 0;
+            while (cursor && guard++ < 50) { names.unshift(cursor.name); cursor = cursor.parent_id ? byId.get(cursor.parent_id) : null; }
+            return names.join(' / ');
+        };
+        return new Map(all.map((f) => [f.id, label(f)]));
+    }
+    const pathBar = (path, last = null) => html`<nav class="dr-path" aria-label="Where you are"><a href="/files">${ui.icon('home')}<span>My files</span></a>${path.map((f, i) => html`${ui.icon('chevron')}${i === path.length - 1 && !last ? html`<span aria-current="page">${f.name}</span>` : html`<a href="${folderHref(f.id)}">${f.name}</a>`}`)}${last ? html`${ui.icon('chevron')}<span aria-current="page">${last}</span>` : ''}</nav>`;
+    const whoOf = (sh) => (sh.public ? ['globe', 'Anyone with the link'] : sh.allowed_subjects ? ['people', 'Only the people you named'] : ['lock', 'Signed-in people with the link']);
+
+    /** The upload: a big "Upload files" target over a plain file form. upload.js takes it over (many files, the tray). */
+    const uploadForm = (folder) => html`<form class="dr-upload" method="post" action="/files/upload" enctype="multipart/form-data" data-upload>
 ${folder ? html`<input type="hidden" name="folder" value="${folder.id}">` : ''}
-<div class="field"><label for="file">File</label><input id="file" name="file" type="file" required></div>
-<div class="field"><label for="name">Name (optional)</label><input id="name" name="name" type="text" maxlength="${rules.NAME_MAX}" placeholder="leave empty to keep the file's own name"></div>
-<p><button class="sc-btn sc-primary" type="submit">Upload</button></p>
-<p class="small muted">Up to ${rules.formatBytes(config.quotas.maxFileBytes)} per file and ${rules.formatBytes(config.quotas.bytes)} in total, ${config.quotas.uploadsPerDay} uploads a day. Files over ${rules.formatBytes(config.singleUploadBytes)} go up in parts, which needs JavaScript; without it, the browser sends one request and files that size are refused.</p>
+<input id="file" class="dr-pick-in" name="file" type="file" required>
+<label class="dr-pick" for="file">${ui.icon('upload')}<span><b>Upload files</b><small>Or drop them anywhere on this page</small></span></label>
+<div class="dr-upload-go" data-nojs><input id="name" name="name" type="text" maxlength="${rules.NAME_MAX}" placeholder="Name (optional)" aria-label="Name (optional)"><button class="dr-btn is-primary" type="submit">Upload</button></div>
 <progress id="upload-progress" max="100" value="0" hidden></progress>
-<p id="upload-status" class="small muted" role="status"></p>
+<p id="upload-status" class="dr-fine" role="status"></p>
+<p class="dr-fine">Up to ${rules.formatBytes(config.quotas.maxFileBytes)} a file, ${rules.formatBytes(config.quotas.bytes)} in all, ${config.quotas.uploadsPerDay} uploads a day.</p>
+</form>`;
+    const folderForm = (folder) => html`<form class="dr-mkdir" method="post" action="/folders">
+${folder ? html`<input type="hidden" name="folder" value="${folder.id}">` : ''}
+<label for="new-folder">${ui.icon('folder-plus')}<span class="sr-only">New folder</span></label><input id="new-folder" name="name" type="text" maxlength="${rules.FOLDER_NAME_MAX}" placeholder="New folder" required><button class="dr-btn" type="submit">Create</button>
 </form>`;
 
     r.get('/files', mustSignIn('/files'), async (req, res) => {
         const owner = requesterOf(req);
         const { folder, path } = await folderOf(req);
-        const folders = (await drive.listFolders(owner)).filter((f) => (f.parent_id || null) === (folder ? folder.id : null));
-        const files = await drive.listFiles(owner, { folderId: folder ? folder.id : null, limit: 200 });
-        const shares = (await drive.listShares(owner)).filter((sh) => drive.stateOf(sh, s.iso()) === 'live');
-        const crumbs = [{ label: 'Home', href: '/' }, { label: 'Your files', href: '/files' }];
-        for (const f of path) crumbs.push({ label: f.name, href: `/files?folder=${encodeURIComponent(f.id)}` });
+        const q = rules.cleanText(req.query.q || '', 100);
+        // The sort asked for, else the one this browser picked last (upload.js keeps it in a cookie), else newest.
+        const asked = String(req.query.sort || (/(?:^|;\s*)dl_sort=([a-z]+)/.exec(String(req.get('cookie') || '')) || [])[1] || '');
+        const sort = Object.prototype.hasOwnProperty.call(SORTS, asked) ? asked : 'new';
+        const here = folder ? folder.id : null;
+        const allFolders = await drive.listFolders(owner);
+        const labels = folderLabels(allFolders);
+        const folders = q
+            ? allFolders.filter((f) => f.name.toLowerCase().includes(q.toLowerCase()))
+            : allFolders.filter((f) => (f.parent_id || null) === here);
+        if (sort === 'name') folders.sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true, sensitivity: 'base' }));
+        else if (sort === 'new') folders.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+        else if (sort === 'old') folders.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+        const files = sortRows(q ? await drive.searchFiles(owner, q, { limit: 200 }) : await drive.listFiles(owner, { folderId: here, limit: 200 }), sort);
+        const liveShares = (await drive.listShares(owner)).filter((sh) => drive.stateOf(sh, s.iso()) === 'live');
+        const showShares = !q && !folder && liveShares.length > 0;
+        const shareNames = new Map();
+        if (showShares) {
+            for (const sh of liveShares) {
+                if (sh.file_id) { const f = await drive.ownFile(owner, sh.file_id); if (f) shareNames.set(sh.slug, f.name); }
+                else if (sh.folder_id && labels.has(sh.folder_id)) shareNames.set(sh.slug, labels.get(sh.folder_id));
+            }
+        }
+        const usage = await drive.usage(owner);
+        const title = q ? `“${q}”` : folder ? folder.name : 'My files';
+        const empty = !files.length && !folders.length;
+        const keep = (extra) => html`${folder ? html`<input type="hidden" name="folder" value="${folder.id}">` : ''}${extra || ''}`;
         return page(req, res, {
-            title: folder ? `${folder.name} · Your files` : 'Your files',
-            crumbs,
-            // The one page script: it turns the upload form into a chunked, resumable, progressive upload. The
-            // form itself works without it.
+            title: q ? `Search: ${q} · Your files` : folder ? `${folder.name} · Your files` : 'Your files',
+            // The one page script: the chunked, resumable upload (many files, dropped anywhere, a tray), the view and
+            // sort it remembers, the instant filter. Every form here works without it.
             scripts: ['js/upload.js'],
-            body: html`<h1>${folder ? folder.name : 'Your files'}</h1>
-${usageBar(await drive.usage(owner))}
-<p class="small"><a href="/sync">Back up a folder from your computer</a></p>
-${folder ? html`<p><a href="/files">← All files</a></p>` : ''}
-<section aria-labelledby="h-upload">${uploadForm(folder)}</section>
-<section aria-labelledby="h-folders"><h2 id="h-folders">Folders</h2>
-${folders.length ? html`<ul class="file-list">${folders.map((f) => html`<li class="file"><span class="file-main"><a class="file-name" href="/files?folder=${encodeURIComponent(f.id)}">${f.name}</a><span class="file-meta small muted">folder</span></span></li>`)}</ul>` : html`<p class="muted">No folders here yet.</p>`}
-<form class="inline" method="post" action="/folders">
-${folder ? html`<input type="hidden" name="parent" value="${folder.id}">` : ''}
-<label for="new-folder">New folder</label> <input id="new-folder" name="name" type="text" maxlength="${rules.FOLDER_NAME_MAX}" required> <button class="sc-btn" type="submit">Create</button>
-</form></section>
-<section aria-labelledby="h-files"><h2 id="h-files">Files</h2>
-${files.length ? html`<ul class="file-list">${files.map(fileRow)}</ul>` : html`<p class="muted">No files here yet.</p>`}</section>
-<section aria-labelledby="h-shares"><h2 id="h-shares">Live share links</h2>
-${shares.length ? html`<ul class="file-list">${shares.map((sh) => html`<li class="file"><span class="file-main"><a class="file-name" href="/s/${sh.slug}">/s/${sh.slug}</a>
-<span class="file-meta small muted">expires ${time(sh.expires_at)} · ${Number(sh.downloads)} download${Number(sh.downloads) === 1 ? '' : 's'}${sh.allowed_subjects ? ' · limited to named people' : ''}</span></span>
-<form class="inline" method="post" action="/shares/${sh.slug}/revoke"><button class="sc-btn" type="submit">Revoke</button></form></li>`)}</ul>` : html`<p class="muted">No live share links. Open a file to make one.</p>`}</section>`,
+            body: html`<div class="dr" data-drive data-place="${title}">
+<aside class="dr-side" aria-label="Your drive">
+<details class="dr-new" data-new><summary class="dr-new-btn">${ui.icon('plus')}<span>New</span></summary>
+<div class="dr-new-panel" role="group" aria-label="Add to ${folder ? folder.name : 'My files'}">
+<p class="dr-new-title">Add to <b>${folder ? folder.name : 'My files'}</b></p>
+${uploadForm(folder)}
+${folderForm(folder)}
+<a class="dr-new-row" href="/sync">${ui.icon('sync')}<span><b>Back up a folder</b><small>Keep a folder on your computer copied here</small></span></a>
+</div></details>
+<nav class="dr-places" aria-label="Places">
+<a href="/files"${!folder && !q ? raw(' aria-current="page"') : ''}>${ui.icon('home')}<span>My files</span></a>
+<a href="/files#shared">${ui.icon('link')}<span>Shared links</span>${liveShares.length ? html`<em>${liveShares.length}</em>` : ''}</a>
+<a href="/sync">${ui.icon('sync')}<span>Backups</span></a>
+</nav>
+${ui.meter(usage)}
+</aside>
+<div class="dr-main" data-main>
+<header class="dr-bar">
+${folder || q ? pathBar(q ? [] : path, q ? `Search: “${q}”` : null) : ''}
+<div class="dr-bar-row">
+<h1 class="dr-title">${title}</h1>
+<div class="dr-tools">
+<form class="dr-find" role="search" method="get" action="/files">${ui.icon('search')}<input type="search" name="q" value="${q}" placeholder="Search your files" aria-label="Search your files" data-filter autocomplete="off"><button class="sr-only" type="submit">Search</button></form>
+<form class="dr-sort" method="get" action="/files">${keep(q ? html`<input type="hidden" name="q" value="${q}">` : '')}<label><span class="sr-only">Sort</span><select name="sort" data-autosubmit>${Object.entries(SORTS).map(([k, v]) => html`<option value="${k}"${k === sort ? raw(' selected') : ''}>${v}</option>`)}</select></label><noscript><button class="dr-btn" type="submit">Sort</button></noscript></form>
+<div class="dr-view" role="radiogroup" aria-label="View">
+<label title="Grid"><input type="radio" name="dr-view" value="grid" checked>${ui.icon('grid')}<span class="sr-only">Grid</span></label>
+<label title="List"><input type="radio" name="dr-view" value="list">${ui.icon('list')}<span class="sr-only">List</span></label>
+</div>
+</div>
+</div>
+</header>
+${empty ? html`<label class="dr-empty" for="file">${ui.icon(q ? 'search' : 'upload')}<b>${q ? `Nothing matches “${q}”` : folder ? 'This folder is empty' : 'Your drive is empty'}</b><span>${q ? 'Try other words, or browse My files.' : 'Drop files here, or tap to choose them. New makes folders and backups.'}</span></label>` : ''}
+${folders.length ? html`<section class="dr-sec" aria-labelledby="h-folders"><h2 id="h-folders" class="dr-h">Folders <span>${folders.length}</span></h2>
+<ul class="dr-folders" data-items>${folders.map((f) => ui.folderTile(f))}</ul></section>` : ''}
+${files.length ? html`<section class="dr-sec" aria-labelledby="h-files"><h2 id="h-files" class="dr-h">Files <span>${files.length}</span></h2>
+<ul class="dr-files" data-items>${files.map((row) => ui.fileCard(row, { where: q ? (row.folder_id ? labels.get(row.folder_id) || 'A folder' : 'My files') : null }))}</ul></section>` : ''}
+<p class="dr-nomatch" data-nomatch hidden>Nothing in this view matches. Press Enter to search every folder.</p>
+${showShares ? html`<section class="dr-sec" id="shared" aria-labelledby="h-shares"><h2 id="h-shares" class="dr-h">Live share links <span>${liveShares.length}</span></h2>
+<ul class="dr-links">${liveShares.map((sh) => { const [ic, who] = whoOf(sh); return html`<li class="dr-link">${ui.icon(ic)}<span class="dr-link-main"><a href="/s/${sh.slug}">${shareNames.get(sh.slug) || `/s/${sh.slug}`}</a>
+<small>${who} · expires ${time(sh.expires_at)} · ${Number(sh.downloads)} download${Number(sh.downloads) === 1 ? '' : 's'}</small></span>
+<button class="dr-btn is-quiet" type="button" data-copy="${config.baseUrl}/s/${sh.slug}" hidden>Copy link</button>
+<form method="post" action="/shares/${sh.slug}/revoke"><button class="dr-btn is-quiet" type="submit">Revoke</button></form></li>`; })}</ul></section>` : ''}
+</div>
+</div>`,
         });
     });
 
@@ -323,29 +401,66 @@ ${shares.length ? html`<ul class="file-list">${shares.map((sh) => html`<li class
         const row = await drive.ownFile(owner, String(req.params.id || ''));
         if (!row) return notFoundFile(req, res);
         const shares = (await drive.listShares(owner)).filter((sh) => sh.file_id === row.id);
+        const allFolders = await drive.listFolders(owner);
+        const labels = folderLabels(allFolders);
+        const path = row.folder_id ? await drive.folderPath(owner, row.folder_id) : [];
+        const kind = ui.kindOf(row);
+        const ext = ui.extOf(row.name);
+        const pic = rules.isPreviewable(row.content_type);
+        const choices = [...labels.entries()].sort((a, b) => a[1].localeCompare(b[1], 'en', { numeric: true, sensitivity: 'base' }));
         return page(req, res, {
             title: row.name,
             styles: ['kit.css'],
-            crumbs: [{ label: 'Home', href: '/' }, { label: 'Your files', href: '/files' }, { label: row.name }],
-            body: html`<h1>${row.name}</h1>
-${rules.isPreviewable(row.content_type) ? html`<figure class="file-preview"><img src="/files/${row.id}/preview?w=640" alt="${row.name}" decoding="async"></figure>` : ''}
-${table(['Size', 'Type', 'SHA-256', 'Added'], [[fileSize(row), row.content_type, row.sha256 || '—', time(row.created_at)]])}
-<p><a class="sc-btn sc-primary" href="/files/${row.id}/download">Download</a> ${raw(shareButton({ url: `${config.baseUrl}/files/${row.id}`, title: row.name, text: `${row.name} — a file on ${SITE_NAME}.`, image: rules.isPreviewable(row.content_type) ? `${config.baseUrl}/files/${row.id}/preview?w=640` : '' }))}</p>
-<section aria-labelledby="h-share"><h2 id="h-share">Make a share link</h2>
-<form method="post" action="/files/${row.id}/share">
-<div class="field"><label for="hours">Expires in</label><select id="hours" name="hours">${rules.EXPIRY_CHOICES.map((c) => html`<option value="${c.hours}"${c.hours === rules.EXPIRY_DEFAULT_HOURS ? raw(' selected') : ''}>${c.label}</option>`)}</select></div>
-<fieldset class="field"><legend>Who can open it</legend>
-<label class="check"><input type="radio" name="who" value="signed_in" checked> Anyone signed in to OpenVibe with the link</label>
-<label class="check"><input type="radio" name="who" value="public"> Anyone with the link, no account needed (a public download page)</label>
-<label class="check"><input type="radio" name="who" value="named"> Only these OpenVibe usernames:</label>
-<input id="usernames" name="usernames" type="text" maxlength="300" placeholder="kim, sam" aria-label="OpenVibe usernames"></fieldset>
-<p><button class="sc-btn sc-primary" type="submit">Create the link</button></p>
+            scripts: ['js/upload.js'],
+            body: html`<div class="fv" data-drive>
+${pathBar(path, row.name)}
+<div class="fv-grid">
+<figure class="fv-stage${pic ? ' is-pic' : ''}" data-kind="${kind}">${pic
+                ? html`<img src="/files/${row.id}/preview?w=640" alt="${row.name}" decoding="async">`
+                : html`<span class="fv-tile">${ui.icon(ui.KINDS[kind].icon)}${ext ? html`<b>${ext.slice(0, 6)}</b>` : ''}</span>`}</figure>
+<div class="fv-side">
+<h1 class="fv-name">${row.name}</h1>
+<p class="fv-sub"><span class="fv-kind" data-kind="${kind}">${ui.icon(ui.KINDS[kind].icon)}${ui.kindWord(row)}</span><span>${fileSize(row)}</span><span>Added ${ui.when(row.created_at)}</span></p>
+<div class="fv-actions"><a class="dr-btn is-primary" href="/files/${row.id}/download">${ui.icon('download')}Download</a>${raw(shareButton({ url: `${config.baseUrl}/files/${row.id}`, title: row.name, text: `${row.name} — a file on ${SITE_NAME}.`, image: pic ? `${config.baseUrl}/files/${row.id}/preview?w=640` : '', cls: 'dr-btn' }))}</div>
+
+<section class="fv-card" id="share" aria-labelledby="h-share"><h2 id="h-share">${ui.icon('link')}Share a link</h2>
+<form class="fv-share" method="post" action="/files/${row.id}/share">
+<fieldset class="fv-who"><legend>Who can open it</legend>
+<label class="fv-opt"><input type="radio" name="who" value="signed_in" checked><span>${ui.icon('lock')}<b>Signed-in people</b><small>Anyone signed in to OpenVibe who has the link</small></span></label>
+<label class="fv-opt"><input type="radio" name="who" value="public"><span>${ui.icon('globe')}<b>Anyone</b><small>A public download page, no account needed</small></span></label>
+<label class="fv-opt"><input type="radio" name="who" value="named"><span>${ui.icon('people')}<b>Only people I name</b><small>Their OpenVibe usernames, below</small></span></label>
+<input class="fv-names" id="usernames" name="usernames" type="text" maxlength="300" placeholder="Usernames, e.g. kim, sam" aria-label="OpenVibe usernames">
+</fieldset>
+<fieldset class="fv-exp"><legend>Expires in</legend><div class="fv-chips">${rules.EXPIRY_CHOICES.map((c) => html`<label><input type="radio" name="hours" value="${c.hours}"${c.hours === rules.EXPIRY_DEFAULT_HOURS ? raw(' checked') : ''}><span>${c.label}</span></label>`)}</div></fieldset>
+<button class="dr-btn is-primary" type="submit">Create the link</button>
 </form>
-${shares.length ? html`<h3>Its links</h3><ul class="file-list">${shares.map((sh) => html`<li class="file">${shareBadge(drive.stateOf(sh, s.iso()))} <a href="/s/${sh.slug}">/s/${sh.slug}</a> <span class="small muted">expires ${time(sh.expires_at)} · ${Number(sh.downloads)} downloads</span></li>`)}</ul>` : ''}
+${shares.length ? html`<h3 class="fv-h3">Links to this file</h3><ul class="dr-links">${shares.map((sh) => { const state = drive.stateOf(sh, s.iso()); const [ic, who] = whoOf(sh); return html`<li class="dr-link">${ui.icon(ic)}<span class="dr-link-main"><a href="/s/${sh.slug}">/s/${sh.slug}</a>
+<small>${shareBadge(state)} ${who} · expires ${time(sh.expires_at)} · ${Number(sh.downloads)} downloads</small></span>
+${state === 'live' ? html`<button class="dr-btn is-quiet" type="button" data-copy="${config.baseUrl}/s/${sh.slug}" hidden>Copy link</button><form method="post" action="/shares/${sh.slug}/revoke"><input type="hidden" name="from" value="${row.id}"><button class="dr-btn is-quiet" type="submit">Revoke</button></form>` : ''}</li>`; })}</ul>` : ''}
 </section>
-<section aria-labelledby="h-delete"><h2 id="h-delete">Delete</h2>
-<p class="muted">Deleting removes every share link to this file at once, and asks OpenVibe.Media to delete the object.</p>
-<form method="post" action="/files/${row.id}/delete"><button class="sc-btn" type="submit">Delete this file</button></form></section>`,
+
+<section class="fv-card" id="move" aria-labelledby="h-move"><h2 id="h-move">${ui.icon('move')}Move</h2>
+<form class="fv-row" method="post" action="/files/${row.id}/move"><label class="sr-only" for="move-to">Move to</label>
+<select id="move-to" name="to"><option value=""${!row.folder_id ? raw(' selected') : ''}>My files (the top)</option>${choices.map(([id, label]) => html`<option value="${id}"${id === row.folder_id ? raw(' selected') : ''}>${label}</option>`)}</select>
+<button class="dr-btn" type="submit">Move</button></form></section>
+
+<section class="fv-card" id="rename" aria-labelledby="h-rename"><h2 id="h-rename">${ui.icon('pencil')}Rename</h2>
+<form class="fv-row" method="post" action="/files/${row.id}/rename"><input type="hidden" name="from" value="file"><label class="sr-only" for="rename-to">New name</label><input id="rename-to" name="name" type="text" value="${row.name}" maxlength="${rules.NAME_MAX}" required><button class="dr-btn" type="submit">Rename</button></form></section>
+
+<dl class="fv-facts">
+<div><dt>Type</dt><dd>${row.content_type}</dd></div>
+<div><dt>Size</dt><dd>${fileSize(row)} (${Number(row.size).toLocaleString('en-US')} bytes)</dd></div>
+<div><dt>Added</dt><dd>${time(row.created_at)}</dd></div>
+<div><dt>Folder</dt><dd><a href="${folderHref(row.folder_id)}">${row.folder_id ? labels.get(row.folder_id) || 'A folder' : 'My files'}</a></dd></div>
+<div><dt>SHA-256</dt><dd><code>${row.sha256 || '—'}</code></dd></div>
+</dl>
+
+<section class="fv-card is-danger" id="delete" aria-labelledby="h-delete"><h2 id="h-delete">${ui.icon('trash')}Delete</h2>
+<p>Every share link to this file stops working at once, and OpenVibe.Media is asked to delete the bytes. There is no undo.</p>
+<form method="post" action="/files/${row.id}/delete" data-confirm="Delete “${row.name}”? Its share links stop working, and this cannot be undone."><button class="dr-btn is-danger" type="submit">Delete this file</button></form></section>
+</div>
+</div>
+</div>`,
         });
     });
 
@@ -458,7 +573,48 @@ ${shares.length ? html`<h3>Its links</h3><ul class="file-list">${shares.map((sh)
     r.post('/shares/:slug/revoke', mustSignIn('/files'), async (req, res) => {
         if (!sameSite(req, res, '/files')) return undefined;
         await drive.revokeShare(requesterOf(req), String(req.params.slug || ''));
-        return res.redirect(303, '/files');
+        const from = String((req.body || {}).from || '');
+        return res.redirect(303, rules.isFileId(from) ? `/files/${from}#share` : '/files#shared');
+    });
+
+    // ── Rename, move, folder delete (the drive's "full controls", 2026-11-07) ──
+    const refused = (req, res, what, detail, back, status = 422) => page(req, res, {
+        title: what,
+        crumbs: [{ label: 'Home', href: '/' }, { label: 'Your files', href: '/files' }],
+        body: html`<h1>${what}</h1>${notice(detail, 'warn')}<p><a class="sc-btn" href="${back}">Go back</a></p>`,
+    }, status);
+
+    r.post('/files/:id/rename', mustSignIn('/files'), async (req, res) => {
+        if (!sameSite(req, res, '/files')) return undefined;
+        const owner = requesterOf(req);
+        const out = await drive.renameFile(owner, String(req.params.id || ''), (req.body || {}).name);
+        if (out.error === 'file.not_found') return notFoundFile(req, res);
+        if (out.error) return refused(req, res, 'The file was not renamed', out.detail, `/files/${req.params.id}`);
+        return res.redirect(303, (req.body || {}).from === 'file' ? `/files/${out.file.id}` : folderHref(out.file.folder_id));
+    });
+
+    r.post('/files/:id/move', mustSignIn('/files'), async (req, res) => {
+        if (!sameSite(req, res, '/files')) return undefined;
+        const owner = requesterOf(req);
+        const to = String((req.body || {}).to || '') || null;
+        const out = await drive.moveFile(owner, String(req.params.id || ''), to);
+        if (out.error === 'file.not_found') return notFoundFile(req, res);
+        if (out.error) return refused(req, res, 'The file was not moved', out.detail, `/files/${req.params.id}`, 404);
+        return res.redirect(303, `/files/${out.file.id}`);
+    });
+
+    r.post('/folders/:id/rename', mustSignIn('/files'), async (req, res) => {
+        if (!sameSite(req, res, '/files')) return undefined;
+        const out = await drive.renameFolder(requesterOf(req), String(req.params.id || ''), (req.body || {}).name);
+        if (out.error) return refused(req, res, 'The folder was not renamed', out.detail, '/files', out.error === 'folder.exists' ? 409 : out.error === 'folder.not_found' ? 404 : 422);
+        return res.redirect(303, folderHref(out.folder.parent_id));
+    });
+
+    r.post('/folders/:id/delete', mustSignIn('/files'), async (req, res) => {
+        if (!sameSite(req, res, '/files')) return undefined;
+        const out = await drive.deleteFolder(requesterOf(req), String(req.params.id || ''));
+        if (out.error) return refused(req, res, 'The folder was not deleted', out.detail, folderHref(String(req.params.id || '')), out.error === 'folder.not_found' ? 404 : 409);
+        return res.redirect(303, folderHref(out.folder.parent_id));
     });
 
     // ── Downloading ──────────────────────────────────────────
