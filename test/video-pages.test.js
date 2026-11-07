@@ -384,6 +384,13 @@ function countOccurrences(haystack, needle) {
         assert.strictEqual(asks.length, 1, 'one Ask your agent chip: ' + asks.join(' | '));
         assert.ok(asks[0].includes('data-ov-ask="About the video “A public recording” on OpenVibe.Video (https://openvibe.video/v/101): "'), asks[0]);
         assert.ok(asks[0].includes('class="ovk-ask ovk-btn'), 'the shared kit chip');
+        // Watch together (Party watch v1): the party plays the recording's own file and keeps the page as its source.
+        const party = (r.text.match(/<a class="ovv-btn" href="https:\/\/openvibe\.party\/new\?[^"]*"/) || [''])[0];
+        assert.ok(party, 'a Watch together link');
+        const q = new URL(party.slice(party.indexOf('https://'), -1).replace(/&amp;/g, '&')).searchParams;
+        assert.strictEqual(q.get('media'), 'https://openvibe.media/v/101', 'the party plays the file, not the page');
+        assert.strictEqual(q.get('source_url'), 'https://openvibe.video/v/101', 'the page goes with it');
+        assert.strictEqual(q.get('title'), 'A public recording');
     });
 
     await check('the clip watch page attributes its maker and links the full recording', async () => {
