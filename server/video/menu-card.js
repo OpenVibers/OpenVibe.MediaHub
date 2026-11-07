@@ -6,7 +6,9 @@
  * Video publishes "Trending": the most viewed public recordings and clips of the last seven days, each linking
  * to its openvibe.video watch page. The rows come from Live's public Content feed (GET /api/content/feed with
  * sort=top&window=week), which merges Media's public VODs and clips and already drops private, unlisted and
- * banned-account items; this module only picks the top six, merges the two lists and builds the card.
+ * banned-account items; this module only picks the top six, merges the two lists and builds the card. An entry
+ * carries the item's own thumbnail (https on openvibe.media, asked for at 640 px and declared 640×360) when the
+ * feed has one; no picture is ever a placeholder.
  *
  * The file is public and CORS *, cached for two minutes. A failed feed keeps the last good card; with none yet it
  * answers 503, and Network keeps the site's previous card for its own 30-minute window.
@@ -30,7 +32,29 @@ function plain(value, max) {
 
 const views = (item) => (Number.isFinite(Number(item && item.views)) ? Number(item.views) : 0);
 
-/** The card itself, most viewed first. `items` are feed items ({ kind, id, title, views }). */
+// A card's picture: the 16:9 shape the menu draws, at the 640 px step of Media's thumbnail ladder.
+const THUMB_W = 640;
+const THUMB_H = 360;
+const MEDIA_THUMB = /^https:\/\/openvibe\.media\/t\/[^?#\s]+$/;
+
+/**
+ * The entry's own picture ({ src, w?, h? }) or null. Only a real https thumbnail on an openvibe.* host (or this
+ * site's own origin) is sent: the feed's null or a third-party picture is left out, never a placeholder. Media's
+ * /t/ thumbnails come in sizes, so a card asks for the 640 px WebP it draws and says it is 640×360.
+ */
+function imageOf(item) {
+    const raw = String((item && item.thumbnail_url) || '').trim();
+    if (!raw || raw.length > 400) return null;
+    let u;
+    try { u = new URL(raw); } catch { return null; }
+    if (u.protocol !== 'https:' || u.username || u.password) return null;
+    const host = u.hostname.toLowerCase();
+    if (host !== 'openvibe.video' && !host.startsWith('openvibe.')) return null;
+    if (MEDIA_THUMB.test(raw)) return { src: `${raw}?w=${THUMB_W}&fmt=webp`, w: THUMB_W, h: THUMB_H };
+    return { src: raw };
+}
+
+/** The card itself, most viewed first. `items` are feed items ({ kind, id, title, views, thumbnail_url? }). */
 function cardFrom(items, at = Date.now()) {
     const seen = new Set();
     const rows = (Array.isArray(items) ? items : [])
@@ -45,11 +69,14 @@ function cardFrom(items, at = Date.now()) {
         .slice(0, LIMIT)
         .map((it) => {
             const n = views(it);
-            return {
+            const item = {
                 title: plain(it.title || (it.kind === 'clip' ? 'Clip' : 'Stream recording'), 80),
                 meta: `${n.toLocaleString('en-US')} ${n === 1 ? 'view' : 'views'} this week`,
                 url: `${BASE}/${it.kind === 'clip' ? 'c' : 'v'}/${Number(it.id)}`,
             };
+            const image = imageOf(it);
+            if (image) item.image = image;
+            return item;
         });
     return {
         id: CARD_ID,
@@ -107,4 +134,4 @@ function createMenuCardHandler({ feed, now = Date.now }) {
     };
 }
 
-module.exports = { createMenuCardHandler, cardFrom, plain, SITE, CARD_ID, CARD_TTL_S };
+module.exports = { createMenuCardHandler, cardFrom, imageOf, plain, SITE, CARD_ID, CARD_TTL_S };

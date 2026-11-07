@@ -2,7 +2,8 @@
 // The menu's network card for OpenVibe.Video (frame.menu-card@1): GET /.well-known/openvibe-menu.json serves the
 // week's most viewed public recordings and clips from Live's Content feed, CORS *, cached two minutes.
 const assert = require('assert');
-const { createMenuCardHandler, cardFrom, plain, CARD_TTL_S } = require('../server/video/menu-card');
+const contracts = require('openvibe-contracts');
+const { createMenuCardHandler, cardFrom, imageOf, plain, CARD_TTL_S } = require('../server/video/menu-card');
 
 const vod = (id, views, title = `Recording ${id}`) => ({ kind: 'vod', id, title, views });
 const clip = (id, views, title = `Clip ${id}`) => ({ kind: 'clip', id, title, views });
@@ -22,10 +23,26 @@ assert.deepStrictEqual(card.items, [
     { title: 'Recording 3', meta: '30 views this week', url: 'https://openvibe.video/v/3' },
 ]);
 assert.deepStrictEqual(card.more, { label: 'Watch more', url: 'https://openvibe.video/' });
+assert.ok(contracts.validate('frame.menu-cards@1', [card]).valid, 'the file validates against frame.menu-cards@1');
 for (const item of card.items) {
     assert.ok(item.title.length <= 80 && item.meta.length <= 120);
     assert.ok(item.url.startsWith('https://openvibe.video/'));
 }
+
+// Pictures: the item's own Media thumbnail at 640 px and 640x360; a real picture only, never a placeholder.
+const pictured = cardFrom([
+    vod(1, 30),
+    { kind: 'clip', id: 2, title: 'Clip 2', views: 20, thumbnail_url: 'https://openvibe.media/t/clip-2-1.jpg' },
+    { kind: 'vod', id: 3, title: 'Elsewhere', views: 10, thumbnail_url: 'https://www.youtube.com/i/x.jpg' },
+    { kind: 'vod', id: 4, title: 'Plain http', views: 5, thumbnail_url: 'http://openvibe.media/t/vod-4-1.jpg' },
+    { kind: 'vod', id: 5, title: 'Own origin', views: 1, thumbnail_url: 'https://openvibe.video/live/nova/frame.jpg' },
+]);
+assert.deepStrictEqual(pictured.items[0], { title: 'Recording 1', meta: '30 views this week', url: 'https://openvibe.video/v/1' }, 'no picture: no image key');
+assert.deepStrictEqual(pictured.items[1].image, { src: 'https://openvibe.media/t/clip-2-1.jpg?w=640&fmt=webp', w: 640, h: 360 });
+assert.ok(!pictured.items[2].image && !pictured.items[3].image, 'a third-party or plain-http picture is left out');
+assert.deepStrictEqual(pictured.items[4].image, { src: 'https://openvibe.video/live/nova/frame.jpg' }, 'another allowed host is used as it is');
+assert.ok(contracts.validate('frame.menu-cards@1', [pictured]).valid, 'a pictured file validates against frame.menu-cards@1');
+assert.strictEqual(imageOf({ thumbnail_url: 'https://openvibe.media/t/x.jpg?w=480' }).src, 'https://openvibe.media/t/x.jpg?w=480', 'an already-sized thumbnail is not re-queried');
 
 // At most six, one view is singular, a repeated item appears once, and anything that is not a public VOD/clip is dropped.
 assert.strictEqual(cardFrom(Array.from({ length: 8 }, (_, i) => vod(i + 1, 100 - i))).items.length, 6);
