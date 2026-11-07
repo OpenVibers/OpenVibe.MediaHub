@@ -51,7 +51,7 @@ function createEventsOutbox({ s, config, log = console, fetchImpl = null }) {
             return await out.emit({
                 event_type: 'mediahub.video.published', version: 1,
                 actor: { type: 'user', id: owner }, subject: { type: 'video', id: row.id }, visibility: 'public',
-                payload: { upload: row.id, owner: { type: 'user', id: owner }, title: String(row.title || 'Video').slice(0, 120), url: `${videoUrl}/u/${row.id}`, published_at: publishedAt },
+                payload: { upload: row.id, owner: { type: 'user', id: owner }, title: String(row.title || 'Video').slice(0, 120), url: row.watch_id ? `${videoUrl}/watch?v=${row.watch_id}` : `${videoUrl}/u/${row.id}`, published_at: publishedAt },
             });
         },
         start: () => out.start(),

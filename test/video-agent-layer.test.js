@@ -76,7 +76,11 @@ function vreq(base, path, { method = 'GET', cookie, host = 'openvibe.video', acc
         assert.strictEqual(d.sitemap, 'https://openvibe.video/sitemap.xml');
         assert.deepStrictEqual(d.policy.auth, ['none', 'Network OIDC']);
         // AGT-4: the id rule of the watch pages, as the pages behave (a private or missing id is a 404 below).
-        assert.deepStrictEqual(d.policy.stableIds.map((x) => [x.kind, x.url]), [['recording', 'https://openvibe.video/v/{id}'], ['clip', 'https://openvibe.video/c/{id}']]);
+        assert.deepStrictEqual(d.policy.stableIds.map((x) => [x.kind, x.url]), [
+            ['recording', 'https://openvibe.video/watch?v={id}'],
+            ['clip', 'https://openvibe.video/watch?v={id}'],
+            ['upload', 'https://openvibe.video/watch?v={id}'],
+        ], 'one watch address for all three kinds of video');
         assert.ok(d.policy.stableIds.every((x) => /never reused/.test(x.id) && /404/.test(x.gone)));
         const drive = await vreq(t.base, '/.well-known/agent.json', { host: 'openvibe.download' });
         assert.strictEqual(drive.status, 200, 'the drive answers with its own manifest');

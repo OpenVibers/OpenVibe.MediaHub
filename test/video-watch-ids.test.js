@@ -142,6 +142,17 @@ function request(base, path, host) {
         assert.ok(!r.text.includes('/v/101<'), 'no numbered recording page');
     });
 
+    await check('cards built from the feed, and the sharing sheet, name the watch address', async () => {
+        const home = await getVideo('/');
+        assert.strictEqual(home.status, 200);
+        assert.ok(home.text.includes(`href="/watch?v=${VOD_WATCH}"`), 'a recording card links to its watch page');
+        assert.ok(home.text.includes(`href="/watch?v=${CLIP_WATCH}"`), 'a clip card too');
+        // The sharing sheet's describe(): the upload's title and its watch link.
+        const { describeRef } = require('../server/sharing');
+        const described = await describeRef(db, { baseUrl: 'https://openvibe.video' })({ service: 'mediahub', kind: 'video', id: ONE });
+        assert.strictEqual(described.link, `https://openvibe.video/watch?v=${UPLOAD_ONE}`);
+    });
+
     await check('the Markdown twin of a watch page is that page, canonically at /watch?v=<id>', async () => {
         const r = await getVideo(`/watch?v=${UPLOAD_ONE}&format=markdown`);
         assert.strictEqual(r.status, 200, r.text.slice(0, 120));
