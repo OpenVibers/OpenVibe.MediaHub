@@ -105,9 +105,14 @@ function probe(buf) {
         const owner = `user:${kim.subject}`;
         const addVod = (id, bytes) => t.media.vods.set(id, { id, title: 'x', visibility: 'private', bytes, types: ['video/mp4'], status: 'ready' });
         const addUpload = async (id, vodId, o = {}) => {
-            await s.db.exec(`INSERT INTO video_uploads (id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, parts_received, status, state, created_at, updated_at, ready_at, duration_seconds)
-                             VALUES ($1, $2, 'kim', $3, 'About the tone.', 'public', $4, 'video/mp4', 1000, 1000, 1, 1, 'ready', 'active', $5, $5, $5, 14)`,
-            [id, owner, o.title || 'A tone and a pause', vodId, s.iso()]);
+            await s.db.exec(`INSERT INTO video_uploads (id, watch_id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, parts_received, status, state, created_at, updated_at, ready_at, duration_seconds)
+                             VALUES ($1, $2, $3, 'kim', $4, 'About the tone.', 'public', $5, 'video/mp4', 1000, 1000, 1, 1, 'ready', 'active', $6, $6, $6, 14)`,
+            [id, id === 'vup_01J0000000000000000000000A' ? 'watchAAAAAA' : 'watchBBBBBB', owner, o.title || 'A tone and a pause', vodId, s.iso()]);
+        };
+        /** The watch page a video is addressed by (its old /u/ address answers 301 to it). */
+        const watchOf = async (id) => {
+            const row = await s.db.maybe('SELECT watch_id FROM video_uploads WHERE id = $1', [id]);
+            return `/watch?v=${row.watch_id}`;
         };
         addVod(900, makeVideo(path.join(dir, 'a.mp4')));
         addVod(901, makeVideo(path.join(dir, 'b.mp4'), { audio: false }));
@@ -117,9 +122,9 @@ function probe(buf) {
         await addUpload(B, 901, { title: 'No sound' });
 
         await check('the owner sees the AI edit panel; anyone else does not, and cannot start a cut', async () => {
-            const mine = await t.get(`/u/${A}`, { as: kim, headers: V });
+            const mine = await t.get(await watchOf(A), { as: kim, headers: V });
             assert.ok(mine.text.includes('AI edit') && mine.text.includes('Cut the pauses') && !mine.text.includes('Highlights reel'), 'no reel without the AI edit');
-            assert.ok(!(await t.get(`/u/${A}`, { as: lee, headers: V })).text.includes('AI edit'));
+            assert.ok(!(await t.get(await watchOf(A), { as: lee, headers: V })).text.includes('AI edit'));
             assert.strictEqual((await t.get(`/u/${A}/cut`, { as: lee, form: { mode: 'pauses' }, headers: V })).status, 404);
         });
 
@@ -144,10 +149,10 @@ function probe(buf) {
         });
 
         await check('the pages: the original lists the cut with a link; the copy names its original; a copy is not cut again', async () => {
-            const orig = await t.get(`/u/${A}`, { as: kim, headers: V });
+            const orig = await t.get(await watchOf(A), { as: kim, headers: V });
             assert.ok(orig.text.includes('Pauses cut') && orig.text.includes(`href="/u/${copyId}"`) && orig.text.includes('1 pause out'));
-            const copy = await t.get(`/u/${copyId}`, { as: kim, headers: V });
-            assert.ok(copy.text.includes('An edited copy of') && copy.text.includes(`href="/u/${A}"`));
+            const copy = await t.get(await watchOf(copyId), { as: kim, headers: V });
+            assert.ok(copy.text.includes('An edited copy of') && copy.text.includes(`href="${await watchOf(A)}"`));
             await s.db.exec("UPDATE video_uploads SET status = 'ready', duration_seconds = 9.5 WHERE id = $1", [copyId]);
             const r = await t.get(`/api/v1/videos/${copyId}/cuts`, { as: kim, method: 'POST', json: { mode: 'pauses' }, headers: V });
             assert.deepStrictEqual([r.status, r.json().code], [409, 'cut.is_copy']);
@@ -156,12 +161,12 @@ function probe(buf) {
         await check('highlights: the reel comes from the AI edit and skips the pause search', async () => {
             await s.db.exec(`INSERT INTO video_upload_ai (upload_id, status, chapters, segments, highlights, updated_at) VALUES ($1, 'done', '[]', '[]', $2, $3)`,
                 [A, JSON.stringify([{ start: 0.5, end: 3.5, score: 0.9 }, { start: 9.5, end: 13, score: 0.8 }]), s.iso()]);
-            assert.ok(!(await t.get(`/u/${A}`, { as: kim, headers: V })).text.includes('Highlights reel'), 'a reel of 6.5 s is not offered (at least 20 s)');
+            assert.ok(!(await t.get(await watchOf(A), { as: kim, headers: V })).text.includes('Highlights reel'), 'a reel of 6.5 s is not offered (at least 20 s)');
             const wrong = await t.get(`/api/v1/videos/${A}/cuts`, { as: kim, method: 'POST', json: { mode: 'highlights' }, headers: V });
             assert.deepStrictEqual([wrong.status, wrong.json().code], [409, 'cut.no_highlights']);
             await s.db.exec('UPDATE video_upload_ai SET highlights = $2 WHERE upload_id = $1', [A, JSON.stringify([{ start: 0, end: 30, score: 0.9 }, { start: 40, end: 70, score: 0.8 }])]);
             await s.db.exec('UPDATE video_uploads SET duration_seconds = 120 WHERE id = $1', [A]);
-            const page = await t.get(`/u/${A}`, { as: kim, headers: V });
+            const page = await t.get(await watchOf(A), { as: kim, headers: V });
             assert.ok(page.text.includes('Highlights reel') && page.text.includes('2 moments the AI picked, 1:00'), 'offered with its length');
             const ok = await t.get(`/api/v1/videos/${A}/cuts`, { as: kim, method: 'POST', json: { mode: 'highlights' }, headers: V });
             assert.strictEqual(ok.status, 202, ok.text);

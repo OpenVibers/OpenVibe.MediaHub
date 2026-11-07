@@ -46,6 +46,9 @@ async function start() {
     const { createLiveClient } = require('./video/live-client');
     const videoIndexNow = createVideoIndexNow({ config, live: createLiveClient({ config, fetchImpl: ctx.fetchImpl, log: ctx.log }), indexnow: ctx.indexnow, log: ctx.log });
     videoIndexNow.start();
+    // Watch ids for uploads that predate migration 0024: filled in bounded batches at boot (a page that reads a row
+    // before this reaches it gets one then, server/video/uploads.js).
+    ctx.videoUploads.backfillWatchIds({ log: ctx.log }).catch((err) => ctx.log.warn('[WatchId] backfill failed:', err && err.message));
     // OpenVibe.Pics: signed-out pictures nobody has viewed for MEDIAHUB_PICS_ANONYMOUS_IDLE_DAYS go, hourly (only while
     // signed-out uploads are on; account pictures stay until their owner deletes them).
     const timers = [];

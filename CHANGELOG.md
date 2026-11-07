@@ -4,6 +4,16 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
 
 ## Unreleased
 
+- A video's watch page is `/watch?v=<watch id>`, for all three kinds of video (2026-11-07, the owner: "on
+  openvibe.video we should copy the style of YouTube … /watch, and then like the actual video ID"). The id is 11
+  characters of URL-safe base64 from 8 random bytes — YouTube's shape, 64 bits of entropy, never derived from the
+  number — and is fixed for the row's life. An upload's is minted here and stored (`video_uploads.watch_id`, migration
+  `0024_watch_ids.sql`, a partial unique index, backfilled in batches at boot and on first read); a stream recording's
+  and a clip's are minted by OpenVibe.Media and resolved through its watch API, so one address serves every video. The
+  old `/u/<vup_…>`, `/v/<id>` and `/c/<id>` answer 301 to the watch page, `?t=` (a start time) and `?list=` carried.
+  The canonical link, the share sheet, the JSON-LD `url`, the sitemap, llms.txt, IndexNow, the menu card, the Search
+  documents, the sharing links and the `mediahub.video.published` event all name the watch address; the Markdown twin is
+  `/watch.md?v=<watch id>` (the query is kept in the canonical link and the twin's link header).
 - The drive has a bin, and the API has the drive's full controls (2026-11-07). Deleting a file — from its page, its
   card, or `DELETE /api/v1/files/:id` — puts it in the bin for 30 days instead of deleting it: its share links stop at
   once, its bytes stay in OpenVibe.Media, and it still counts against storage. `/files/bin` in the sidebar (with a

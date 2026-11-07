@@ -8,8 +8,10 @@
  *   /                         what OpenVibe.Video is: who is live now, the latest uploads, the month's most watched,
  *                             the latest recordings and clips, categories and channels, how it works, questions
  *   /category/:slug           a category's recordings (OpenVibe.Search's facets over Live's recordings)
- *   /v/:id                    a VOD watch page (player, AI chapters and captions, its clips)
- *   /c/:id                    a clip watch page
+ *   /watch?v=<id>             a watch page (player, AI chapters and captions) for a recording, a clip or an upload, by
+ *                             the watch id it is addressed by (and &t=<seconds> for a start time)
+ *   /v/:id                    a recording's old address: 301 to its watch page
+ *   /c/:id                    a clip's old address: 301 to its watch page
  *   /@:username               a channel's recordings (and clips), newest first
  *   /v/:id/captions.vtt       the AI transcript as WebVTT captions, with what was heard ("[laughter]")
  *   /v/:id/chapters.vtt       the AI moments as WebVTT chapters
@@ -45,6 +47,8 @@ const { createUploadApi, mountUploadPages } = require('./upload-routes');
 const { ACCESS_COOKIE, REFRESH_COOKIE } = require('../auth/sso');
 const { mountDownloads, downloadMenu } = require('./downloads');
 const { actionMenu, menuLinks, companion, whatItIs, shareButton, lengthWords, dayLabel, streamDate } = require('./watch-ui');
+const { watchIdOf, watchPath, vodPath, clipPath, uploadPath, movedTo } = require('./watch-links');
+const { isWatchId } = require('./watch-ids');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 const HOME_LIMIT = 10;
@@ -205,7 +209,7 @@ async function pipsOf(vod, live) {
             from: Number(p.from), to: Number(p.to), offset: Math.max(0, Number(p.offset) || 0),
             x: unit(p.x, 0, 1, 0.72), y: unit(p.y, 0, 1, 0.7), w: unit(p.w, 0.08, 0.6, 0.25), muted: p.muted !== false,
             title: String(p.title || pv.title || 'Picture-in-picture').slice(0, 120),
-            href: `/v/${String(p.vod_id)}${Number(p.offset) >= 1 ? `?t=${Math.floor(Number(p.offset))}` : ''}`,
+            href: pv ? vodPath(pv, { t: Number(p.offset) >= 1 ? Math.floor(Number(p.offset)) : null }) : `/v/${String(p.vod_id)}`,
         });
     }
     return out;
@@ -267,6 +271,7 @@ const isoTime = (v) => { const t = Date.parse(String(v || '')); return Number.is
  */
 function videoLd({ base, path, item, title, description, chapterList, partOf }) {
     const pageUrl = `${base}${path}`;
+    const withT = (seconds) => `${pageUrl}${pageUrl.includes('?') ? '&' : '?'}t=${seconds}`;
     const thumb = httpsUrl(item.thumbnail_url);
     const channel = item.display_name || item.username;
     const parts = (chapterList || []).map((m, i, all) => ({
@@ -274,7 +279,7 @@ function videoLd({ base, path, item, title, description, chapterList, partOf }) 
         name: String(m.description || `Chapter ${i + 1}`).slice(0, 110),
         startOffset: m.offset_seconds,
         ...(all[i + 1] ? { endOffset: all[i + 1].offset_seconds } : (Number(item.duration_seconds) > m.offset_seconds ? { endOffset: Math.floor(Number(item.duration_seconds)) } : {})),
-        url: `${pageUrl}?t=${m.offset_seconds}`,
+        url: withT(m.offset_seconds),
     }));
     return {
         ...seo.jsonLd.video({
@@ -566,7 +571,7 @@ ${meta([channel, o.extra || null, o.views ? viewsLabel(o.views) : null, o.date ?
 }
 
 function feedCard(item, { views = false } = {}) {
-    const href = item.kind === 'clip' ? `/c/${item.id}` : `/v/${item.id}`;
+    const href = item.kind === 'clip' ? clipPath(item) : vodPath(item);
     return card({
         href,
         kind: item.kind,
@@ -586,7 +591,7 @@ function feedCard(item, { views = false } = {}) {
 
 function vodCard(v) {
     return card({
-        href: `/v/${v.id}`,
+        href: vodPath(v),
         labels: labelsUi.inForce(v),
         owner: v.username || null,
         thumb: httpsUrl(v.thumbnail_url),
@@ -600,7 +605,7 @@ function vodCard(v) {
 function clipCard(c) {
     const dur = c.duration_seconds != null ? c.duration_seconds : c.duration;
     return card({
-        href: `/c/${c.id}`,
+        href: clipPath(c),
         kind: 'clip',
         badge: c.auto_generated ? 'AI clip' : null,
         labels: labelsUi.inForce(c),
@@ -653,7 +658,7 @@ function createVideoRoutes(ctx) {
         viewer: req.viewer,
         private: o.private !== false && hasSessionCookie(req),
         baseUrl: base,
-        path: req.originalUrl,
+        path: o.path || req.originalUrl,
     });
     const notFound = (req, res) => page(req, res, {
         title: 'Not found',
@@ -796,7 +801,8 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
     r.use(express.urlencoded({ extended: false, limit: '64kb' }));
 
     // ── Uploads: /upload, /u/:id, /me/videos (server/video/upload-routes.js) ──
-    const uploadCard = mountUploadPages(r, { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt, playlistForm, upNext, whatItIs, shareButton });
+    const uploads = mountUploadPages(r, { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt, playlistForm, upNext, whatItIs, shareButton });
+    const uploadCard = uploads.card;
 
     // ── Downloads: /v/:id/download/:file and /c/:id/download/:file (server/video/downloads.js) ──
     mountDownloads(r, { live, chat, ownView, asPerson, notFound, base, httpsUrl, log, fetchImpl: ctx.fetchImpl || globalThis.fetch,
@@ -827,7 +833,7 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
         if (kind === 'upload') {
             const row = await ctx.videoUploads.bySeq(itemId);
             if (!row || row.status !== 'ready' || row.state !== 'active' || row.visibility === 'private') return null;
-            return { href: `/u/${row.id}`, title: row.title, thumb: httpsUrl(row.thumbnail_url), channel: row.owner_username || null, duration: row.duration_seconds, icon: 'fa-film' };
+            return { href: uploadPath(row), title: row.title, thumb: httpsUrl(row.thumbnail_url), channel: row.owner_username || null, duration: row.duration_seconds, icon: 'fa-film' };
         }
         let info = null;
         try {
@@ -836,7 +842,7 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
         } catch { info = null; }
         if (!info) return null;
         return {
-            href: kind === 'vod' ? `/v/${itemId}` : `/c/${itemId}`,
+            href: kind === 'vod' ? vodPath(info) : clipPath(info),
             title: info.title || (kind === 'clip' ? 'Clip' : 'Stream recording'),
             thumb: httpsUrl(info.thumbnail_url),
             channel: info.username || info.display_name || null,
@@ -849,8 +855,13 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
     async function itemHref(kind, itemId) {
         if (kind === 'upload') {
             const row = await ctx.videoUploads.bySeq(itemId);
-            return row ? `/u/${row.id}` : null;
+            return row ? uploadPath(row) : null;
         }
+        try {
+            const data = kind === 'vod' ? await live.vod(itemId) : await live.clip(itemId);
+            const info = data && (kind === 'vod' ? data.vod : data.clip);
+            if (info) return kind === 'vod' ? vodPath(info) : clipPath(info);
+        } catch { /* Live down: the caller falls back to the old address */ }
         return kind === 'vod' ? `/v/${itemId}` : `/c/${itemId}`;
     }
 
@@ -866,7 +877,7 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
         const nextId = Number(next.item_id);
         const nextHref = await itemHref(next.kind, nextId);
         if (!nextHref) return { html: '', nextUrl: null };
-        const nextUrl = `${nextHref}?list=${encodeURIComponent(pl.id)}`;
+        const nextUrl = `${nextHref}${nextHref.includes('?') ? '&' : '?'}list=${encodeURIComponent(pl.id)}`;
         const info = await itemInfo(next.kind, nextId);
         const label = (info && info.title) || `${next.kind === 'vod' ? 'VOD' : next.kind === 'clip' ? 'Clip' : 'Video'} ${nextId}`;
         return {
@@ -1013,7 +1024,7 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
             ? `Watch ${n(counts.vods)} stream recordings and ${n(counts.clips)} clips from OpenVibe.Live, or upload and record your own videos, with AI captions and chapters.`
             : 'Watch stream recordings and clips from OpenVibe.Live, or upload and record your own videos, with AI captions and chapters.';
         const faq = HOME_FAQ(config.videoUploads);
-        const listed = vodItems.map((it) => ({ name: it.title || 'Stream recording', url: `${base}/v/${it.id}` }));
+        const listed = vodItems.map((it) => ({ name: it.title || 'Stream recording', url: `${base}${vodPath(it)}` }));
         return page(req, res, {
             index: true,
             title: 'OpenVibe.Video: watch streams again and share your videos',
@@ -1089,7 +1100,7 @@ ${channels.length ? html`<section class="ovv-section" id="channels" aria-labelle
             crumbs: [{ label: 'Home', href: '/' }, { label: 'Categories', href: '/#categories' }, { label: cat.label }],
             jsonLd: [
                 seo.jsonLd.breadcrumbs([{ name: 'OpenVibe.Video', url: `${base}/` }, { name: cat.label, url: `${base}/category/${slug}` }]),
-                seo.jsonLd.itemList(title, items.map((it) => ({ name: it.title || 'Stream recording', url: `${base}/v/${it.id}` })), { url: `${base}/category/${slug}` }),
+                seo.jsonLd.itemList(title, items.map((it) => ({ name: it.title || 'Stream recording', url: `${base}${vodPath(it)}` })), { url: `${base}/category/${slug}` }),
             ],
             body: html`<header class="ovv-channel-head"><span class="ovv-avatar ovv-avatar--big" aria-hidden="true"><i class="fa-solid ${cat.icon}"></i></span><div><h1>${cat.label}</h1><p class="ovv-meta">${cat.blurb}${count ? ` ${n(count.count)} ${count.count === 1 ? 'recording' : 'recordings'}.` : ''}</p></div></header>
 <section class="ovv-section" aria-label="${title}">${grid(items.map((it) => feedCard(it)), 'Nothing in this category yet.')}</section>
@@ -1189,11 +1200,10 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
         return sendVtt(res, renderChaptersVtt(mems, data.vod.duration_seconds));
     });
 
-    // ── VOD watch page ──────────────────────────────────────
-    r.get('/v/:id', async (req, res) => {
-        const id = String(req.params.id || '');
-        if (!live.isId(id)) return notFound(req, res);
-
+    // ── Watch pages ─────────────────────────────────────────
+    // /watch?v=<watch id> is the address of every video: a recording and a clip (OpenVibe.Media mints their ids) and
+    // an upload (its own, server/video/watch-ids.js). The old addresses answer 301 to it.
+    async function vodWatchPage(req, res, id, { watch = null } = {}) {
         let data = await live.vod(id);
         let ownOnly = false;
         if (!data || !data.vod) {
@@ -1212,6 +1222,10 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
             if (req.query.list) q.set('list', String(req.query.list));
             return res.redirect(301, `/v/${rec.vod_id}${q.toString() ? `?${q}` : ''}`);
         }
+        // Its old address answers 301 to its watch page, ?t= and ?list= carried over.
+        const watchId = watch || watchIdOf(vod);
+        if (!watch && watchId) return res.redirect(301, movedTo(watchPath(watchId), req.query));
+        const canonicalPath = watchId ? watchPath(watchId) : `/v/${id}`;
         if (vod && vod.ai_overview) vod.ai_overview = String(vod.ai_overview).trim() || null;
         const manageable = mayManage(req, 'vod', vod);
         const clips = Array.isArray(data.clips) ? data.clips.filter((c) => c && c.visibility !== 'private') : [];
@@ -1295,8 +1309,9 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
             title: watchTitle(vod.title || 'Stream recording', vod.username, vod.created_at),
             styles: ['kit.css'],
             description: about,
+            path: canonicalPath,
             ...(ownOnly || vod.is_recording ? {} : {
-                jsonLd: videoLd({ base, path: `/v/${id}`, item: vod, title: vod.title || 'Stream recording', description: about, chapterList: mems }),
+                jsonLd: videoLd({ base, path: canonicalPath, item: vod, title: vod.title || 'Stream recording', description: about, chapterList: mems }),
                 image: httpsUrl(vod.thumbnail_url) || undefined, ogType: 'video.other',
             }),
             scripts: ['js/video.js'],
@@ -1317,7 +1332,7 @@ ${channelName ? html`<a class="ovv-avatar" href="${localChannel || liveChannel}"
 <div class="ovv-byline-text">${channelName ? (localChannel ? html`<a class="ovv-channel-name" href="${localChannel}">@${channelName}</a>` : html`<span class="ovv-channel-name">@${channelName}</span>`) : ''}
 ${metaParts.length ? html`<span class="ovv-meta">${metaParts.map((p, i) => (i === 0 ? p : [html` · `, p]))}</span>` : ''}</div>
 </div>
-<div class="ovv-actions">${manageable ? editButton('recording') : ''}${saveForm}${ownOnly ? '' : clipAction(req, id, vod)}${downloadMenu({ kind: 'vod', id, item: vod, has: { transcript: segs.length, chat: chatRows ? chatRows.rows.length + chatRows.leftOut : 0, chapters: mems.length } })}${raw(shareButton({ url: `${base}/v/${id}`, title: vod.title || 'Stream recording', text: about, image: httpsUrl(vod.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
+<div class="ovv-actions">${manageable ? editButton('recording') : ''}${saveForm}${ownOnly ? '' : clipAction(req, id, vod)}${downloadMenu({ kind: 'vod', id, item: vod, has: { transcript: segs.length, chat: chatRows ? chatRows.rows.length + chatRows.leftOut : 0, chapters: mems.length } })}${raw(shareButton({ url: `${base}${canonicalPath}`, title: vod.title || 'Stream recording', text: about, image: httpsUrl(vod.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
 </div>
 ${vod.is_recording ? html`<p class="ovv-recording" role="status"><i class="fa-solid fa-circle" aria-hidden="true"></i> This recording is still in progress. <a href="${liveChannel}">Watch the live channel</a>.</p>` : ''}
 </div>
@@ -1339,13 +1354,10 @@ ${clips.length ? html`<section class="ovv-panel ovv-clips" aria-labelledby="h-cl
 </aside>
 </div>`,
         });
-    });
+    }
 
     // ── Clip watch page ─────────────────────────────────────
-    r.get('/c/:id', async (req, res) => {
-        const id = String(req.params.id || '');
-        if (!live.isId(id)) return notFound(req, res);
-
+    async function clipWatchPage(req, res, id, { watch = null } = {}) {
         let data = await live.clip(id);
         let ownOnly = false;
         if (!data || !data.clip) {
@@ -1354,6 +1366,10 @@ ${clips.length ? html`<section class="ovv-panel ovv-clips" aria-labelledby="h-cl
         }
         if (!data || !data.clip) return notFound(req, res);
         const clip = data.clip;
+        // Its old address answers 301 to its watch page, ?t= and ?list= carried over.
+        const watchId = watch || watchIdOf(clip);
+        if (!watch && watchId) return res.redirect(301, movedTo(watchPath(watchId), req.query));
+        const canonicalPath = watchId ? watchPath(watchId) : `/c/${id}`;
         if (clip && clip.ai_overview) clip.ai_overview = String(clip.ai_overview).trim() || null;
         const manageable = mayManage(req, 'clip', clip);
 
@@ -1379,7 +1395,9 @@ ${clips.length ? html`<section class="ovv-panel ovv-clips" aria-labelledby="h-cl
         // A clip Media is still cutting (or failed to cut) has no file to play yet.
         const cutting = Boolean(clip.status) && clip.status !== 'ready';
         if (cutting) live.forgetItem('clip', id);
-        const fullRecording = clip.vod_id ? `/v/${clip.vod_id}${clip.start_time != null ? `?t=${clip.start_time}` : ''}` : null;
+        const fullRecording = clip.vod_id
+            ? (sourceVod && sourceVod !== 'down' ? vodPath(sourceVod, { t: clip.start_time }) : `/v/${clip.vod_id}${clip.start_time != null ? `?t=${clip.start_time}` : ''}`)
+            : null;
         const sourceName = clip.source_streamer_display_name || clip.source_streamer_username || 'the streamer';
         const madeBy = clip.display_name || clip.username || 'an OpenVibe member';
         const attribution = clip.auto_generated ? `AI clip from ${sourceName}'s stream` : `Made by ${madeBy}`;
@@ -1420,8 +1438,9 @@ ${clips.length ? html`<section class="ovv-panel ovv-clips" aria-labelledby="h-cl
             title: watchTitle(clip.title || 'Clip', clip.source_streamer_username, clip.created_at),
             styles: ['kit.css'],
             description: clip.ai_overview || factualDescription('clip', clip),
+            path: canonicalPath,
             ...(ownOnly || aiClip ? {} : {
-                jsonLd: videoLd({ base, path: `/c/${id}`, item: clip, title: clip.title || 'Clip', description: clip.ai_overview || factualDescription('clip', clip) || attribution, partOf: clip.vod_id ? `/v/${clip.vod_id}` : null }),
+                jsonLd: videoLd({ base, path: canonicalPath, item: clip, title: clip.title || 'Clip', description: clip.ai_overview || factualDescription('clip', clip) || attribution, partOf: sourceVod && sourceVod !== 'down' ? vodPath(sourceVod) : (clip.vod_id ? `/v/${clip.vod_id}` : null) }),
                 image: httpsUrl(clip.thumbnail_url) || undefined, ogType: 'video.other',
             }),
             scripts: ['js/video.js'],
@@ -1441,7 +1460,7 @@ ${clipCredit}
 <div class="ovv-head-row">
 <div class="ovv-byline"><div class="ovv-byline-text"><span class="ovv-channel-name">${clip.auto_generated ? html`<span class="ovv-tag ovv-tag--inline">AI clip</span> ` : ''}${attribution}</span>
 ${clip.created_at ? html`<span class="ovv-meta"><time datetime="${clip.created_at}">${dateLabel(clip.created_at)}</time>${manageable ? html` · ${visibilityBadge(clip.visibility)}` : ''}</span>` : ''}</div></div>
-<div class="ovv-actions">${manageable ? editButton('clip') : ''}${fullRecording ? html`<a class="ovv-btn ovv-btn--primary" href="${fullRecording}" title="Watch the recording it was cut from, from this moment"><i class="fa-solid fa-film" aria-hidden="true"></i> Full recording</a>` : ''}${saveForm}${cutting ? '' : downloadMenu({ kind: 'clip', id, item: clip, has: { transcript: segs.length } })}${raw(shareButton({ url: `${base}/c/${id}`, title: clip.title || 'Clip', text: clip.ai_overview || attribution, image: httpsUrl(clip.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
+<div class="ovv-actions">${manageable ? editButton('clip') : ''}${fullRecording ? html`<a class="ovv-btn ovv-btn--primary" href="${fullRecording}" title="Watch the recording it was cut from, from this moment"><i class="fa-solid fa-film" aria-hidden="true"></i> Full recording</a>` : ''}${saveForm}${cutting ? '' : downloadMenu({ kind: 'clip', id, item: clip, has: { transcript: segs.length } })}${raw(shareButton({ url: `${base}${canonicalPath}`, title: clip.title || 'Clip', text: clip.ai_overview || attribution, image: httpsUrl(clip.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
 </div>
 </div>
 </div>
@@ -1454,6 +1473,35 @@ ${up.html}
 </aside>
 </div>`,
         });
+    }
+
+    // /watch?v=<id> — the one watch address for a recording, a clip and an upload. A local upload answers first
+    // (MediaHub owns those ids); anything else is OpenVibe.Media's to resolve, and Live's own public read then decides
+    // what the caller may see, exactly as it did on /v/:id and /c/:id.
+    r.get('/watch', async (req, res) => {
+        const watchId = String((req.query && req.query.v) || '');
+        if (!isWatchId(watchId)) return notFound(req, res);
+        const row = await ctx.videoUploads.byWatchId(watchId);
+        if (row) return uploads.renderWatchPage(req, res, row);
+        if (!ctx.media || typeof ctx.media.watchResolve !== 'function') return notFound(req, res);
+        const ref = await ctx.media.watchResolve(watchId).catch(() => ({ ok: false }));
+        if (!ref.ok || !ref.data || !ref.data.id) return notFound(req, res);
+        const id = String(ref.data.id);
+        if (!live.isId(id)) return notFound(req, res);
+        return ref.data.kind === 'clip' ? clipWatchPage(req, res, id, { watch: watchId }) : vodWatchPage(req, res, id, { watch: watchId });
+    });
+
+    // The old addresses: 301 to the watch page, once the item has its watch id.
+    r.get('/v/:id', async (req, res) => {
+        const id = String(req.params.id || '');
+        if (!live.isId(id)) return notFound(req, res);
+        return vodWatchPage(req, res, id);
+    });
+
+    r.get('/c/:id', async (req, res) => {
+        const id = String(req.params.id || '');
+        if (!live.isId(id)) return notFound(req, res);
+        return clipWatchPage(req, res, id);
     });
 
     // ── Channel page ────────────────────────────────────────
@@ -1716,7 +1764,7 @@ ${isOwner ? itemControls(pl.id, it) : ''}
 
         const first = items[0];
         const firstHref = first ? await itemHref(first.kind, Number(first.item_id)) : null;
-        const playAllHref = firstHref ? `${firstHref}?list=${encodeURIComponent(pl.id)}` : null;
+        const playAllHref = firstHref ? `${firstHref}${firstHref.includes('?') ? '&' : '?'}list=${encodeURIComponent(pl.id)}` : null;
 
         return page(req, res, {
             index: pl.visibility === 'public',
@@ -1843,9 +1891,9 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
                 const video = sitemapVideo(it);
                 // The same thumbnail as an <image:image> on the video's own entry (SEO-17): an image entry needs a URL
                 // this site really serves, and sitemapVideo only builds one from a thumbnail that exists and is https.
-                return { loc: `${base}${it.kind === 'clip' ? '/c/' : '/v/'}${Number(it.id)}`, lastmod: day(it.created_at), ...(video ? { videos: [video], images: [video.thumbnail_loc] } : {}) };
+                return { loc: `${base}${it.kind === 'clip' ? clipPath(it) : vodPath(it)}`, lastmod: day(it.created_at), ...(video ? { videos: [video], images: [video.thumbnail_loc] } : {}) };
             }),
-            ...uploaded.map((x) => ({ loc: `${base}/u/${x.id}`, lastmod: day(x.updated_at) })),
+            ...uploaded.map((x) => ({ loc: `${base}${uploadPath(x)}`, lastmod: day(x.updated_at) })),
             ...[...channels].map(([u, d]) => ({ loc: `${base}/@${u}`, lastmod: d })),
         ].map((u) => (u.lastmod ? u : { ...u, lastmod: undefined }));
         sitemapCache = { at: Date.now(), xml: seo.sitemapXml(urls) };
@@ -1867,7 +1915,7 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
         ]);
         const vodItems = (vods && vods.items) || [];
         const clipItems = (clips && clips.items) || [];
-        const links = (items, kind) => items.map((it) => ({ title: it.title || (kind === 'vod' ? 'Recording' : 'Clip'), url: `${base}/${kind === 'vod' ? 'v' : 'c'}/${it.id}`, note: String(it.description || it.ai_summary || it.summary || '').replace(/\s+/g, ' ').trim().slice(0, 600) }));
+        const links = (items, kind) => items.map((it) => ({ title: it.title || (kind === 'vod' ? 'Recording' : 'Clip'), url: `${base}${kind === 'vod' ? vodPath(it) : clipPath(it)}`, note: String(it.description || it.ai_summary || it.summary || '').replace(/\s+/g, ' ').trim().slice(0, 600) }));
         return {
             name: SITE_NAME,
             // AGT-5: each of Video's own pages is linked at its Markdown twin (openvibe-shared 4.108.0 leaves files and

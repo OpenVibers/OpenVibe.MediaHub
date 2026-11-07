@@ -34,12 +34,19 @@ function assetVersion(rel) {
 }
 const asset = (rel) => `/${rel}?v=${assetVersion(rel)}`;
 
-// The pages with a Markdown twin (openvibe-shared/agent-layer): the home and the watch pages of a
-// recording and a clip. The others (search, categories, an account's playlists) have none.
-const TWIN_PATH_RE = /^\/(?:v|c)\/\d+$/;
+// The pages with a Markdown twin (openvibe-shared/agent-layer): the home and the watch pages (a recording, a clip or
+// an upload, whose id is in /watch?v=). The others (search, categories, an account's playlists) have none.
+const TWIN_PATH_RE = /^\/(?:watch|(?:v|c)\/\d+)$/;
 function hasTwin(path) {
     const p = String(path || '/').split('?')[0].replace(/\/+$/, '') || '/';
     return p === '/' || TWIN_PATH_RE.test(p);
+}
+
+/** A page's canonical path: its query too when the page is addressed by it (/watch?v=<watch id>), which a twin link
+ *  and the canonical tag must keep. Every other page's canonical drops the query. */
+function canonicalPath(path) {
+    const p = String(path || '/');
+    return /^\/watch(\?|$)/.test(p) ? p : p.split('?')[0];
 }
 
 /** o: title, description, body (html), config, path, index, noindex, viewer, private, crumbs [{label, href}], scripts [rel],
@@ -56,7 +63,7 @@ function renderPage(o) {
     const viewer = o.viewer || { kind: 'anonymous' };
     const signedIn = viewer.kind === 'user';
     const pathNow = o.path || '/';
-    const canonical = `${String(o.baseUrl).replace(/\/+$/, '')}${pathNow.split('?')[0]}`;
+    const canonical = `${String(o.baseUrl).replace(/\/+$/, '')}${canonicalPath(pathNow)}`;
     const crumbs = (o.crumbs || []).length
         ? html`<nav class="crumbs" aria-label="Breadcrumbs">${o.crumbs.map((c, i) => html`${i ? ' / ' : ''}${c.href ? html`<a href="${c.href}">${c.label}</a>` : c.label}`)}</nav>`
         : '';
@@ -136,7 +143,7 @@ function send(res, status, o) {
     res.set('Vary', 'Host');
     // A page with a twin names it in the Link header, the same way the twin names the page.
     if (hasTwin(o.path)) {
-        const canonical = `${String(o.baseUrl).replace(/\/+$/, '')}${String(o.path || '/').split('?')[0]}`;
+        const canonical = `${String(o.baseUrl).replace(/\/+$/, '')}${canonicalPath(o.path || '/')}`;
         res.set('Link', seo.linkHeaderTags(canonical, '/llms.txt').header);
     }
     res.status(status).type('html').send(renderPage(o));

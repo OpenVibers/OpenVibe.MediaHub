@@ -13,11 +13,13 @@ module.exports = {
     policy: {
         auth: ['none', 'Network OIDC'],
         rateLimit: 'The public watch pages are not rate-limited by the app; the playlist API is limited to 120 reads a minute and 3,000 an hour per caller',
-        // What an id in a watch page's address is, and that it never changes meaning (AGT-4). The ids are OpenVibe.Media's:
-        // its vods and clips tables number them with a PostgreSQL identity column (migrations/0001_initial.sql).
+        // What an id in a watch page's address is, and that it never changes meaning (AGT-4). A page is addressed by
+        // its watch id (11 characters of URL-safe base64), never by the number behind it; the old numbered addresses
+        // (/v/{id}, /c/{id}, /u/{id}) answer 301 to the watch page.
         stableIds: [
-            { kind: 'recording', url: 'https://openvibe.video/v/{id}', id: 'OpenVibe.Media\'s recording id, a positive integer from an identity column: never reused or renumbered, even after the recording is deleted', gone: 'a deleted, private or missing recording answers 404, never another recording' },
-            { kind: 'clip', url: 'https://openvibe.video/c/{id}', id: 'OpenVibe.Media\'s clip id, the same kind of integer: never reused or renumbered', gone: 'a deleted, private or missing clip answers 404, never another clip' },
+            { kind: 'recording', url: 'https://openvibe.video/watch?v={id}', id: 'OpenVibe.Media\'s watch id for the recording: 11 characters of URL-safe base64, never reused and never derived from the recording\'s number', gone: 'a deleted, private or missing recording answers 404, never another recording' },
+            { kind: 'clip', url: 'https://openvibe.video/watch?v={id}', id: 'OpenVibe.Media\'s watch id for the clip: the same kind of id as a recording\'s, never reused, in the same space', gone: 'a deleted, private or missing clip answers 404, never another clip' },
+            { kind: 'upload', url: 'https://openvibe.video/watch?v={id}', id: 'OpenVibe.Video\'s watch id for an upload or a browser recording: 11 characters of URL-safe base64, never reused, fixed for the video\'s life', gone: 'a deleted, private or missing upload answers 404, never another video' },
         ],
     },
 };

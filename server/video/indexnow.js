@@ -12,6 +12,7 @@
  * Off without a key (INDEXNOW_KEY): start() does nothing and sweep() reads nothing.
  */
 const { USERNAME_RE } = require('./live-client');
+const { watchIdOf, watchPath } = require('./watch-links');
 
 function createVideoIndexNow({ config, live, indexnow, log = console, intervalMs = 10 * 60_000, limit = 50, maxRemembered = 5000 }) {
     const base = config.video.url.replace(/\/$/, '');
@@ -36,7 +37,8 @@ function createVideoIndexNow({ config, live, indexnow, log = console, intervalMs
             for (const it of pages.flatMap((p) => (p && Array.isArray(p.items) ? p.items : []))) {
                 const id = Number(it && it.id);
                 if (!Number.isSafeInteger(id) || id <= 0) continue;
-                const path = `${it.kind === 'clip' ? '/c/' : '/v/'}${id}`;
+                const watchId = watchIdOf(it);
+                const path = watchId ? watchPath(watchId) : `${it.kind === 'clip' ? '/c/' : '/v/'}${id}`;
                 if (seen.has(path)) continue;
                 seen.add(path);
                 if (!primed) continue;

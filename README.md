@@ -92,7 +92,7 @@ On other services it calls:
   change's own transaction by [server/events-outbox.js](server/events-outbox.js) and relayed by the SDK; off without
   `MEDIAHUB_EVENTS_URL`/`EVENTS_URL` and the client secret. OpenVibe.Quest credits "Publish a video" and "Share a picture".
 - OpenVibe.Search `search.document.write` — OpenVibe.Video's public, ready uploads as Search documents (owner
-  `media-hub`, type `video`, `/u/<id>`) through the owner API ([server/video/search-index.js](server/video/search-index.js),
+  `media-hub`, type `video`, `/watch?v=<watch id>`) through the owner API ([server/video/search-index.js](server/video/search-index.js),
   `MEDIAHUB_SEARCH_URL`; a minute after boot, hourly, and 30 s after an edit; a private, hidden or removed upload is
   tombstoned; `video_search_state`, migration 0013).
 
@@ -225,7 +225,10 @@ pages read Live's public JSON API server-side, signed out (Live already applies 
   - Completion runs in the background: the upload is *processing* until Media is done. The watch page says so and
     reloads itself (`Refresh: 15`), and a restart is recovered by asking Media again when the page or "Your videos" is
     read.
-- **Where it shows:** the watch page is `/u/<id>`. A public, ready video is on the person's channel (`/@username`,
+- **Where it shows:** the watch page is `/watch?v=<watch id>` (11 characters of URL-safe base64, minted once
+  per upload and fixed for its life; migration 0024). A stream recording and a clip have the same kind of address,
+  their ids minted by OpenVibe.Media, so one address serves every video. The old `/u/<vup_…>`, `/v/<id>` and
+  `/c/<id>` answer 301 to it, carrying `?t=` and `?list=`. A public, ready video is on the person's channel (`/@username`,
   as **Videos**), on the home page's **Latest uploads** and in the sitemap. Unlisted videos open by link only;
   private ones only for the owner and staff.
 - **Owner tools:** the owner edits the title, description and visibility (Media's title and visibility follow) and

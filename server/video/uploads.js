@@ -22,6 +22,7 @@
  * staff still see a hidden video, labelled. A removed upload's VOD is deleted in Media.
  */
 const crypto = require('crypto');
+const { createWatchIds } = require('./watch-ids');
 
 const KINDS = { 'video/mp4': 'video/mp4', 'video/quicktime': 'video/mp4', 'video/x-m4v': 'video/mp4', 'video/webm': 'video/webm', 'video/x-matroska': 'video/x-matroska' };
 const EXT_KINDS = { mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska' };
@@ -51,6 +52,7 @@ function createUploads({ s, media, config, log = console, events = null, sharing
     const addressId = (ip) => `ip:${crypto.createHmac('sha256', addressKey).update(String(ip || 'unknown')).digest('hex').slice(0, 32)}`;
     const running = new Map();   // upload id → the completion in flight in this process
 
+    const watchIds = createWatchIds({ s });
     const byId = (id) => (/^vup_[0-9A-HJKMNP-TV-Z]{26}$/.test(String(id)) ? s.db.maybe('SELECT * FROM video_uploads WHERE id = $1', [String(id)]) : null);
     /** An upload by its playlist number (seq, migration 0010). */
     const bySeq = (seq) => (/^[1-9]\d{0,15}$/.test(String(seq)) ? s.db.maybe('SELECT * FROM video_uploads WHERE seq = $1', [Number(seq)]) : null);
@@ -101,10 +103,11 @@ function createUploads({ s, media, config, log = console, events = null, sharing
         const vod = await media.vodCreate({ title, visibility, ownerSubject: who.requester });
         if (!vod.ok || !vod.data || vod.data.id == null) throw new UploadError(502, 'upload.media', `OpenVibe.Media could not start the upload (${vod.code || vod.status}).`);
         const id = s.newId('vup');
+        const watchId = await watchIds.mintUnique();
         const now = s.iso();
-        await s.db.query(`INSERT INTO video_uploads (id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, created_at, updated_at)
-                          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)`,
-        [id, who.requester, who.username || null, title, description, visibility, Number(vod.data.id), kind, size, PART_SIZE, Math.ceil(size / PART_SIZE), now]);
+        await s.db.query(`INSERT INTO video_uploads (id, watch_id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, created_at, updated_at)
+                          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)`,
+        [id, watchId, who.requester, who.username || null, title, description, visibility, Number(vod.data.id), kind, size, PART_SIZE, Math.ceil(size / PART_SIZE), now]);
         if (sharing) await sharing.register(who.requester, 'video', id, visibility);
         return await byId(id);
     }
@@ -125,10 +128,11 @@ function createUploads({ s, media, config, log = console, events = null, sharing
         const vod = await media.vodCreate({ title, visibility, ownerSubject: who.requester });
         if (!vod.ok || !vod.data || vod.data.id == null) throw new UploadError(502, 'upload.media', `OpenVibe.Media could not start the recording (${vod.code || vod.status}).`);
         const id = s.newId('vup');
+        const watchId = await watchIds.mintUnique();
         const now = s.iso();
-        await s.db.query(`INSERT INTO video_uploads (id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, created_at, updated_at)
-                          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, 0, 0, $9, $9)`,
-        [id, who.requester, who.username || null, title, description, visibility, Number(vod.data.id), kind, now]);
+        await s.db.query(`INSERT INTO video_uploads (id, watch_id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, created_at, updated_at)
+                          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, 0, 0, $10, $10)`,
+        [id, watchId, who.requester, who.username || null, title, description, visibility, Number(vod.data.id), kind, now]);
         if (sharing) await sharing.register(who.requester, 'video', id, visibility);
         return await byId(id);
     }
@@ -219,10 +223,10 @@ function createUploads({ s, media, config, log = console, events = null, sharing
         const now = s.iso();
         const title = cleanLine(vod.title, 120) || `Recording, ${now.slice(0, 16).replace('T', ' ')} UTC`;
         const size = Number(vod.file_size) > 0 ? Math.round(Number(vod.file_size)) : 0;
-        const row = await s.db.maybe(`INSERT INTO video_uploads (id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, status, created_at, updated_at)
-                                       VALUES ($1, $2, NULL, $3, '', 'private', $4, 'video/mp4', $5, 0, 0, 'processing', $6, $6)
+        const row = await s.db.maybe(`INSERT INTO video_uploads (id, watch_id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, status, created_at, updated_at)
+                                       VALUES ($1, $2, $3, NULL, $4, '', 'private', $5, 'video/mp4', $6, 0, 0, 'processing', $7, $7)
                                        ON CONFLICT (media_vod_id) WHERE media_vod_id IS NOT NULL DO NOTHING RETURNING *`,
-        [s.newId('vup'), `user:${subject}`, title, vodId, size, now]);
+        [s.newId('vup'), await watchIds.mintUnique(), `user:${subject}`, title, vodId, size, now]);
         if (!row) return await s.db.maybe('SELECT * FROM video_uploads WHERE media_vod_id = $1', [vodId]);
         log.log(`[MediaHub] a record-only recording is ${row.id} (Media VOD ${vodId})`);
         return await absorb(row, vod);
@@ -277,6 +281,9 @@ function createUploads({ s, media, config, log = console, events = null, sharing
     return {
         PART_SIZE, REASONS, UploadError, kindOf, addressId, canSee,
         byId, bySeq, start, part, complete, refresh, update, remove, report, startRecording, chunk, importRecording, fillUsername,
+        byWatchId: watchIds.byWatchId,
+        watchIdOf: (row) => watchIds.ensure(row),
+        backfillWatchIds: (opts) => watchIds.backfillAll(opts),
         mine: (owner, limit = 60) => s.db.many("SELECT * FROM video_uploads WHERE owner = $1 AND state <> 'removed' ORDER BY id DESC LIMIT $2", [owner, limit]),
         latest: (limit = 12) => s.db.many("SELECT * FROM video_uploads WHERE visibility = 'public' AND status = 'ready' AND state = 'active' ORDER BY id DESC LIMIT $1", [limit]),
         channel: (username, limit = 48) => s.db.many("SELECT * FROM video_uploads WHERE lower(owner_username) = lower($1) AND visibility = 'public' AND status = 'ready' AND state = 'active' ORDER BY id DESC LIMIT $2", [String(username), limit]),

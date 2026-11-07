@@ -73,13 +73,16 @@ const OUTPUT = {
     const kimCookie = t.signIn(kim);
     const samCookie = t.signIn(sam);
     let id;
+    let watch;
 
     await check('a finished private upload is analysed through a signed URL, never a paid model; a run still going is read again by its id', async () => {
         const start = await vreq(t.base, '/api/v1/videos', { method: 'POST', json: { title: 'Coast', size: 10, content_type: 'video/mp4', name: 'c.mp4', visibility: 'private' }, cookie: kimCookie });
         id = start.json().upload.id;
         await vreq(t.base, `/api/v1/videos/${id}/parts/1`, { method: 'PUT', body: Buffer.alloc(10, 1), cookie: kimCookie });
-        await vreq(t.base, `/api/v1/videos/${id}/complete`, { method: 'POST', cookie: kimCookie });
-        for (let i = 0; i < 20 && !(await vreq(t.base, `/u/${id}`, { cookie: kimCookie })).text.includes('data-ovv-video'); i++) await new Promise((r) => setTimeout(r, 50));
+        const done = await vreq(t.base, `/api/v1/videos/${id}/complete`, { method: 'POST', cookie: kimCookie });
+        watch = done.json().video.url;
+        assert.match(watch, /^\/watch\?v=[A-Za-z0-9_-]{11}$/, 'the upload is addressed by its watch id');
+        for (let i = 0; i < 20 && !(await vreq(t.base, watch, { cookie: kimCookie })).text.includes('data-ovv-video'); i++) await new Promise((r) => setTimeout(r, 50));
         assert.ok(t.ctx.videoAi.enabled);
         await t.ctx.videoAi.sweep();
         assert.strictEqual(runs.length, 1);
@@ -100,7 +103,7 @@ const OUTPUT = {
     });
 
     await check('the page: captions and chapters tracks, the transcript, the chapters, the summary and the owner\'s button', async () => {
-        const page = await vreq(t.base, `/u/${id}`, { cookie: kimCookie });
+        const page = await vreq(t.base, watch, { cookie: kimCookie });
         assert.ok(page.text.includes(`<track kind="captions" label="Captions (AI)" src="/u/${id}/captions.vtt" default>`));
         assert.ok(page.text.includes(`<track kind="chapters" src="/u/${id}/chapters.vtt">`));
         assert.ok(page.text.includes('A walk along the coast at sunset') && page.text.includes('Written by AI'));
@@ -123,7 +126,7 @@ const OUTPUT = {
         const said = 'A man in a red hoodie walks along the coast at sunset.';
         await t.ctx.s.db.query('UPDATE video_upload_ai SET overview = $1 WHERE upload_id = $2', [said, id]);
         assert.strictEqual((await t.ctx.videoAi.forUpload({ id })).overview, said, 'the overview is stored as written');
-        const view = await vreq(t.base, `/u/${id}`, { cookie: kimCookie });
+        const view = await vreq(t.base, watch, { cookie: kimCookie });
         assert.ok(view.text.includes(said), 'the page shows the overview as written');
         await t.ctx.s.db.query('UPDATE video_upload_ai SET overview = $1 WHERE upload_id = $2', [OUTPUT.overview.text, id]);
     });

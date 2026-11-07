@@ -40,6 +40,8 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
     const vods = new Map();        // OpenVibe.Video uploads: id → { id, title, visibility, user_id, bytes, types, status }
     const deletedVods = [];
     const vodState = { duration: 42.5, completeFails: false };
+    // The watch ids Media mints for the VODs and clips it owns: watch id → { kind, id } (the resolver tests fill it).
+    const watches = new Map();
     let vodSeq = 0;
     const state = { down: false, tokenRejects: false };
     let seq = 0;
@@ -115,7 +117,13 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
         // delete. Needs the service token like the v2 API.
         if (path.startsWith('/api/v1/')) {
             if (state.tokenRejects || req.headers.authorization !== `Bearer ${SERVICE_TOKEN}`) return problem(res, 401, 'auth.required', 'Authentication required');
-            const parts = path.split('/').filter(Boolean);   // api v1 :app vods [:id] [chunks|complete]
+            const parts = path.split('/').filter(Boolean);   // api v1 :app vods [:id] [chunks|complete] | watch :watchId
+            // The watch-id resolver (GET /api/v1/:app/watch/:watchId): which item a watch id names, or 404. Media mints
+            // the ids of its VODs and clips, so it is the one authority that can answer.
+            if (parts[3] === 'watch') {
+                const ref = watches.get(String(parts[4] || ''));
+                return ref ? json(res, 200, { ...ref }) : problem(res, 404, 'media.watch.not_found', 'Not found');
+            }
             if (parts[3] !== 'vods') return problem(res, 404, 'route.not_found', 'no such route');
             const vodPublicOf = (v) => ({
                 id: v.id, title: v.title, visibility: v.visibility, user_id: v.user_id, is_recording: v.status !== 'ready',
@@ -332,7 +340,7 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     const url = `http://127.0.0.1:${server.address().port}`;
     return {
-        url, objects, sessions, requests, deleted, state, vods, deletedVods, vodState,
+        url, objects, sessions, requests, deleted, state, vods, deletedVods, vodState, watches,
         bytesOf: (id) => (objects.get(id) && objects.get(id).bytes) || null,
         objectOf: (id) => objects.get(id) || null,
         setDown: (v) => { state.down = v; },

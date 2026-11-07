@@ -24,6 +24,7 @@ const cache = require('openvibe-shared/cache-policy');
 const { sameOrigin } = require('../http/principal');
 const { html, raw, notice } = require('../render/html');
 const { UploadError } = require('./uploads');
+const { watchPath, uploadPath, movedTo } = require('./watch-links');
 
 const REASON_TEXT = {
     child_safety: 'It sexualises or endangers a child', violence: 'Violence or a threat', harassment: 'Harassment or someone\'s private details',
@@ -98,7 +99,7 @@ function createUploadApi({ ctx, config }) {
         if (!row) return undefined;
         try {
             const out = await up.complete(row);
-            return res.status(202).json({ video: { id: out.id, status: out.status, url: `/u/${out.id}` } });
+            return res.status(202).json({ video: { id: out.id, status: out.status, url: uploadPath(out) } });
         } catch (err) { return problem(res, err); }
     });
 
@@ -136,6 +137,9 @@ function mountUploadPages(r, h) {
     const cfg = ctx.config.videoUploads;
     const whoOf = (req) => ({ requester: signedIn(req) ? ownerOf(req) : null, staff: isStaff(req) });
     const GB = 1024 ** 3;
+
+    /** The page a video lives on now, with a query: /watch?v=<watch id> (or /u/<id> before migration 0024 filled it). */
+    const liveAt = (row, q) => `${row.watch_id ? watchPath(row.watch_id) : `/u/${row.id}`}${row.watch_id ? '&' : '?'}${q}`;
 
     const statusText = (row) => (row.state === 'hidden' ? 'Hidden after reports, waiting for staff'
         : row.status === 'uploading' ? `Upload stopped at ${Math.round((row.parts_received / row.parts_expected) * 100)}%`
@@ -226,24 +230,33 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
             body: html`<h1>Your videos</h1>
 <p><a class="ovv-btn ovv-btn--primary" href="/upload"><i class="fa-solid fa-upload" aria-hidden="true"></i> Upload a video</a></p>
 ${fresh.length ? html`<table class="ovv-table"><thead><tr><th scope="col">Video</th><th scope="col">State</th><th scope="col">Length</th><th scope="col">Views</th><th scope="col">Uploaded</th></tr></thead><tbody>
-${fresh.map((x) => html`<tr><td><a href="/u/${x.id}">${x.title}</a></td><td>${statusText(x)}</td><td>${x.duration_seconds ? durationLabel(x.duration_seconds) : ''}</td><td>${Number(x.views) || 0}</td><td>${dateLabel(x.created_at) || ''}</td></tr>`)}
+${fresh.map((x) => html`<tr><td><a href="${uploadPath(x)}">${x.title}</a></td><td>${statusText(x)}</td><td>${x.duration_seconds ? durationLabel(x.duration_seconds) : ''}</td><td>${Number(x.views) || 0}</td><td>${dateLabel(x.created_at) || ''}</td></tr>`)}
 </tbody></table>` : html`<p class="muted">Nothing uploaded yet.</p>`}`,
         });
     });
 
-    r.get('/u/:id', async (req, res) => {
-        let row = await up.byId(req.params.id);
+    // A video is watched at /watch?v=<watch id>; /u/<vup_…> is its old address and answers 301 to it (once the row
+    // has a watch id, migration 0024).
+    async function mayWatch(req, row) {
         const who = whoOf(req);
-        if (!up.canSee(row, who)) return notFound(req, res);
+        if (!up.canSee(row, who)) return false;
         // Specific people and Only me: the share row decides, beside the old column. A row written before the
         // sharing model (an import, a cut) does not exist yet: the column still decides, failing closed for private.
         const own = who.requester && row.owner === who.requester;
         if (!own && !who.staff && ctx.sharing) {
             const share = await ctx.sharing.shareOf('video', row.id).catch(() => null);
-            if (share && !await ctx.sharing.canView(req.viewer, 'video', row.id).catch(() => false)) return notFound(req, res);
+            if (share && !await ctx.sharing.canView(req.viewer, 'video', row.id).catch(() => false)) return false;
         }
+        return true;
+    }
+
+    async function renderPage(req, res, row) {
+        const who = whoOf(req);
         if (row.status === 'processing') row = await up.refresh(row);
-        const manage = own || who.staff;
+        const manage = who.requester && row.owner === who.requester || who.staff;
+        const own = Boolean(who.requester && row.owner === who.requester);
+        const watchId = row.watch_id || null;
+        const canonicalPath = watchId ? watchPath(watchId) : `/u/${row.id}`;
         const ready = row.status === 'ready';
         const vod = ready ? await up.playback(row) : null;
         const ai = ready ? await ctx.videoAi.forUpload(row) : null;
@@ -287,6 +300,7 @@ ${fresh.map((x) => html`<tr><td><a href="/u/${x.id}">${x.title}</a></td><td>${st
             title: row.title,
             styles: ['kit.css'],
             description: about,
+            path: canonicalPath,
             ...(listed && thumb ? { image: thumb, ogType: 'video.other' } : {}),
             scripts: ready ? ['js/video.js'] : [],
             player: !!(ready && vod),
@@ -295,7 +309,7 @@ ${fresh.map((x) => html`<tr><td><a href="/u/${x.id}">${x.title}</a></td><td>${st
 ${req.query.saved === '1' ? notice('Saved.', 'ok') : ''}${req.query.reported === '1' ? notice('Thanks: the report reached OpenVibe staff.', 'ok') : ''}
 ${row.state === 'hidden' ? notice('Hidden after reports: only you and OpenVibe staff can see it until staff decide.', 'warn') : ''}
 ${row.visibility === 'private' && ready ? notice('Private: only you (and OpenVibe staff) can see this video.', 'info') : ''}
-${original && original.state !== 'removed' ? html`<p class="ovv-fine ovv-edited-from">An edited copy of <a href="/u/${original.id}">${original.title}</a>, made by the AI cut.</p>` : ''}
+${original && original.state !== 'removed' ? html`<p class="ovv-fine ovv-edited-from">An edited copy of <a href="${uploadPath(original)}">${original.title}</a>, made by the AI cut.</p>` : ''}
 ${ready && vod ? html`<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${thumb ? html` poster="${`${thumb}?w=1280&fmt=webp`}" data-ov-thumb="${`${thumb}?w=32&fmt=webp`}" data-ov-ambient` : ''} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${hlsAttrs(vod)}>${tracks}</video></div>`
         : html`<div class="ovv-player-wrap ovv-processing" role="status">${row.status === 'processing' ? html`<p><i class="fa-solid fa-gear fa-spin" aria-hidden="true"></i> Processing: OpenVibe.Media is making it playable. This page reloads by itself.</p>`
             : row.status === 'failed' ? html`<p>This upload could not be processed. ${row.error || ''}</p>`
@@ -306,7 +320,7 @@ ${what}
 ${channel ? html`<a class="ovv-avatar" href="/@${channel}" aria-hidden="true" tabindex="-1">${channel.slice(0, 1).toUpperCase()}${/^[A-Za-z0-9_]{1,32}$/.test(channel) ? html`<img src="${ctx.config.networkUrl}/avatar/${channel}" alt="" loading="lazy">` : ''}</a>` : ''}
 <div class="ovv-byline-text">${channel ? html`<a class="ovv-channel-name" href="/@${channel}">@${channel}</a>` : ''}
 </div>
-<div class="ovv-byline-actions">${saveForm}${raw(shareButton({ url: `${ctx.config.video.url}/u/${row.id}`, title: row.title, text: about, image: thumb || '', timeFrom: ready && vod ? '.ovv-player' : null }))}</div>
+<div class="ovv-byline-actions">${saveForm}${raw(shareButton({ url: `${ctx.config.video.url}${canonicalPath}`, title: row.title, text: about, image: thumb || '', timeFrom: ready && vod ? '.ovv-player' : null }))}</div>
 </div>
 ${row.description ? html`<section class="ovv-panel ovv-description"><p>${row.description}</p></section>` : ''}
 ${aiDone && ai.overview ? html`<section class="ovv-panel" aria-labelledby="h-ai"><h2 id="h-ai">About this video</h2><p>${ai.overview}</p><p class="ovv-fine">Written by AI from the video's sound and pictures (OpenVibe.AI, run on OpenVibe's own servers).</p>
@@ -326,7 +340,7 @@ ${manage ? html`<section class="ovv-panel ovv-owner" aria-labelledby="h-owner"><
 <form class="ovv-owner-delete" method="post" action="/u/${row.id}/delete"><label class="ovv-confirm"><input type="checkbox" name="confirm" value="1" required> I want to delete it for good</label> <button class="ovv-btn ovv-btn--danger" type="submit">Delete</button></form>
 </details></section>` : ''}
 ${cutsOn ? cutPanel(row, cuts, cutBusy, reel) : ''}
-${aiDone && ai.chapters.length > 1 ? html`<section class="ovv-panel ovv-chapters" aria-labelledby="h-chapters"><h2 id="h-chapters">Chapters</h2><ol>${ai.chapters.map((c) => html`<li><a href="/u/${row.id}?t=${c.start}" data-ovv-chapter="${c.start}"><span class="ovv-time">${vttTime(c.start).slice(0, 8)}</span><span>${c.title}</span></a></li>`)}</ol><p class="ovv-fine">From the video's highlights (AI).</p></section>` : ''}
+${aiDone && ai.chapters.length > 1 ? html`<section class="ovv-panel ovv-chapters" aria-labelledby="h-chapters"><h2 id="h-chapters">Chapters</h2><ol>${ai.chapters.map((c) => html`<li><a href="${canonicalPath}${watchId ? '&' : '?'}t=${c.start}" data-ovv-chapter="${c.start}"><span class="ovv-time">${vttTime(c.start).slice(0, 8)}</span><span>${c.title}</span></a></li>`)}</ol><p class="ovv-fine">From the video's highlights (AI).</p></section>` : ''}
 ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report this video</summary>
 <form method="post" action="/u/${row.id}/report">
 <fieldset><legend>What is wrong?</legend>${Object.entries(REASON_TEXT).map(([k, t]) => html`<label class="ovv-radio"><input type="radio" name="reason" value="${k}" required> ${t}</label>`)}</fieldset>
@@ -336,7 +350,23 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
 </aside>
 </div>`,
         });
+    }
+
+    // /u/<vup_…>: the old address, 301 to the watch page (a row written before migration 0024 has no id yet: it gets
+    // one here, so an old link still lands on a watch page).
+    r.get('/u/:id', async (req, res) => {
+        const row = await up.byId(req.params.id);
+        if (!row || !await mayWatch(req, row)) return notFound(req, res);
+        const watchId = row.watch_id || await up.watchIdOf(row);
+        if (watchId) return res.redirect(301, movedTo(watchPath(watchId), req.query));
+        return renderPage(req, res, row);
     });
+
+    /** The watch page of an upload, for /watch?v=<id> (server/video/pages.js), whoever may see it. */
+    async function renderWatchPage(req, res, row) {
+        if (!row || !await mayWatch(req, row)) return notFound(req, res);
+        return renderPage(req, res, row);
+    }
 
     // The AI's transcript and chapters as WebVTT tracks, for whoever may see the video.
     async function aiOf(req) {
@@ -367,7 +397,7 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
             return page(req, res, { title: 'Not saved', body: html`<h1>Not saved</h1><p>${err.detail}</p><p><a href="/u/${row.id}">Back</a></p>` }, err.status);
         }
         if (ctx.videoSearch) ctx.videoSearch.kick();
-        return res.redirect(303, `/u/${row.id}?saved=1`);
+        return res.redirect(303, liveAt(row, 'saved=1'));
     });
 
     r.post('/u/:id/cut', mustSignIn('here'), async (req, res) => {
@@ -381,7 +411,7 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
             if (!(err instanceof UploadError)) throw err;
             return page(req, res, { title: 'Not started', body: html`<h1>The cut did not start</h1><p>${err.detail}</p><p><a href="/u/${row.id}">Back to the video</a></p>` }, err.status);
         }
-        return res.redirect(303, `/u/${row.id}#h-cut`);
+        return res.redirect(303, `${row.watch_id ? watchPath(row.watch_id) : `/u/${row.id}`}#h-cut`);
     });
 
     r.post('/u/:id/delete', mustSignIn('here'), async (req, res) => {
@@ -389,7 +419,7 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
         const who = whoOf(req);
         if (!row || row.state === 'removed' || !(row.owner === who.requester || who.staff)) return notFound(req, res);
         if (!sameSite(req, res, `/u/${row.id}`)) return undefined;
-        if ((req.body || {}).confirm !== '1') return res.redirect(303, `/u/${row.id}`);
+        if ((req.body || {}).confirm !== '1') return res.redirect(303, row.watch_id ? watchPath(row.watch_id) : `/u/${row.id}`);
         await up.remove(row);
         if (ctx.videoSearch) ctx.videoSearch.kick();
         return res.redirect(303, '/me/videos');
@@ -407,18 +437,20 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
             return page(req, res, { title: 'Not sent', body: html`<h1>Not sent</h1><p>${err.detail}</p><p><a href="/u/${row.id}">Back</a></p>` }, err.status);
         }
         if (ctx.videoSearch) ctx.videoSearch.kick();
-        return res.redirect(303, `/u/${row.id}?reported=1`);
+        return res.redirect(303, liveAt(row, 'reported=1'));
     });
 
     /** A card for an upload (home, channel). */
-    return function uploadCard(x) {
+    function uploadCard(x) {
         return card({
-            href: `/u/${x.id}`, thumb: httpsUrl(x.thumbnail_url), title: x.title,
+            href: uploadPath(x), thumb: httpsUrl(x.thumbnail_url), title: x.title,
             channel: x.owner_username || null, channelHref: x.owner_username ? `/@${x.owner_username}` : null,
             duration: x.duration_seconds ? durationLabel(x.duration_seconds) : null,
             date: dateLabel(x.ready_at || x.created_at) || null, iso: x.ready_at || x.created_at || null,
         });
-    };
+    }
+
+    return { card: uploadCard, renderWatchPage };
 }
 
 module.exports = { createUploadApi, mountUploadPages, REASON_TEXT };

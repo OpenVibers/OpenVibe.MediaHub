@@ -145,10 +145,11 @@ function startLive() {
             const s = t.ctx.s;
             const id = 'vup_01J0000000000000000000000B';
             t.media.vods.set(950, { id: 950, title: 'A home video', visibility: 'public', bytes: 1000, types: ['video/mp4'], status: 'ready' });
-            await s.db.exec(`INSERT INTO video_uploads (id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, parts_received, status, state, created_at, updated_at, ready_at, duration_seconds, views)
-                             VALUES ($1, 'user:nobody', 'kim', 'A home video', '', 'public', 950, 'video/mp4', 1000, 1000, 1, 1, 'ready', 'active', '2026-10-20T10:00:00.000Z', '2026-10-20T10:00:00.000Z', '2026-10-20T10:00:00.000Z', 125, 0)`,
+            await s.db.exec(`INSERT INTO video_uploads (id, watch_id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, parts_received, status, state, created_at, updated_at, ready_at, duration_seconds, views)
+                             VALUES ($1, 'watchUP0000', 'user:nobody', 'kim', 'A home video', '', 'public', 950, 'video/mp4', 1000, 1000, 1, 1, 'ready', 'active', '2026-10-20T10:00:00.000Z', '2026-10-20T10:00:00.000Z', '2026-10-20T10:00:00.000Z', 125, 0)`,
             [id]);
-            const up = await get(`/u/${id}`);
+            assert.strictEqual((await get(`/u/${id}`)).status, 301, 'the old address is a redirect');
+            const up = await get(`/watch?v=watchUP0000`);
             assert.strictEqual(up.status, 200);
             const uline = /<p class="ovv-what">([\s\S]*?)<\/p>/.exec(up.text)[1];
             assert.ok(uline.includes('Upload') && uline.includes('Uploaded on') && uline.includes('Oct 20, 2026'), uline);
@@ -188,11 +189,11 @@ function startLive() {
             assert.strictEqual(clipButtons.length, 1, 'one Share button on the clip page: ' + clipButtons.join(' | '));
             assert.ok(clipButtons[0].includes('data-url="https://openvibe.video/c/602"'), clipButtons[0]);
             // An upload's watch page carries the same button.
-            const up = await get('/u/vup_01J0000000000000000000000B');
+            const up = await get('/watch?v=watchUP0000');
             assert.strictEqual(up.status, 200);
             const upButtons = up.text.match(/<button[^>]*data-ov-share-sheet[^>]*>/g) || [];
             assert.strictEqual(upButtons.length, 1, 'one Share button on the upload page: ' + upButtons.join(' | '));
-            assert.ok(upButtons[0].includes('data-url="https://openvibe.video/u/vup_01J0000000000000000000000B"'), upButtons[0]);
+            assert.ok(upButtons[0].includes('data-url="https://openvibe.video/watch?v=watchUP0000"'), upButtons[0]);
         });
 
         await check('outcome 7: every export says what it is for, and the transcript says it was written by AI', async () => {

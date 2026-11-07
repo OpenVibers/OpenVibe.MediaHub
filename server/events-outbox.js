@@ -11,6 +11,7 @@
  * The relay is off (rows wait) without MEDIAHUB_EVENTS_URL/EVENTS_URL and the OAuth client secret.
  */
 const contracts = require('openvibe-contracts');
+const { uploadPath } = require('./video/watch-links');
 const { createServiceOutbox } = require('openvibe-sdk/events');
 
 const EVENT_TYPES = ['mediahub.video.published', 'mediahub.picture.uploaded'];
@@ -51,7 +52,7 @@ function createEventsOutbox({ s, config, log = console, fetchImpl = null }) {
             return await out.emit({
                 event_type: 'mediahub.video.published', version: 1,
                 actor: { type: 'user', id: owner }, subject: { type: 'video', id: row.id }, visibility: 'public',
-                payload: { upload: row.id, owner: { type: 'user', id: owner }, title: String(row.title || 'Video').slice(0, 120), url: `${videoUrl}/u/${row.id}`, published_at: publishedAt },
+                payload: { upload: row.id, owner: { type: 'user', id: owner }, title: String(row.title || 'Video').slice(0, 120), url: `${videoUrl}${uploadPath(row)}`, published_at: publishedAt },
             });
         },
         start: () => out.start(),

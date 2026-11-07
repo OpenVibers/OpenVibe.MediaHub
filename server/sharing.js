@@ -18,6 +18,7 @@
  */
 const { createShares } = require('openvibe-sdk/share');
 const { serviceAuth } = require('openvibe-contracts');
+const { uploadPath } = require('./video/watch-links');
 
 const SERVICE = 'mediahub';
 const KINDS = ['picture', 'album', 'video', 'download'];
@@ -164,9 +165,9 @@ function describeRef(db, config) {
             return { title: row.title || 'An album', link: `${base}/a/${row.slug}`, roles: ['viewer'], audiences: AUDIENCES, transferable: true };
         }
         if (ref.kind === 'video') {
-            const row = await db.maybe('SELECT id, title FROM video_uploads WHERE id = $1', [ref.id]);
+            const row = await db.maybe('SELECT id, watch_id, title FROM video_uploads WHERE id = $1', [ref.id]);
             if (!row) return {};
-            return { title: row.title || 'A video', link: `${base}/u/${row.id}`, roles: ['viewer'], audiences: AUDIENCES, transferable: true };
+            return { title: row.title || 'A video', link: `${base}${uploadPath(row)}`, roles: ['viewer'], audiences: AUDIENCES, transferable: true };
         }
         return {};
     };

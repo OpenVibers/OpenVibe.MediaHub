@@ -55,6 +55,7 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
     const file = Buffer.alloc(8 * MB + 1234, 7);
     file.write('ftypqt  ', 4);
     let id = null;
+    let watchUrl = null;
 
     await check('signed out, cross-site, wrong type and too big are refused before Media hears of it', async () => {
         const meta = { title: 'Trip', size: file.length, content_type: 'video/quicktime', name: 'trip.mov', visibility: 'public' };
@@ -87,13 +88,18 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         assert.strictEqual(vod.meta.owner_subject, kim.subject, 'the uploader is in the VOD\'s meta');
         const done1 = await vreq(t.base, `/api/v1/videos/${id}/complete`, { method: 'POST', cookie: kimCookie });
         assert.strictEqual(done1.status, 202);
-        assert.strictEqual(done1.json().video.url, `/u/${id}`);
+        // A video is watched at /watch?v=<watch id>, YouTube's shape: 11 characters of URL-safe base64.
+        assert.match(done1.json().video.url, /^\/watch\?v=[A-Za-z0-9_-]{11}$/);
+        watchUrl = done1.json().video.url;
+        const old = await vreq(t.base, `/u/${id}`);
+        assert.strictEqual(old.status, 301, 'the old address is a redirect');
+        assert.strictEqual(old.headers.location, watchUrl, 'to the watch page');
     });
 
     await check('the watch page plays it from Media, and it is on the channel, the home page and the sitemap', async () => {
         let page = null;
         for (let i = 0; i < 20; i++) {
-            page = await vreq(t.base, `/u/${id}`);
+            page = await vreq(t.base, watchUrl);
             if (page.status === 200 && page.text.includes('data-ovv-video')) break;
             await new Promise((r) => setTimeout(r, 50));
         }
@@ -104,15 +110,15 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         assert.ok(page.text.includes('<a class="ovv-channel-name" href="/@kim">@kim</a>'));
         assert.ok(page.text.includes('Report this video'), 'others may report it');
         assert.ok(!page.text.includes('Manage this video'));
-        assert.ok((await vreq(t.base, '/')).text.includes(`href="/u/${id}"`), 'the home page');
-        assert.ok((await vreq(t.base, '/@kim')).text.includes(`href="/u/${id}"`), 'the channel');
-        assert.ok((await vreq(t.base, '/sitemap.xml')).text.includes(`https://openvibe.video/u/${id}`), 'the sitemap');
+        assert.ok((await vreq(t.base, '/')).text.includes(`href="${watchUrl}"`), 'the home page');
+        assert.ok((await vreq(t.base, '/@kim')).text.includes(`href="${watchUrl}"`), 'the channel');
+        assert.ok((await vreq(t.base, '/sitemap.xml')).text.includes(`https://openvibe.video${watchUrl}`), 'the sitemap');
         const mine = await vreq(t.base, '/me/videos', { cookie: kimCookie });
         assert.ok(mine.text.includes('Trip to the coast') && mine.text.includes('Public'));
     });
 
     await check('a ready upload goes in a playlist (kind upload, by its number): listed, played, and next in line', async () => {
-        const watch = await vreq(t.base, `/u/${id}`, { cookie: samCookie });
+        const watch = await vreq(t.base, watchUrl, { cookie: samCookie });
         assert.ok(watch.text.includes('title="Save to a playlist"'), 'a signed-in viewer can save it');
         assert.ok(watch.text.includes('<input type="hidden" name="kind" value="upload">'));
         const seq = Number((/<input type="hidden" name="id" value="(\d+)">/.exec(watch.text) || [])[1]);
@@ -122,11 +128,11 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         const listUrl = saved.headers.location;
         const listId = listUrl.split('/').pop();
         const list = await vreq(t.base, listUrl, { cookie: samCookie });
-        assert.ok(list.text.includes(`href="/u/${id}"`) && list.text.includes('Trip to the coast'), 'the playlist shows the upload');
-        assert.ok(list.text.includes(`href="/u/${id}?list=${listId}"`), 'Play all starts it');
+        assert.ok(list.text.includes(`href="${watchUrl}"`) && list.text.includes('Trip to the coast'), 'the playlist shows the upload');
+        assert.ok(list.text.includes(`href="${watchUrl}&amp;list=${listId}"`), 'Play all starts it');
         await vreq(t.base, `/playlists/${listId}/visibility`, { method: 'POST', cookie: samCookie, form: { visibility: 'public' } });
         await vreq(t.base, '/playlists/add', { method: 'POST', cookie: samCookie, form: { kind: 'vod', id: '101', playlist: listId } });
-        const inList = await vreq(t.base, `/u/${id}?list=${listId}`);
+        const inList = await vreq(t.base, `${watchUrl}&list=${listId}`);
         assert.ok(inList.text.includes('Up next in') && inList.text.includes(`data-ovv-next="/v/101?list=${listId}"`), 'the next item plays after it');
         const api = await vreq(t.base, `/api/v1/video/playlists/${listId}`, { cookie: samCookie });
         assert.ok(api.text.includes('"kind":"upload"'), api.text.slice(0, 300));
@@ -136,17 +142,17 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         const r = await vreq(t.base, `/u/${id}/manage`, { method: 'POST', cookie: kimCookie, form: { title: 'Coast trip', description: 'x', visibility: 'private' } });
         assert.strictEqual(r.status, 303);
         assert.strictEqual([...t.media.vods.values()][0].title, 'Coast trip');
-        assert.strictEqual((await vreq(t.base, `/u/${id}`)).status, 404);
-        assert.strictEqual((await vreq(t.base, `/u/${id}`, { cookie: samCookie })).status, 404);
-        const own = await vreq(t.base, `/u/${id}`, { cookie: kimCookie });
+        assert.strictEqual((await vreq(t.base, watchUrl)).status, 404);
+        assert.strictEqual((await vreq(t.base, watchUrl, { cookie: samCookie })).status, 404);
+        const own = await vreq(t.base, watchUrl, { cookie: kimCookie });
         assert.ok(own.text.includes('Private: only you') && own.text.includes('noindex'));
-        assert.ok(!(await vreq(t.base, '/')).text.includes(`/u/${id}`), 'off the home page');
+        assert.ok(!(await vreq(t.base, '/')).text.includes(watchUrl), 'off the home page');
         assert.strictEqual((await vreq(t.base, `/u/${id}/manage`, { method: 'POST', cookie: samCookie, form: { title: 'Mine now' } })).status, 404);
         await vreq(t.base, `/u/${id}/manage`, { method: 'POST', cookie: kimCookie, form: { title: 'Coast trip', visibility: 'public' } });
     });
 
     await check('a short description is kept, and the meta description says what the video is (SEO audit 11-03)', async () => {
-        const page = (await vreq(t.base, `/u/${id}`)).text;
+        const page = (await vreq(t.base, watchUrl)).text;
         const m = page.match(/<meta name="description" content="([^"]*)"/);
         assert.ok(m, 'a meta description');
         assert.ok(m[1].startsWith('x. '), `the uploader's own word first (${m[1]})`);
@@ -156,8 +162,8 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
     await check('a child-safety report hides it at once; one report per person; the owner sees why', async () => {
         const r = await vreq(t.base, `/u/${id}/report`, { method: 'POST', cookie: samCookie, form: { reason: 'child_safety', note: 'look at 0:12' } });
         assert.strictEqual(r.status, 303);
-        assert.strictEqual((await vreq(t.base, `/u/${id}`)).status, 404, 'hidden from everyone');
-        const own = await vreq(t.base, `/u/${id}`, { cookie: kimCookie });
+        assert.strictEqual((await vreq(t.base, watchUrl)).status, 404, 'hidden from everyone');
+        const own = await vreq(t.base, watchUrl, { cookie: kimCookie });
         assert.ok(own.text.includes('Hidden after reports'));
         assert.strictEqual((await vreq(t.base, `/u/${id}/report`, { method: 'POST', cookie: samCookie, form: { reason: 'nonsense' } })).status, 404, 'hidden: not reportable by others');
     });
@@ -176,9 +182,12 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         const vod = [...t.media.vods.values()].find((v) => v.visibility === 'unlisted');
         assert.ok(vod.bytes.equals(Buffer.concat(pieces)), 'Media has every piece, in order');
         assert.deepStrictEqual([...new Set(vod.types)], ['video/webm']);
-        assert.strictEqual((await vreq(t.base, `/api/v1/videos/${rid}/complete`, { method: 'POST', cookie: samCookie })).status, 202);
+        const doneR = await vreq(t.base, `/api/v1/videos/${rid}/complete`, { method: 'POST', cookie: samCookie });
+        assert.strictEqual(doneR.status, 202);
+        const recUrl = doneR.json().video.url;
+        assert.match(recUrl, /^\/watch\?v=[A-Za-z0-9_-]{11}$/, 'a recording has a watch id too');
         let page = null;
-        for (let i = 0; i < 20; i++) { page = await vreq(t.base, `/u/${rid}`, { cookie: samCookie }); if (page.text.includes('data-ovv-video')) break; await new Promise((r) => setTimeout(r, 50)); }
+        for (let i = 0; i < 20; i++) { page = await vreq(t.base, recUrl, { cookie: samCookie }); if (page.text.includes('data-ovv-video')) break; await new Promise((r) => setTimeout(r, 50)); }
         assert.ok(page.text.includes('data-ovv-video'), 'it plays');
         assert.match(page.text, /<h1 class="ovv-title">Recording, \d{4}-\d\d-\d\d \d\d:\d\d UTC<\/h1>/, 'an untitled recording is named by its time');
         assert.strictEqual((await vreq(t.base, `/api/v1/videos/${rid}/chunks/4`, { method: 'PUT', body: pieces[2], cookie: samCookie })).status, 409, 'closed once complete');
@@ -191,7 +200,7 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         const r = await vreq(t.base, `/u/${id}/delete`, { method: 'POST', cookie: kimCookie, form: { confirm: '1' } });
         assert.strictEqual(r.status, 303);
         assert.deepStrictEqual(t.media.deletedVods, [1]);
-        assert.strictEqual((await vreq(t.base, `/u/${id}`, { cookie: kimCookie })).status, 404);
+        assert.strictEqual((await vreq(t.base, watchUrl, { cookie: kimCookie })).status, 404);
         const meta = { title: 'More', size: 10, content_type: 'video/mp4', name: 'a.mp4' };
         for (let i = 0; i < 3; i++) assert.strictEqual((await vreq(t.base, '/api/v1/videos', { method: 'POST', json: meta, cookie: kimCookie })).status, 201);
         const fifth = await vreq(t.base, '/api/v1/videos', { method: 'POST', json: meta, cookie: kimCookie });

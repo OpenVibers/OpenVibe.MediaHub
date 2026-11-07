@@ -117,6 +117,14 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
         vodUpdate: (vodId, patch) => call(`/${Number(vodId)}`, { root: vods(), method: 'PUT', json: patch }),
         vodDelete: (vodId) => call(`/${Number(vodId)}`, { root: vods(), method: 'DELETE' }),
 
+        /**
+         * Which item a watch id names: Media mints the id of every VOD and clip it owns, so it is the one authority
+         * that can say ({ kind: 'vod' | 'clip', id }) or 404. Discovery only: the caller then reads the item through
+         * its own scoped read (Live's public API for a stream recording or a clip), and that read still applies the
+         * visibility rule it always did.
+         */
+        watchResolve: (watchId) => call(`/watch/${encodeURIComponent(String(watchId))}`, { root: `${media.url}/api/v1/${encodeURIComponent(media.app)}` }),
+
         /** Start an object. Media gives it back `uploading` until its bytes arrive and it is completed. */
         async init({ size, contentType, name, ownerSubject, multipart = false, partSize = null, visibility = 'private', ownerless = false }) {
             // A drive file always belongs to a person. A picture uploaded signed out (Pics, `ownerless`) is the

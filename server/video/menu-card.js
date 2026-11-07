@@ -19,6 +19,7 @@ const BASE = 'https://openvibe.video';
 const CARD_TTL_S = 300;
 const CACHE_MS = 120_000;
 const LIMIT = 6;
+const { watchIdOf, watchPath } = require('./watch-links');
 
 /** Plain words for a card: markup and control characters out, one line, within the schema's limit. */
 function plain(value, max) {
@@ -72,7 +73,7 @@ function cardFrom(items, at = Date.now()) {
             const item = {
                 title: plain(it.title || (it.kind === 'clip' ? 'Clip' : 'Stream recording'), 80),
                 meta: `${n.toLocaleString('en-US')} ${n === 1 ? 'view' : 'views'} this week`,
-                url: `${BASE}/${it.kind === 'clip' ? 'c' : 'v'}/${Number(it.id)}`,
+                url: `${BASE}${watchIdOf(it) ? watchPath(watchIdOf(it)) : `/${it.kind === 'clip' ? 'c' : 'v'}/${Number(it.id)}`}`,
             };
             const image = imageOf(it);
             if (image) item.image = image;
