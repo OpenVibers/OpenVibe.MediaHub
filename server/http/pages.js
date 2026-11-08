@@ -448,6 +448,8 @@ ${files.length ? html`<ul class="dr-files" data-items>${files.map((row) => ui.fi
         const kind = ui.kindOf(row);
         const ext = ui.extOf(row.name);
         const pic = rules.isPreviewable(row.content_type);
+        const radioTrack = /^audio\/(mpeg|mp4|ogg|webm|wav|flac)$/.test(row.content_type)
+            ? await s.db.maybe('SELECT id FROM mh_radio_tracks WHERE file_id = $1 AND revoked_at IS NULL', [row.id]) : null;
         const choices = [...labels.entries()].sort((a, b) => a[1].localeCompare(b[1], 'en', { numeric: true, sensitivity: 'base' }));
         return page(req, res, {
             title: row.name,
@@ -464,6 +466,9 @@ ${pathBar(path, row.name)}
 <h1 class="fv-name">${row.name}</h1>
 <p class="fv-sub"><span class="fv-kind" data-kind="${kind}">${ui.icon(ui.KINDS[kind].icon)}${ui.kindWord(row)}</span><span>${fileSize(row)}</span><span>Added ${ui.when(row.created_at)}</span></p>
 <div class="fv-actions"><a class="dr-btn is-primary" href="/files/${row.id}/download">${ui.icon('download')}Download</a>${raw(shareButton({ url: `${config.baseUrl}/files/${row.id}`, title: row.name, text: `${row.name} — a file on ${SITE_NAME}.`, image: pic ? `${config.baseUrl}/files/${row.id}/preview?w=640` : '', cls: 'dr-btn' }))}${raw(askAgent({ text: `About my file “${row.name}” (${ui.kindWord(row)}, ${fileSize(row)}): ` }))}</div>
+${/^audio\/(mpeg|mp4|ogg|webm|wav|flac)$/.test(row.content_type) ? html`<section class="fv-card"><h2>OpenVibe Radio</h2>${radioTrack
+    ? html`<p>This music is published for listening parties.</p><a class="dr-btn" href="/radio/tracks/${radioTrack.id}">Open in Radio</a>`
+    : html`<p>Mark this audio file as music and choose a licence before anyone can listen in a party.</p><a class="dr-btn" href="/radio/publish?file=${row.id}">Publish as music</a>`}</section>` : ''}
 
 <section class="fv-card" id="share" aria-labelledby="h-share"><h2 id="h-share">${ui.icon('link')}Share a link</h2>
 <form class="fv-share" method="post" action="/files/${row.id}/share">
