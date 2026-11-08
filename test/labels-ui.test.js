@@ -153,7 +153,7 @@ function hreq(base, host, path, { method = 'GET', cookie, form, body, type, same
 
         await check('the owner\'s form: in force ticked, the AI\'s suggestion marked and not ticked', async () => {
             const r = await video('/v/301', { cookie: kimCookie });
-            assert.ok(r.text.includes('who can see it, labels, delete'), 'the panel says it holds the labels');
+            assert.ok(r.text.includes('who can see it, labels</span>'), 'the panel says it holds the labels');
             assert.ok(/<link rel="stylesheet" href="\/css\/labels\.css(\?v=[0-9a-f]+)?">/.test(r.text), 'the picker\'s sheet, on the owner\'s page only');
             assert.ok(!(await video('/v/301')).text.includes('css/labels.css'), 'a viewer\'s page does not load it');
             assert.ok(r.text.includes('value="nudity" checked>') && r.text.includes('value="18+" checked>'), 'in force');

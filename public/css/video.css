@@ -658,3 +658,8 @@ html.ov-motion .ovv-stat.is-live .ovv-dot { animation: ovv-pulse 1.6s ease-out i
 .ovv-card-cover > .ovv-card-media { border-radius: inherit; }
 .ovv-card-body > .ovk-labels { margin: .3rem 0 0; }
 .ovv-head > .ovk-labels { margin: .35rem 0 .1rem; }
+
+/* The owner's Delete in the action row (beside Edit): a quiet button, a red one inside its question. */
+.ovv-deleter > summary { color: var(--danger-text, var(--danger, #f87171)); }
+.ovv-deleter .ovv-pop-panel form { margin-top: 10px; }
+.ovv-deleter .ovv-pop-panel .ovv-btn--danger { width: 100%; justify-content: center; }

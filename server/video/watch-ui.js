@@ -111,6 +111,13 @@ function actionMenu({ icon, label, title = null, body, cls = '', iconOnly = fals
 <div class="ovv-pop-panel" role="group" aria-label="${label}">${body}</div></details>`;
 }
 
+/** The owner's Delete in the action row: one tap opens the question, one more deletes (the route checks confirm=1). */
+function deleteAction({ action, what }) {
+    return actionMenu({ icon: 'fa-solid fa-trash-can', label: 'Delete', title: `Delete this ${what}`, cls: 'ovv-deleter', body: html`<p class="ovv-pop-title">Delete this ${what}?</p>
+<p class="ovv-fine">It goes for good: nobody can watch it again, and it cannot be brought back.</p>
+<form method="post" action="${action}/delete"><input type="hidden" name="confirm" value="1"><button class="ovv-btn ovv-btn--danger" type="submit"><i class="fa-solid fa-trash-can" aria-hidden="true"></i> Delete for good</button></form>` });
+}
+
 /** The More menu's rows: [{ href, icon, label, hint? }]. */
 function menuLinks(items) {
     return html`<ul class="ovv-pop-list">${items.map((it) => html`<li><a href="${it.href}"${it.external ? html` rel="noopener"` : ''}${it.data ? html` ${it.data}` : ''}><i class="${it.icon}" aria-hidden="true"></i><span>${it.label}${it.hint ? html`<small>${it.hint}</small>` : ''}</span></a></li>`)}</ul>`;
@@ -199,4 +206,4 @@ ${t.body}
 </section>`;
 }
 
-module.exports = { clockOf, lengthWords, dayLabel, streamDate, whatItIs, shareButton, actionMenu, menuLinks, cornerMenu, downloadsFor, companion };
+module.exports = { clockOf, lengthWords, dayLabel, streamDate, whatItIs, shareButton, actionMenu, deleteAction, menuLinks, cornerMenu, downloadsFor, companion };
