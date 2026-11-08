@@ -224,6 +224,8 @@ async function createApp(opts = {}) {
         if (picsHost && req.hostname === picsHost) return picsRoutes(req, res, next);
         return next();
     });
+    const radioRoutes = require('./radio/routes').createRadioRoutes(ctx);
+    app.use((req, res, next) => (req.hostname === videoHost || req.hostname === picsHost ? next() : radioRoutes(req, res, next)));
 
     // ── Machine endpoints ───────────────────────────────────
     app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'openvibe-media-hub', version: VERSION }));

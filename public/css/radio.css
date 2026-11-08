@@ -1,0 +1,13 @@
+:root { color-scheme: dark light; font-family: system-ui, sans-serif; background: #0e1422; color: #edf3ff; }
+body { margin: 0; }
+.radio-page { box-sizing: border-box; width: min(100%, 680px); margin: 36px auto; padding: 24px; }
+.radio-page h1 { font-size: clamp(26px, 4vw, 38px); line-height: 1.15; margin: 0 0 16px; }
+.radio-page p { line-height: 1.55; }
+.radio-page form { padding: 18px; border-radius: 16px; border: 1px solid #38465f; background: #172135; }
+.radio-page label:not(.radio-check) { display: grid; gap: 7px; font-weight: 650; }
+.radio-page input:not([type=checkbox]), .radio-page select { box-sizing: border-box; width: 100%; min-height: 44px; border-radius: 9px; border: 1px solid #64748b; background: #0e1422; color: inherit; padding: 8px 12px; font: inherit; }
+.radio-page input[type=checkbox] { width: 20px; height: 20px; vertical-align: middle; }
+.radio-page button { min-height: 44px; border: 0; border-radius: 9px; background: #79b4ff; color: #071323; padding: 0 18px; font: inherit; font-weight: 750; cursor: pointer; }
+.radio-page a { color: #9dc9ff; }
+@media (prefers-color-scheme: light) { :root { background: #f6f8fc; color: #172033; } .radio-page form { background: #fff; border-color: #cbd5e1; } .radio-page input:not([type=checkbox]), .radio-page select { background: #fff; color: #172033; } .radio-page a { color: #1459a3; } }
+@media (max-width: 600px) { .radio-page { margin: 12px auto; padding: 16px; } }
