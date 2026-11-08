@@ -85,7 +85,7 @@ function createRadioRoutes({ s, drive, media, config }) {
 <form method="post" action="/radio/publish">
 <input type="hidden" name="file" value="${esc(file.id)}">
 <p>
-<label>Track title <input name="title" required maxlength="160" value="${esc(file.name)}">
+<label>Track title <input name="title" required maxlength="160" value="${esc(String(file.name || '').replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[_-]+/g, ' ').trim())}">
 </label>
 </p>
 <p>
