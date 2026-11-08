@@ -45,7 +45,7 @@ const { createVideoApiRoutes } = require('./api');
 const { createUploadApi, mountUploadPages } = require('./upload-routes');
 const { ACCESS_COOKIE, REFRESH_COOKIE } = require('../auth/sso');
 const { mountDownloads, downloadMenu } = require('./downloads');
-const { actionMenu, menuLinks, companion, whatItIs, shareButton, lengthWords, dayLabel, streamDate } = require('./watch-ui');
+const { actionMenu, deleteAction, menuLinks, companion, whatItIs, shareButton, lengthWords, dayLabel, streamDate } = require('./watch-ui');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 const HOME_LIMIT = 10;
@@ -749,7 +749,7 @@ function createVideoRoutes(ctx) {
     /** The owner's badge in the meta line: who can see it now. */
     const visibilityBadge = (v) => html`<span class="ovv-vis-badge ovv-vis-badge--${VISIBILITIES.includes(v) ? v : 'public'}"><i class="${(VISIBILITY_LOOK[v] || VISIBILITY_LOOK.public)[0]}" aria-hidden="true"></i> ${visibilityLabel(v || 'public')}</span>`;
     /** The owner's Edit button, first in the action row: opens the edit panel under the player. */
-    const editButton = (what) => html`<a class="ovv-btn ovv-btn--edit" href="#manage" data-ovv-open="manage" title="Edit this ${what}: title, description, who can see it, delete"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit</a>`;
+    const editButton = (what) => html`<a class="ovv-btn ovv-btn--edit" href="#manage" data-ovv-open="manage" title="Edit this ${what}: title, description, who can see it"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit</a>`;
     /**
      * "Clip" in the action row: a finished recording, any signed-in viewer who can see it (Live's rule, as on Live). A
      * small form under the button; signed out, the button signs in first and comes back.
@@ -780,7 +780,7 @@ ${whole ? html`<input type="hidden" name="recording_time" value="1">` : ''}
     function ownerPanel(kind, id, item) {
         const what = kind === 'vod' ? 'recording' : 'clip';
         const action = `/${kind === 'vod' ? 'v' : 'c'}/${id}`;
-        return html`<details class="ovv-panel ovv-owner" id="manage"><summary><h2 id="h-owner"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit this ${what}</h2><span class="ovv-fine">Title, ${kind === 'vod' ? 'description, ' : ''}who can see it, labels, delete</span></summary>
+        return html`<details class="ovv-panel ovv-owner" id="manage"><summary><h2 id="h-owner"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit this ${what}</h2><span class="ovv-fine">Title, ${kind === 'vod' ? 'description, ' : ''}who can see it, labels</span></summary>
 <form class="ovv-owner-form" method="post" action="${action}/manage">
 <label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="200" value="${item.title || ''}" required></label>
 ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textarea name="description" rows="3" maxlength="2000">${item.description || ''}</textarea></label>` : ''}
@@ -788,9 +788,6 @@ ${visibilityChoices(item.visibility || 'public')}
 ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
 <button class="ovv-btn ovv-btn--primary" type="submit">Save changes</button>
 </form>
-<details class="ovv-danger"><summary>Delete this ${what}</summary>
-<form class="ovv-owner-delete" method="post" action="${action}/delete"><label class="ovv-confirm"><input type="checkbox" name="confirm" value="1" required> I want to delete it for good</label> <button class="ovv-btn ovv-btn--danger" type="submit">Delete</button></form>
-</details>
 </details>`;
     }
 
@@ -1482,7 +1479,7 @@ ${channelName ? html`<a class="ovv-avatar" href="${localChannel || liveChannel}"
 <div class="ovv-byline-text">${channelName ? (localChannel ? html`<a class="ovv-channel-name" href="${localChannel}">@${channelName}</a>` : html`<span class="ovv-channel-name">@${channelName}</span>`) : ''}
 ${metaParts.length ? html`<span class="ovv-meta">${metaParts.map((p, i) => (i === 0 ? p : [html` · `, p]))}</span>` : ''}</div>
 </div>
-<div class="ovv-actions">${manageable ? editButton('recording') : ''}${saveForm}${partyLink(watchPath, vod.title || 'Stream recording', vod)}${ownOnly ? '' : clipAction(req, id, vod)}${downloadMenu({ kind: 'vod', id, item: vod, has: { transcript: segs.length, chat: chatRows ? chatRows.rows.length + chatRows.leftOut : 0, chapters: mems.length } })}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: vod.title || 'Stream recording', text: about, image: httpsUrl(vod.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${raw(askAgent({ text: `About the video “${vod.title || 'Stream recording'}” on OpenVibe.Video (${base}${watchPath}): ` }))}${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
+<div class="ovv-actions">${manageable ? html`${editButton('recording')}${deleteAction({ action: `/v/${id}`, what: 'recording' })}` : ''}${saveForm}${partyLink(watchPath, vod.title || 'Stream recording', vod)}${ownOnly ? '' : clipAction(req, id, vod)}${downloadMenu({ kind: 'vod', id, item: vod, has: { transcript: segs.length, chat: chatRows ? chatRows.rows.length + chatRows.leftOut : 0, chapters: mems.length } })}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: vod.title || 'Stream recording', text: about, image: httpsUrl(vod.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${raw(askAgent({ text: `About the video “${vod.title || 'Stream recording'}” on OpenVibe.Video (${base}${watchPath}): ` }))}${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
 </div>
 ${vod.is_recording ? html`<p class="ovv-recording" role="status"><i class="fa-solid fa-circle" aria-hidden="true"></i> This recording is still in progress. <a href="${liveChannel}">Watch the live channel</a>.</p>` : ''}
 </div>
@@ -1620,7 +1617,7 @@ ${clipCredit}
 <div class="ovv-head-row">
 <div class="ovv-byline"><div class="ovv-byline-text"><span class="ovv-channel-name">${clip.auto_generated ? html`<span class="ovv-tag ovv-tag--inline">AI clip</span> ` : ''}${attribution}</span>
 ${clip.created_at ? html`<span class="ovv-meta"><time datetime="${clip.created_at}">${dateLabel(clip.created_at)}</time>${manageable ? html` · ${visibilityBadge(clip.visibility)}` : ''}</span>` : ''}</div></div>
-<div class="ovv-actions">${manageable ? editButton('clip') : ''}${fullRecording ? html`<a class="ovv-btn ovv-btn--primary" href="${fullRecording}" title="Watch the recording it was cut from, from this moment"><i class="fa-solid fa-film" aria-hidden="true"></i> Full recording</a>` : ''}${saveForm}${cutting ? '' : partyLink(watchPath, clip.title || 'Clip', clip)}${cutting ? '' : downloadMenu({ kind: 'clip', id, item: clip, has: { transcript: segs.length } })}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: clip.title || 'Clip', text: clip.ai_overview || attribution, image: httpsUrl(clip.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${raw(askAgent({ text: `About the clip “${clip.title || 'Clip'}” on OpenVibe.Video (${base}${watchPath}): ` }))}${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
+<div class="ovv-actions">${manageable ? html`${editButton('clip')}${deleteAction({ action: `/c/${id}`, what: 'clip' })}` : ''}${fullRecording ? html`<a class="ovv-btn ovv-btn--primary" href="${fullRecording}" title="Watch the recording it was cut from, from this moment"><i class="fa-solid fa-film" aria-hidden="true"></i> Full recording</a>` : ''}${saveForm}${cutting ? '' : partyLink(watchPath, clip.title || 'Clip', clip)}${cutting ? '' : downloadMenu({ kind: 'clip', id, item: clip, has: { transcript: segs.length } })}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: clip.title || 'Clip', text: clip.ai_overview || attribution, image: httpsUrl(clip.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${raw(askAgent({ text: `About the clip “${clip.title || 'Clip'}” on OpenVibe.Video (${base}${watchPath}): ` }))}${moreItems.length ? actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: menuLinks(moreItems) }) : ''}</div>
 </div>
 </div>
 </div>
@@ -1696,7 +1693,7 @@ ${up.html}
         if (!live.isId(id)) return notFound(req, res);
         const back = `/v/${id}`;
         if (!sameSite(req, res, back)) return undefined;
-        if ((req.body || {}).confirm !== '1') return fieldError(req, res, 'Tick the box to confirm the deletion.', back);
+        if ((req.body || {}).confirm !== '1') return fieldError(req, res, 'Confirm with Delete for good.', back);
         try {
             await asPerson(req, res, (token) => live.deleteVod(token, id));
         } catch (err) { return ownerRefused(req, res, err, back); }
@@ -1734,7 +1731,7 @@ ${up.html}
         if (!live.isId(id)) return notFound(req, res);
         const back = `/c/${id}`;
         if (!sameSite(req, res, back)) return undefined;
-        if ((req.body || {}).confirm !== '1') return fieldError(req, res, 'Tick the box to confirm the deletion.', back);
+        if ((req.body || {}).confirm !== '1') return fieldError(req, res, 'Confirm with Delete for good.', back);
         try {
             await asPerson(req, res, (token) => live.deleteClip(token, id));
         } catch (err) { return ownerRefused(req, res, err, back); }
