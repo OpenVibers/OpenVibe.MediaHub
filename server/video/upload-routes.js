@@ -191,19 +191,19 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
     r.get('/record', mustSignIn('/record', 'Recordings belong to your OpenVibe account: sign in to record a video.'), async (req, res) => page(req, res, {
         title: 'Record a video',
         crumbs: [{ label: 'Home', href: '/' }, { label: 'Record' }],
-        scripts: ['js/video-record.js'],
+        scripts: ['js/video-upload.js', 'js/video-record.js'],
         body: html`<h1>Record a video</h1>
-<p class="ovv-lede">Record from your camera or your screen, right here. It is never live: each few seconds go up to your OpenVibe.Video account as you record, and when you stop it becomes a video you can keep private, share by link or publish.</p>
-<form class="ovv-record ovv-panel" data-video-record>
-<fieldset class="ovv-record-source"><legend>Record</legend>
-<label class="ovv-radio"><input type="radio" name="source" value="camera" checked> Camera and microphone</label>
-<label class="ovv-radio"><input type="radio" name="source" value="screen"> Screen, with your microphone</label></fieldset>
+<p class="ovv-lede">Open the camera here, then review and trim your clip before saving it to Video.</p>
+<form class="ovv-record ovv-panel" data-video-upload data-video-record>
 <label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="120" placeholder="Untitled recording"></label>
 <label class="ovv-field"><span>Who can see it</span><select name="visibility">${visibilityOptions('private')}</select></label>
-<div class="ovv-record-stage"><video class="ovv-record-preview" muted playsinline hidden></video><p class="ovv-record-clock" aria-live="off" hidden>0:00</p></div>
+<input name="file" type="file" accept="video/webm,video/mp4" class="ovv-record-file" aria-label="Recorded file" tabindex="-1" required>
+<textarea name="description" hidden></textarea>
+<progress hidden value="0" max="1"></progress>
 <p class="ovv-upload-status" role="status" aria-live="polite"></p>
-<p class="ovv-record-actions"><button class="ovv-btn" type="button" data-record-preview>Turn on the camera</button> <button class="ovv-btn ovv-btn--primary" type="button" data-record-start disabled>Start recording</button> <button class="ovv-btn ovv-btn--danger" type="button" data-record-stop disabled>Stop and save</button></p>
-<p class="ovv-fine">Up to ${Math.round(cfg.maxBytes / GB)} GB a video. Keep this tab open while recording; a few seconds are lost at most if the connection drops. Recording needs a browser that records video (Chrome, Edge, Firefox, Safari 14.1+) and JavaScript.</p>
+<p class="ovv-record-actions"><button class="ovv-btn ovv-btn--primary" type="button" data-record-open="video">Open camera</button> <button class="ovv-btn" type="button" data-record-open="screen">Record screen</button></p>
+<button type="submit" hidden>Save recording</button>
+<p class="ovv-fine">Cam records on this page. You can retake or trim before Use this; only then does the file upload. Keep this tab open while it uploads. Up to ${Math.round(cfg.maxBytes / GB)} GB a video.</p>
 </form>
 <p><a href="/upload">Upload a file instead</a> · <a href="/me/videos">Your videos</a></p>`,
     }));

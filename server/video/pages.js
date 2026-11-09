@@ -560,11 +560,11 @@ function card(o) {
     const media = html`<a class="ovv-card-media" href="${o.href}" tabindex="-1" aria-hidden="true">${o.thumb ? thumbImg(o.thumb, CARD_SIZES) : cardPlaceholder(o, icon)}${o.duration ? html`<span class="ovv-dur">${o.duration}</span>` : ''}${o.badge ? html`<span class="ovv-tag${o.live ? ' ovv-tag--live' : ''}">${o.badge}</span>` : ''}</a>`;
     return html`<article class="ovv-card"${labelsUi.attrs(labels, { owner: o.owner || o.channel })}>
 ${labels.length ? html`<div class="ovv-card-cover" data-ov-labels-media>${media}</div>` : media}
-<div class="ovv-card-body">
+<div class="ovv-card-body">${o.channel && faceBase && /^[A-Za-z0-9_]{1,32}$/.test(o.channel) ? html`<a class="ovv-card-avatar" href="${o.channelHref}" tabindex="-1" aria-hidden="true"><img src="${faceBase}/avatar/${o.channel}?s=80" alt="" loading="lazy" width="36" height="36"></a>` : ''}<div class="ovv-card-copy">
 <h3 class="ovv-card-title"><a href="${o.href}">${o.title}</a></h3>
 ${labelsUi.chips(labels)}
 ${meta([channel, o.extra || null, o.views ? viewsLabel(o.views) : null, o.date ? html`<time datetime="${o.iso}">${o.date}</time>` : null])}
-</div>
+</div></div>
 </article>`;
 }
 
@@ -1095,46 +1095,28 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
         { q: 'Can I make a clip?', a: `Yes. Sign in, open a recording and cut a clip of up to ${CLIP_MAX_SECONDS} seconds. It gets its own watch page and shows on the channel.` },
     ];
     r.get('/', async (req, res) => {
-        const [vods, clips, topVods, topClips, onAir, totals, shelf] = await Promise.all([
+        const [vods, clips, uploaded] = await Promise.all([
             live.feed({ type: 'vods', limit: HOME_LIMIT + 6 }),
             live.feed({ type: 'clips', limit: HOME_LIMIT }),
-            settle(live.feed({ type: 'vods', limit: HOME_LIMIT, sort: 'top', window: 'month' })),
-            settle(live.feed({ type: 'clips', limit: HOME_LIMIT, sort: 'top', window: 'month' })),
-            settle(live.liveNow()),
-            settle(live.totals()),
-            settle(shelves.shelves()),
+            ctx.videoUploads.latest(HOME_LIMIT),
         ]);
         // A stream that ended seconds after it started (a test, a dropped connection) is not worth a tile on the front
         // page; it stays on its channel.
         const worthATile = (x) => !(Number(x.duration_seconds) > 0 && Number(x.duration_seconds) < MIN_HOME_SECONDS);
         const vodItems = itemsOf(vods).filter(worthATile).slice(0, HOME_LIMIT);
         const clipItems = itemsOf(clips);
-        const topItems = [...itemsOf(topVods).filter(worthATile), ...itemsOf(topClips)]
-            .filter((x) => Number(x.views) > 0)
-            .sort((a, b) => (Number(b.views) || 0) - (Number(a.views) || 0))
-            .slice(0, HOME_LIMIT);
-        const uploaded = await ctx.videoUploads.latest(HOME_LIMIT);
-        const onAirCards = liveCards(onAir);
-        const categories = (shelf && shelf.categories) || [];
-        const channels = ((shelf && shelf.channels) || []).filter((c) => c.count >= 2).slice(0, 12);
-        const counts = totals || {};
-        const onAirNames = liveNames(onAir);
-        const liveHref = onAirNames.length === 1 ? `${livePublic}/@${onAirNames[0]}` : `${livePublic}/`;
-        const stats = [
-            onAirCards.length ? { value: n(onAirCards.length), label: 'live now', href: liveHref, live: true,
-                title: onAirNames.length === 1 ? `Watch ${onAirNames[0]} live` : 'Everyone live on OpenVibe.Live' } : null,
-            counts.vods ? { value: n(counts.vods), label: counts.vods === 1 ? 'stream recording' : 'stream recordings', href: '#recordings' } : null,
-            counts.clips ? { value: n(counts.clips), label: counts.clips === 1 ? 'clip' : 'clips', href: '#clips' } : null,
-            shelf && shelf.channels.length ? { value: n(shelf.channels.length), label: shelf.channels.length === 1 ? 'channel' : 'channels', href: '#channels' } : null,
-            categories.length ? { value: n(categories.length), label: categories.length === 1 ? 'category' : 'categories', href: '#categories' } : null,
-        ].filter(Boolean);
-        const description = counts.vods && counts.clips
-            ? `Watch ${n(counts.vods)} stream recordings and ${n(counts.clips)} clips from OpenVibe.Live, or upload and record your own videos, with AI captions and chapters.`
-            : 'Watch stream recordings and clips from OpenVibe.Live, or upload and record your own videos, with AI captions and chapters.';
-        const faq = HOME_FAQ(config.videoUploads);
+        const description = 'Watch stream recordings, clips and uploads on OpenVibe.Video, or record your own video in the browser.';
         const listed = vodItems.map((it) => ({ name: it.title || 'Stream recording', url: `${base}${it.watch_id ? `/watch?v=${it.watch_id}` : `/v/${it.id}`}` }));
+        const feedKind = ['streams', 'clips', 'uploads', 'following'].includes(req.query.feed) ? req.query.feed : 'all';
+        const feedEntries = [
+            ...vodItems.map((item) => ({ kind: 'streams', item })),
+            ...clipItems.map((item) => ({ kind: 'clips', item })),
+            ...uploaded.map((item) => ({ kind: 'upload', item })),
+        ].filter((entry) => feedKind === 'all' || entry.kind === feedKind)
+            .sort((a, b) => String(b.item.created_at || '').localeCompare(String(a.item.created_at || '')));
         return page(req, res, {
             index: true,
+            scripts: ['js/video-home.js'],
             title: 'OpenVibe.Video: watch streams again and share your videos',
             description,
             jsonLd: [
@@ -1142,33 +1124,16 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
                 seo.jsonLd.organization(),
                 seo.jsonLd.webPage({ name: 'OpenVibe.Video', url: `${base}/`, description, siteUrl: base }),
                 ...(listed.length ? [seo.jsonLd.itemList('Latest stream recordings on OpenVibe.Video', listed, { url: `${base}/` })] : []),
-                seo.jsonLd.faq(faq),
             ],
-            body: html`<header class="ovv-hero"><p class="ovv-eyebrow"><i class="fa-solid fa-circle-play" aria-hidden="true"></i> OpenVibe.Video</p>
-<h1>Watch streams again, and share your own videos</h1>
-<p class="ovv-lede">Recordings and clips of streams on OpenVibe.Live land here when the stream ends. Upload a video or record your camera or screen in the browser, and OpenVibe.AI adds captions, chapters and a summary. Everything you post plays on your channel at openvibe.video/@you.</p>
-<p class="ovv-hero-actions"><a class="ovv-btn ovv-btn--primary" href="/upload"><i class="fa-solid fa-upload" aria-hidden="true"></i> Upload a video</a> <a class="ovv-btn" href="/record"><i class="fa-solid fa-video" aria-hidden="true"></i> Record in the browser</a> <a class="ovv-btn" href="${livePublic}/docs/go-live-in-your-browser"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Go live from your browser</a></p>
-${searchForm()}
-${stats.length ? html`<ul class="ovv-stats" role="list">${stats.map((s) => html`<li><a class="${s.live ? 'ovv-stat is-live' : 'ovv-stat'}" href="${s.href}"${s.title ? html` title="${s.title}"` : ''}><b>${s.value}</b><span>${s.live ? html`<i class="ovv-dot" aria-hidden="true"></i> ` : ''}${s.label}</span></a></li>`)}</ul>` : ''}</header>
-${onAirCards.length ? html`<section class="ovv-section ovv-row" aria-labelledby="h-live"><div class="ovv-section-head"><h2 id="h-live"><span class="ovv-dot" aria-hidden="true"></span> Live now on OpenVibe.Live</h2><a href="${livePublic}/">Everyone live</a></div>${grid(onAirCards)}</section>` : ''}
-${uploaded.length ? html`<section class="ovv-section ovv-row" aria-labelledby="h-uploads"><h2 id="h-uploads">Latest uploads</h2>${grid(uploaded.map(uploadCard))}</section>` : ''}
-${topItems.length ? html`<section class="ovv-section ovv-row" aria-labelledby="h-top"><h2 id="h-top">Most watched this month</h2>${grid(topItems.map((it) => feedCard(it, { views: true })))}</section>` : ''}
-<section class="ovv-section ovv-row" id="recordings" aria-labelledby="h-vods"><h2 id="h-vods">Latest stream recordings</h2>${grid(vodItems.map(feedCard), 'No recordings yet.')}</section>
-${categories.length ? html`<section class="ovv-section" id="categories" aria-labelledby="h-cats"><h2 id="h-cats">Browse by category</h2><ul class="ovv-shelf" role="list">${categories.map((c) => html`<li><a class="ovv-shelf-tile" href="/category/${c.slug}"><i class="fa-solid ${c.icon}" aria-hidden="true"></i><span class="ovv-shelf-name">${c.label}</span><span class="ovv-shelf-count">${n(c.count)} ${c.count === 1 ? 'recording' : 'recordings'}</span></a></li>`)}</ul></section>` : ''}
-<section class="ovv-section ovv-row" id="clips" aria-labelledby="h-clips"><h2 id="h-clips">Latest clips</h2>${grid(clipItems.map(feedCard), 'No clips yet.')}</section>
-${channels.length ? html`<section class="ovv-section" id="channels" aria-labelledby="h-channels"><h2 id="h-channels">Channels</h2><ul class="ovv-people" role="list">${channels.map((c) => html`<li><a class="ovv-person" href="/@${c.username}"><span class="ovv-avatar" aria-hidden="true">${c.username.slice(0, 1).toUpperCase()}<img src="${config.networkUrl}/avatar/${c.username}" alt="" loading="lazy" width="42" height="42"></span><span class="ovv-person-text"><span class="ovv-person-name">@${c.username}</span><span class="ovv-person-count">${n(c.count)} ${c.count === 1 ? 'recording' : 'recordings'}</span></span></a></li>`)}</ul></section>` : ''}
-<section class="ovv-section" aria-labelledby="h-how"><details class="ovv-fold"><summary><h2 id="h-how">How it works</h2><span>stream or upload, AI captions, share</span></summary><ol class="ovv-steps">
-<li><h3>Stream or upload</h3><p>Go live on OpenVibe.Live from your browser and the recording comes here, or upload a file: MP4, MOV, WebM or MKV up to ${formatBytes(config.videoUploads.maxBytes)}.</p></li>
-<li><h3>Let AI do the busywork</h3><p>OpenVibe.AI writes captions, chapters and a summary. On an upload, the AI cut can make an edited copy with the pauses taken out.</p></li>
-<li><h3>Share it</h3><p>Every video gets a watch page and a place on your channel. Save videos to playlists, and cut clips of up to ${CLIP_MAX_SECONDS} seconds from any recording.</p></li>
-</ol></details></section>
-<section class="ovv-section" aria-labelledby="h-faq"><h2 id="h-faq">Questions</h2><div class="ovv-faq">${faq.map((f) => html`<details><summary>${f.q}</summary><p>${f.a}</p></details>`)}</div></section>
-<section class="ovv-section" aria-labelledby="h-more"><h2 id="h-more">More on OpenVibe</h2><ul class="ovv-more" role="list">
-<li><a href="${livePublic}/"><strong>OpenVibe.Live</strong><span>Go live from your browser, no OBS needed.</span></a></li>
-<li><a href="${config.pics.url}/"><strong>OpenVibe.Pics</strong><span>Share and embed pictures with a link.</span></a></li>
-<li><a href="${config.baseUrl}/"><strong>OpenVibe.Download</strong><span>Your files and backups, shared on your terms.</span></a></li>
-<li><a href="https://openvibe.community/"><strong>OpenVibe.Community</strong><span>Forums and pastes for talking it over.</span></a></li>
-</ul></section>`,
+            body: html`<div class="ovv-app-home">
+<header class="ovv-app-head"><h1>${signedIn(req) ? 'Your video feed' : 'Videos from OpenVibe'}</h1>${signedIn(req) ? '' : html`<a class="ovv-feed-signin" href="/auth/login?next=%2F">Sign in</a>`}</header>
+<nav class="ovv-feed-chips" aria-label="Video feed">
+${[['all', 'All'], ['streams', 'Streams'], ['clips', 'Clips'], ['uploads', 'Uploads'], ['following', 'Following']].map(([key, label]) => html`<a href="${key === 'all' ? '/' : `/?feed=${key}`}"${feedKind === key ? html` aria-current="page"` : ''}>${label}</a>`)}
+</nav>
+<section class="ovv-continue" id="continue-watching" aria-label="Continue watching" hidden></section>
+<section class="ovv-app-feed" aria-labelledby="feed-title"><h2 id="feed-title">${{ all: 'For you', streams: 'Streams', clips: 'Clips', uploads: 'Uploads', following: 'Following' }[feedKind]}</h2>
+${feedKind === 'following' ? html`<p class="muted">Your followed channels are on <a href="${livePublic}/following">OpenVibe.Live Following</a>.</p>` : grid(feedEntries.map((entry) => entry.kind === 'upload' ? uploadCard(entry.item) : feedCard(entry.item, { views: true })), 'No videos here yet.')}
+</section></div>`,
         });
     });
 

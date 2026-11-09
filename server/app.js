@@ -126,8 +126,8 @@ async function createApp(opts = {}) {
             directives: {
                 defaultSrc: ["'self'"],
                 // The OpenVibe Frame (theme-loader, navbar, footer) comes from the Network; the inline init is ours.
-                scriptSrc: ["'self'", "'unsafe-inline'", 'https://openvibe.network', 'https://static.cloudflareinsights.com'],
-                styleSrc: ["'self'", "'unsafe-inline'", 'https://openvibe.network', 'https://fonts.googleapis.com'],
+                scriptSrc: ["'self'", "'unsafe-inline'", 'https://openvibe.network', 'https://openvibe.cam', 'https://static.cloudflareinsights.com'],
+                styleSrc: ["'self'", "'unsafe-inline'", 'https://openvibe.network', 'https://openvibe.cam', 'https://fonts.googleapis.com'],
                 fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
                 // The Video home's live-now cards show OpenVibe.Live's own stream thumbnails (its /api/thumbnails).
                 imgSrc: ["'self'", 'data:', 'https://openvibe.network', 'https://openvibe.media', liveOrigin],

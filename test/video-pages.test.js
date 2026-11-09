@@ -318,12 +318,12 @@ function countOccurrences(haystack, needle) {
         assert.ok(j.release && j.service, JSON.stringify(j).slice(0, 200));
     });
 
-    await check('the video home shows both latest grids and links the watch pages', async () => {
+    await check('the video home feeds recordings and clips with their watch links', async () => {
         const r = await getVideo('/');
         assert.strictEqual(r.status, 200);
         assert.ok(r.text.includes('OpenVibe.Video'));
-        assert.ok(r.text.includes('Latest stream recordings'));
-        assert.ok(r.text.includes('Latest clips'));
+        assert.ok(r.text.includes('id="feed-title">For you'));
+        assert.ok(r.text.includes('class="ovv-app-feed"'));
         assert.ok(r.text.includes('/v/101'));
         const ld = graphOf(r.text);
         assert.ok(ld.some((n) => n['@type'] === 'WebSite' && n.name === 'OpenVibe.Video'), 'the home says what the site is (JSON-LD)');
@@ -507,39 +507,23 @@ function countOccurrences(haystack, needle) {
         assert.strictEqual(r.text, 'WEBVTT\n\n00:00:10.000 --> 00:00:30.000\nIntro &amp; setup\n\n00:00:30.000 --> 00:00:45.000\nThe &lt;main&gt; part\n');
     });
 
-    await check('the video home: live now, most watched, real counts, categories, channels, how it works and questions', async () => {
+    await check('the video home is a card feed with filters and one compact signed-out line', async () => {
         const r = await getVideo('/');
         assert.strictEqual(r.status, 200);
         assert.strictEqual((r.text.match(/<h1[\s>]/g) || []).length, 1, 'one h1');
-        // Live now: the stream links its Live channel, with Live's own thumbnail; the adult one and a foreign picture are not shown.
-        assert.ok(r.text.includes('Live now on OpenVibe.Live') && r.text.includes('href="https://openvibe.live/@onair"'), 'the live stream links its channel on Live');
-        assert.ok(r.text.includes('src="https://openvibe.live/api/thumbnails/stream-1-123.jpg"'), "Live's own stream thumbnail");
-        assert.ok(r.text.includes('7 watching') && r.text.includes('Robots'), 'viewers and the category');
-        assert.ok(!r.text.includes('ADULT_STREAM_XYZ'), 'a stream marked adult is left out');
-        assert.ok(!r.text.includes('evil.example'), 'a thumbnail from anywhere else is dropped');
-        // Most watched: clips and recordings together, by views, with the count.
-        const top = r.text.slice(r.text.indexOf('id="h-top"'), r.text.indexOf('id="h-vods"'));
-        assert.ok(top.indexOf('/c/201') !== -1 && top.indexOf('/c/201') < top.indexOf('/v/101'), 'the clip with more views comes first');
-        assert.ok(top.includes('250 views') && top.includes('100 views'), 'view counts');
-        // The numbers are Live's and Search's own.
-        assert.ok(/href="#recordings"><b>812<\/b>/.test(r.text) && /href="#clips"><b>399<\/b>/.test(r.text), 'recordings and clips counted by Live, each a link to its section');
-        assert.ok(/class="ovv-stat is-live" href="https:\/\/openvibe\.live\/"/.test(r.text), 'with two streams live, the live now tile opens everyone live');
-        assert.ok(r.text.includes('src="https://openvibe.media/live/@elsewhere/frame.jpg?w=640"'), "a stream without Live's own thumbnail shows Media's live frame");
-        assert.ok(r.text.includes('id="recordings"') && r.text.includes('id="clips"') && r.text.includes('id="categories"'), 'the sections the stats link to');
-        assert.ok(r.text.includes('Watch 812 stream recordings and 399 clips'), 'the description carries the counts');
-        // Categories and channels from Search's facets: only known categories, only real usernames with two or more.
-        assert.ok(r.text.includes('href="/category/gaming"') && r.text.includes('5 recordings'), 'a category with its count');
-        assert.ok(r.text.includes('href="/category/music"') && r.text.includes('1 recording<'), 'one recording, singular');
-        assert.ok(!r.text.includes('not-a-category'), 'an unknown category is not shown');
-        assert.ok(r.text.includes('href="/@streamer"') && r.text.includes('3 recordings'), 'a channel with its count');
-        assert.ok(!r.text.includes('bad name!') && !r.text.includes('href="/@once"'), 'a bad name and a one-recording channel are left out');
+        for (const label of ['All', 'Streams', 'Clips', 'Uploads', 'Following']) assert.ok(r.text.includes('>' + label + '</a>'), label);
+        assert.ok(r.text.includes('class="ovv-app-home"') && r.text.includes('class="ovv-app-feed"'));
+        assert.ok(r.text.includes('href="/auth/login?next=%2F"'), 'a sign-in chip');
+        assert.ok(!r.text.includes('class="ovv-hero"') && !r.text.includes('ovv-hero-actions'), 'no marketing hero');
+        assert.ok(!r.text.includes('ovv-search-form'), 'search is in the navbar');
+        assert.ok(r.text.includes('/v/101') && r.text.includes('/c/201'), 'recordings and clips share the feed');
+        assert.ok(r.text.includes('ovv-card-avatar'), 'cards show the channel face');
         const ld = graphOf(r.text);
-        const faq = ld.find((x) => x['@type'] === 'FAQPage');
-        assert.ok(faq && faq.mainEntity.length >= 5, 'FAQPage structured data');
-        const shown = [...r.text.matchAll(/<summary>([^<]*)<\/summary>/g)].map((m) => m[1].replace(/&#39;/g, "'"));
-        assert.deepStrictEqual(faq.mainEntity.map((q) => q.name), shown, 'every question in the structured data is on the page');
-        assert.ok(ld.some((x) => x['@type'] === 'ItemList' && x.itemListElement.some((it) => it.url === 'https://openvibe.video/v/101')), 'the latest recordings as an ItemList');
-        assert.ok(r.text.includes('up to 2 GB') && !r.text.includes('2.0 GB'), 'the upload limit, as people write it');
+        assert.ok(ld.some((x) => x['@type'] === 'ItemList' && x.itemListElement.some((it) => it.url === 'https://openvibe.video/v/101')));
+        const clips = await getVideo('/?feed=clips');
+        assert.ok(clips.text.includes('aria-current="page">Clips</a>'));
+        const clipFeed = clips.text.slice(clips.text.indexOf('class="ovv-app-feed"'));
+        assert.ok(clipFeed.includes('/c/201') && !clipFeed.includes('href="/v/101"'));
     });
 
     await check('a category page lists its recordings from Search, with the thumbnails Live has', async () => {
