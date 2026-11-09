@@ -272,3 +272,36 @@
 .ovp-drop--signin.ovp-drop--compact .ovp-drop-hint { display: block; flex: 1; }
 .ovp-gallery-search input { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; min-height: 44px; padding: 8px 12px; }
 .ovp-btn { min-height: 44px; }
+
+/* The picture's action bar (owner's design pass, 11-09): who published it and how many saw it on the left, Like (a heart
+   that fills in Pics pink, with its count) and Share on the right; under it, quiet buttons to make something with the
+   picture; the comments as a card whose head holds the one button. */
+.ovp-pic-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; margin: 14px 0 10px; }
+.ovp-pic-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ovp-pic-av { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 50%; background: color-mix(in srgb, var(--ovp-pink) 26%, var(--ovp-card)); color: var(--text-primary, #e6edf7); font-weight: 800; }
+.ovp-pic-who-txt { display: grid; min-width: 0; line-height: 1.25; }
+.ovp-pic-who-txt b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ovp-pic-who-txt small { color: var(--ovp-dim); font-size: 13px; }
+.ovp-pic-acts { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.ovp-glyph { display: inline-grid; place-items: center; flex: none; }
+.ovp-glyph svg { display: block; }
+.ovp-like { gap: 8px; }
+.ovp-like-n { padding-left: 8px; border-left: 1px solid var(--ovp-line); color: var(--ovp-dim); font-variant-numeric: tabular-nums; }
+.ovp-like[aria-pressed="true"] { border-color: color-mix(in srgb, var(--ovp-pink) 60%, transparent); background: color-mix(in srgb, var(--ovp-pink) 14%, transparent); }
+.ovp-like[aria-pressed="true"] .ovp-glyph { color: var(--ovp-pink); }
+.ovp-like[aria-pressed="true"] .ovp-glyph svg { fill: currentColor; }
+.ovp-pic-status:empty { display: none; }
+.ovp-pic-status { margin: 0 0 8px; color: var(--ovp-dim); font-size: 14px; }
+.ovp-pic-make { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 14px; }
+.ovp-pic-make .ovk-btn, .ovp-comments-head .ovk-btn { gap: 8px; }
+.ovp-comments { padding: 14px 16px; border: 1px solid var(--ovp-line); border-radius: 16px; background: var(--ovp-card); }
+.ovp-comments-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.ovp-comments-head h2 { margin: 0; }
+.ovp-comments-list:empty { display: none; }
+.ovp-comments-list { margin-top: 12px; display: grid; gap: 8px; }
+.ovp-comments-list p { margin: 0; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--text-primary, #e6edf7) 5%, transparent); overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .ovp-pic-acts { margin-left: 0; width: 100%; }
+  .ovp-pic-acts > * { flex: 1; justify-content: center; }
+  .ovp-pic-make .ovk-btn { flex: 1 1 auto; justify-content: center; }
+}
