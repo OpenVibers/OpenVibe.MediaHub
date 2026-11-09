@@ -34,7 +34,7 @@ function assetVersion(rel) {
 }
 const asset = (rel) => `/${rel}?v=${assetVersion(rel)}`;
 // This hash pins the Cam PR's recorder until its next reviewed release.
-const CAM_KIT_SRI = 'sha384-kD5WfySp7D3rNJliBpLgJRrl4Geks+4EcgSaCIBGX+dZdecjmUVxEjzbcUw2Spp7';
+const CAM_KIT_SRI = 'sha384-yqqjh1FiP7a4l9uelJHaryd8Y5IwnHVbqjt1d0AXbgCcytI9Z5MMmItFqbwB4YZG';
 
 // The pages with a Markdown twin (openvibe-shared/agent-layer): the home and the watch pages of a
 // recording and a clip. The others (search, categories, an account's playlists) have none.
