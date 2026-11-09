@@ -136,7 +136,7 @@ function hreq(base, host, path, { method = 'GET', cookie, form, body, type, same
             const r = await video('/v/301');
             assert.strictEqual(r.status, 200, r.text.slice(0, 300));
             assert.ok(r.text.includes('<div class="ovv-player-wrap" data-ov-labels="nudity,18+" data-ov-labels-owner="@kim" data-ov-labels-opened>'), 'the player is the labelled thing');
-            assert.ok(/<h1 class="ovv-title">Kim labelled<\/h1>\s*<ul class="ovk-labels" aria-label="Content labels"><li class="ovk-label" data-label="nudity">Nudity<\/li><li class="ovk-label ovk-label--adult" data-label="18\+">18\+<\/li><\/ul>/.test(r.text), 'the chips under the title');
+            assert.ok(/<h1 class="ovv-title">Kim labelled<\/h1>(?:<\/div>)?\s*<ul class="ovk-labels" aria-label="Content labels"><li class="ovk-label" data-label="nudity">Nudity<\/li><li class="ovk-label ovk-label--adult" data-label="18\+">18\+<\/li><\/ul>/.test(r.text), 'the chips under the title');
             assert.ok(!r.text.includes('Flashing lights'), 'a suggestion is never shown to viewers');
             assert.ok(!r.text.includes('name="labels"'), 'no picker for a viewer');
         });

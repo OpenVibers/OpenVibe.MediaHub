@@ -132,6 +132,19 @@
                 if (!d.open) return;
                 all.forEach(function (o) { if (o !== d && !o.contains(d)) close(o, false); });
                 if (sheet(d)) return;
+                if (d.closest('.ovv-actions-shell')) {
+                    const button = d.querySelector('summary').getBoundingClientRect();
+                    const width = Math.min(panel.offsetWidth, window.innerWidth - 24);
+                    const left = Math.max(12, Math.min(button.left, window.innerWidth - width - 12));
+                    const below = window.innerHeight - button.bottom;
+                    panel.style.position = 'fixed';
+                    panel.style.left = left + 'px';
+                    panel.style.right = 'auto';
+                    panel.style.width = width + 'px';
+                    panel.style.top = below >= panel.offsetHeight + 12 ? button.bottom + 8 + 'px' : 'auto';
+                    panel.style.bottom = below >= panel.offsetHeight + 12 ? 'auto' : window.innerHeight - button.top + 8 + 'px';
+                    return;
+                }
                 const vw = document.documentElement.clientWidth;
                 const r = panel.getBoundingClientRect();
                 if (r.right > vw - 12) panel.style.transform = 'translateX(' + Math.round(vw - 12 - r.right) + 'px)';
@@ -158,6 +171,59 @@
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') all.forEach(function (d) { if (d.open) close(d, true); });
         });
+    }
+
+    function watchActions() {
+        document.querySelectorAll('[data-ovv-like]').forEach(function (button) {
+            const count = button.querySelector('.ovv-like-count');
+            button.addEventListener('click', async function () {
+                if (button.disabled) return;
+                const ref = button.getAttribute('data-ovv-like').split(':');
+                button.disabled = true;
+                try {
+                    const response = await fetch('/watch/like', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ kind: ref[0], id: ref[1] }) });
+                    if (response.status === 401) { location.href = '/auth/login?next=' + encodeURIComponent(location.pathname + location.search); return; }
+                    if (!response.ok) throw new Error('Like failed');
+                    const state = await response.json();
+                    button.setAttribute('aria-pressed', String(state.liked));
+                    if (count) count.textContent = String(state.count);
+                    if (state.liked) {
+                        button.classList.remove('ovv-like--pop');
+                        void button.offsetWidth;
+                        button.classList.add('ovv-like--pop');
+                    }
+                } catch (_) { button.title = 'Could not save the like. Try again.'; }
+                finally { button.disabled = false; }
+            });
+        });
+        document.querySelectorAll('[data-ovv-copy-time]').forEach(function (button) {
+            button.addEventListener('click', async function () {
+                const video = document.querySelector('.ovv-player');
+                const url = new URL(button.getAttribute('data-ovv-copy-time'), location.origin);
+                const seconds = video && Number.isFinite(video.currentTime) ? Math.floor(video.currentTime) : 0;
+                if (seconds > 0) url.searchParams.set('t', String(seconds));
+                try {
+                    await navigator.clipboard.writeText(url.href);
+                    const label = button.innerHTML;
+                    button.textContent = 'Copied';
+                    setTimeout(function () { button.innerHTML = label; }, 1800);
+                } catch (_) { location.href = url.href; }
+            });
+        });
+        const video = document.querySelector('video[data-ovv-video]');
+        const pip = document.querySelector('[data-ovv-pip]');
+        if (video && pip && document.pictureInPictureEnabled && typeof video.requestPictureInPicture === 'function') {
+            const ready = function () { if (video.readyState >= 1) pip.hidden = false; };
+            ready();
+            video.addEventListener('loadedmetadata', ready, { once: true });
+            pip.addEventListener('click', async function () {
+                try {
+                    if (document.pictureInPictureElement === video) await document.exitPictureInPicture();
+                    else await video.requestPictureInPicture();
+                    pip.closest('details').open = false;
+                } catch (_) { pip.title = 'Picture in picture is unavailable for this video.'; }
+            });
+        }
     }
 
     // "Copy for YouTube": the chapters' text on the clipboard, where the browser lets a page write it.
@@ -485,6 +551,7 @@
         }
 
         menus();
+        watchActions();
         copyButtons();
         tabs();
         openers();
