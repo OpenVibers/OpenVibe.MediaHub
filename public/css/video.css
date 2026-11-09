@@ -480,8 +480,27 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-cutting p { margin: 0; max-width: 40ch; }
 .ovv-cutting i { color: var(--accent-light, var(--ovv-accent)); margin-right: 6px; }
 /* Uploads (/upload, /u/:id, /me/videos) */
-.ovv-upload { display: grid; gap: 12px; max-width: 640px; }
-.ovv-upload progress { width: 100%; height: 10px; }
+/* Upload (Opus's design pass, 11-09): the video on the left and its details on the right from 900 px; one column on a
+   phone. The meter shows only once a video is chosen. */
+.ovv-upload { display: grid; gap: 18px; max-width: 1040px; }
+.ovv-upload-pick, .ovv-upload-details { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.ovv-upload ov-progress[hidden] { display: none; }
+@media (min-width: 900px) {
+  .ovv-upload { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+  .ovv-upload-pick { position: sticky; top: calc(var(--ovnav-h, 56px) + 16px); }
+}
+.ovv-visibility { display: grid; gap: 8px; padding: 0; border: 0; }
+.ovv-visibility legend { margin-bottom: 8px; font-weight: 700; }
+.ovv-visibility label { display: block; cursor: pointer; }
+.ovv-visibility input { position: absolute; opacity: 0; }
+.ovv-visibility label span { display: grid; gap: 3px; min-height: 58px; padding: 11px 14px; border: 1px solid var(--ovv-line-strong); border-radius: 12px; background: var(--ovv-card); }
+.ovv-visibility label small { color: var(--ovv-dim); }
+.ovv-visibility input:checked + span { border: 2px solid var(--ovv-accent); padding: 10px 13px; background: rgba(111, 91, 230, .13); }
+.ovv-visibility input:focus-visible + span { outline: 3px solid var(--ovv-accent); outline-offset: 2px; }
+.ovv-link-button { border: 0; padding: 0; background: none; color: var(--ovv-accent); font: inherit; text-decoration: underline; cursor: pointer; }
+.ovv-rules { max-width: min(460px, calc(100vw - 28px)); padding: 24px; border: 1px solid var(--ovv-line-strong); border-radius: 18px; background: var(--ovv-card); color: inherit; box-shadow: 0 20px 70px rgba(0,0,0,.4); }
+.ovv-rules::backdrop { background: rgba(5, 8, 23, .7); }
+.ovv-rules p { line-height: 1.55; }
 .ovv-upload-status { margin: 0; min-height: 1.4em; }
 .ovv-processing { display: grid; place-items: center; min-height: 220px; padding: 20px; text-align: center; }
 .ovv-description p { white-space: pre-line; margin: 0; }
@@ -496,6 +515,42 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-edited-from { margin: 0 0 10px; }
 .ovv-table { width: 100%; border-collapse: collapse; }
 .ovv-table th, .ovv-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--ovv-line); }
+
+/* Your videos (/me/videos): the person's uploads as app rows: a picture, the title and its state, then one set of
+   actions. A stopped upload carries the shared ov-progress meter and a Resume that reopens /upload. */
+.ovv-my-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.ovv-my-head .ovv-lede { max-width: 54ch; }
+.ovv-mylist { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 10px; }
+.ovv-myrow { display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: 14px; padding: 10px; border: 1px solid var(--ovv-line); border-radius: 16px; background: var(--ovv-card); }
+.ovv-mythumb { display: grid; place-items: center; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 11px; color: var(--accent-light, var(--ovv-accent)); background: color-mix(in srgb, var(--ovv-accent) 12%, transparent); font-size: 1.6rem; text-decoration: none; }
+.ovv-mythumb img { width: 100%; height: 100%; object-fit: cover; }
+.ovv-mybody { display: grid; align-content: center; gap: 5px; min-width: 0; }
+.ovv-mytitleline { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; }
+.ovv-mytitle { overflow-wrap: anywhere; color: inherit !important; font-weight: 700; text-decoration: none; }
+.ovv-mytitle:hover, .ovv-mytitle:focus-visible { text-decoration: underline; }
+.ovv-mystate { flex: none; padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--text-primary, #e6edf7) 8%, transparent); color: var(--ovv-dim); font-size: .72rem; font-weight: 700; }
+.ovv-myrow[data-state=ready] .ovv-mystate { background: color-mix(in srgb, var(--success, #22c55e) 14%, transparent); color: var(--success, #22c55e); }
+.ovv-myrow[data-state=uploading] .ovv-mystate, .ovv-myrow[data-state=processing] .ovv-mystate { background: color-mix(in srgb, var(--ovv-accent) 16%, transparent); color: var(--accent-light, var(--ovv-accent)); }
+.ovv-myrow[data-state=hidden] .ovv-mystate, .ovv-myrow[data-state=failed] .ovv-mystate { background: color-mix(in srgb, var(--danger, #ef4444) 12%, transparent); color: var(--danger-text, var(--danger, #ef4444)); }
+.ovv-mymeta { margin: 0; color: var(--ovv-dim); font-size: .82rem; }
+.ovv-myprogress { max-width: 440px; margin-top: 2px; }
+.ovv-myprocess { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--ovv-dim); font-size: .82rem; }
+.ovv-pulse { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--ovv-accent); animation: ovv-pulse 1.4s ease-in-out infinite; }
+@keyframes ovv-pulse { 50% { opacity: .35; transform: scale(.8); } }
+.ovv-myactions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
+.ovv-my-empty { display: grid; justify-items: center; gap: 8px; margin-top: 18px; padding: 38px 20px; border: 1px dashed var(--ovv-line-strong); border-radius: 16px; text-align: center; }
+.ovv-my-empty > i { color: var(--ovv-accent); font-size: 1.8rem; }
+.ovv-my-empty h2, .ovv-my-empty p { margin: 0; }
+.ovv-my-empty p { max-width: 46ch; color: var(--ovv-dim); }
+.ovv-sheet-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
+@media (max-width: 560px) {
+  .ovv-myrow { grid-template-columns: 104px minmax(0, 1fr); gap: 10px; }
+  .ovv-mytitleline { display: grid; gap: 3px; }
+  .ovv-mystate { justify-self: start; }
+}
+@media (prefers-reduced-motion: reduce) { .ovv-pulse { animation: none; } }
+html[data-ov-motion=reduced] .ovv-pulse { animation: none; }
+
 /* Recording (/record) */
 .ovv-record { display: grid; gap: 12px; max-width: 760px; }
 .ovv-record-source { border: 0; padding: 0; margin: 0; display: flex; gap: 18px; flex-wrap: wrap; }

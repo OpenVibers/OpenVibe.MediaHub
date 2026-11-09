@@ -28,7 +28,7 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         const u = new URL(base + path);
         const h = { Host: 'openvibe.video' };
         if (cookie) h.cookie = cookie;
-        if (same && method !== 'GET') h['sec-fetch-site'] = 'same-origin';
+        if (same) h['sec-fetch-site'] = 'same-origin';
         let data;
         if (form) { data = Buffer.from(new URLSearchParams(form).toString()); h['content-type'] = 'application/x-www-form-urlencoded'; }
         if (json) { data = Buffer.from(JSON.stringify(json)); h['content-type'] = 'application/json'; }
@@ -72,11 +72,30 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         assert.strictEqual(t.media.vods.size, 0, 'no VOD was created');
     });
 
+    await check('upload page uses the shared picker, progress and a rules sheet', async () => {
+        const page = await vreq(t.base, '/upload', { cookie: kimCookie });
+        assert.strictEqual(page.status, 200, page.text.slice(0, 180));
+        assert.ok(page.text.includes('/shared/ov-upload.js') && page.text.includes('/shared/ov-upload.css'));
+        assert.ok(page.text.includes('<ov-progress') && page.text.includes('data-ov-upload-picker'));
+        assert.ok(page.text.includes('data-upload-rules-sheet'));
+        assert.ok(!page.text.includes('type="file"') && !page.text.includes('<select name="visibility"'));
+    });
+
     await check('a MOV goes up in 8 MB parts, in order, to one Media VOD as MP4, and completes in the background', async () => {
         const start = await vreq(t.base, '/api/v1/videos', { method: 'POST', json: { title: 'Trip to the coast', description: 'Line one\nLine two', size: file.length, content_type: 'video/quicktime', name: 'trip.mov', visibility: 'public' }, cookie: kimCookie });
         assert.strictEqual(start.status, 201, start.text);
         const up = start.json().upload;
         id = up.id;
+        const initial = await vreq(t.base, `/api/v1/videos/${id}/status`, { cookie: kimCookie });
+        assert.strictEqual(initial.status, 200);
+        assert.strictEqual(initial.json().upload.parts_received, 0);
+        assert.strictEqual((await vreq(t.base, `/api/v1/videos/${id}/status`, { cookie: samCookie })).status, 404);
+        const stopped = await vreq(t.base, '/me/videos', { cookie: kimCookie });
+        assert.strictEqual(stopped.status, 200);
+        assert.ok(stopped.text.includes('Upload stopped at 0%') && stopped.text.includes('Resume upload'), 'a stopped upload is resumable from Your videos');
+        assert.ok(stopped.text.includes('data-ov-upload-progress') && stopped.text.includes('/shared/ov-upload.js'), 'the shared meter on its row');
+        const details = await vreq(t.base, `/api/v1/videos/${id}`, { method: 'PATCH', cookie: kimCookie, json: { title: 'Trip to the coast', description: 'Line one\nLine two', visibility: 'public' } });
+        assert.strictEqual(details.status, 200, details.text);
         assert.match(id, /^vup_[0-9A-Z]{26}$/);
         assert.deepStrictEqual([up.part_size, up.parts_expected], [8 * MB, 2]);
         const out = await vreq(t.base, `/api/v1/videos/${id}/parts/2`, { method: 'PUT', body: file.subarray(8 * MB), cookie: kimCookie });
@@ -84,6 +103,7 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         assert.strictEqual((await vreq(t.base, `/api/v1/videos/${id}/parts/1`, { method: 'PUT', body: file.subarray(0, 100), cookie: kimCookie })).status, 422, 'a part is its full size');
         assert.strictEqual((await vreq(t.base, `/api/v1/videos/${id}/parts/1`, { method: 'PUT', body: file.subarray(0, 8 * MB), cookie: samCookie })).status, 404, 'not sam\'s upload');
         assert.strictEqual((await vreq(t.base, `/api/v1/videos/${id}/parts/1`, { method: 'PUT', body: file.subarray(0, 8 * MB), cookie: kimCookie })).status, 200);
+        assert.strictEqual((await vreq(t.base, `/api/v1/videos/${id}/status`, { cookie: kimCookie })).json().upload.parts_received, 1, 'a reloaded page resumes at the next part');
         assert.strictEqual((await vreq(t.base, `/api/v1/videos/${id}/parts/2`, { method: 'PUT', body: file.subarray(8 * MB), cookie: kimCookie })).status, 200);
         const vod = [...t.media.vods.values()][0];
         assert.ok(vod.bytes.equals(file), 'Media has the file, byte for byte');
@@ -120,6 +140,9 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         assert.ok((await vreq(t.base, '/sitemap.xml')).text.includes(`https://openvibe.video/watch?v=${wid}`), 'the sitemap');
         const mine = await vreq(t.base, '/me/videos', { cookie: kimCookie });
         assert.ok(mine.text.includes('Trip to the coast') && mine.text.includes('Public'));
+        assert.ok(mine.text.includes('/shared/ov-upload.css') && mine.text.includes('js/my-videos.js'), 'Your videos uses the kit');
+        assert.ok(mine.text.includes('data-delete-sheet') && mine.text.includes(`data-delete-video="${id}"`), 'Delete opens the kit sheet');
+        assert.ok(!/window\.confirm|onclick="return confirm/.test(mine.text), 'never a browser confirm');
     });
 
     await check('a ready upload goes in a playlist (kind upload, by its number): listed, played, and next in line', async () => {

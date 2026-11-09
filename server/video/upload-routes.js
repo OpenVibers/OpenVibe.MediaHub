@@ -63,6 +63,32 @@ function createUploadApi({ ctx, config }) {
         } catch (err) { return problem(res, err); }
     });
 
+    r.get('/:id/status', async (req, res) => {
+        if (!guard(req, res)) return undefined;
+        const row = await own(req, res);
+        if (!row) return undefined;
+        return res.json({ upload: { id: row.id, status: row.status, part_size: row.part_size, parts_expected: row.parts_expected, parts_received: row.parts_received, size: Number(row.size_bytes), title: row.title, description: row.description, visibility: row.visibility } });
+    });
+
+    r.patch('/:id', express.json({ limit: '16kb' }), async (req, res) => {
+        if (!guard(req, res)) return undefined;
+        const row = await own(req, res);
+        if (!row) return undefined;
+        try {
+            const b = req.body || {};
+            const updated = await up.update(row, { title: b.title, description: b.description, visibility: b.visibility });
+            return res.json({ upload: { id: updated.id, title: updated.title, visibility: updated.visibility } });
+        } catch (err) { return problem(res, err); }
+    });
+
+    r.delete('/:id', async (req, res) => {
+        if (!guard(req, res)) return undefined;
+        const row = await own(req, res);
+        if (!row) return undefined;
+        await up.remove(row);
+        return res.status(204).end();
+    });
+
     r.put('/:id/parts/:n', express.raw({ type: () => true, limit: `${Math.ceil(up.PART_SIZE / 1024) + 64}kb` }), async (req, res) => {
         if (!guard(req, res)) return undefined;
         const row = await own(req, res);
@@ -141,6 +167,35 @@ function mountUploadPages(r, h) {
         : row.status === 'uploading' ? `Upload stopped at ${Math.round((row.parts_received / row.parts_expected) * 100)}%`
             : row.status === 'processing' ? 'Processing' : row.status === 'failed' ? 'Failed' : visibilityLabel(row.visibility));
 
+    // Your videos: one card per upload with the same words the watch page uses, its picture when Media has made one,
+    // and the shared progress meter when the upload stopped part-way (Resume opens /upload, which reads IndexedDB).
+    const uploadState = (row) => (row.state === 'hidden' ? 'hidden'
+        : row.status === 'uploading' ? 'uploading' : row.status === 'processing' ? 'processing' : row.status === 'failed' ? 'failed' : 'ready');
+    function myVideoRow(row) {
+        const state = uploadState(row);
+        const watch = row.watch_id ? `/watch?v=${row.watch_id}` : `/u/${row.id}`;
+        const views = Number(row.views) || 0;
+        const pct = row.parts_expected ? Math.round((Number(row.parts_received) / Number(row.parts_expected)) * 100) : 0;
+        const meta = [visibilityLabel(row.visibility), row.duration_seconds ? durationLabel(row.duration_seconds) : null,
+            `${views} view${views === 1 ? '' : 's'}`, dateLabel(row.created_at)].filter(Boolean).join(' · ');
+        const done = Number(row.parts_received) * Number(row.part_size);
+        const total = Number(row.size_bytes);
+        return html`<li class="ovv-myrow" data-state="${state}">
+<a class="ovv-mythumb" href="${watch}" tabindex="-1" aria-hidden="true">${row.thumbnail_url ? html`<img src="${row.thumbnail_url}" alt="" loading="lazy">` : html`<i class="fa-solid fa-film"></i>`}</a>
+<div class="ovv-mybody">
+<div class="ovv-mytitleline"><a class="ovv-mytitle" href="${watch}">${row.title}</a><span class="ovv-mystate">${statusText(row)}</span></div>
+<p class="ovv-mymeta">${meta}</p>
+${state === 'uploading' ? html`<div class="ovv-myprogress" data-ov-upload-progress data-state="waiting" data-done="${done}" data-total="${total}">Upload stopped at ${pct}%</div>` : ''}
+${state === 'processing' ? html`<p class="ovv-myprocess"><span class="ovv-pulse" aria-hidden="true"></span> Making it playable. You can close this page.</p>` : ''}
+<div class="ovv-myactions">
+${state === 'uploading' ? html`<a class="ovv-btn ovv-btn--small ovv-btn--primary" href="/upload">Resume upload</a>` : ''}
+${state === 'ready' ? html`<a class="ovv-btn ovv-btn--small" href="${watch}">Watch</a> <a class="ovv-btn ovv-btn--small" href="${watch}#h-owner">Edit</a>` : ''}
+${state === 'processing' || state === 'hidden' || state === 'failed' ? html`<a class="ovv-btn ovv-btn--small" href="${watch}">Open</a>` : ''}
+<button class="ovv-btn ovv-btn--small ovv-btn--danger" type="button" data-delete-video="${row.id}" data-delete-title="${row.title}">Delete</button>
+</div>
+</div></li>`;
+    }
+
     const CUT_STATUS = { queued: 'Waiting to start', measuring: 'Finding the pauses', rendering: 'Making the copy' };
     const CUT_LABEL = { pauses: 'Pauses cut', tight: 'Tight cut', highlights: 'Highlights reel' };
     function cutLine(c) {
@@ -172,19 +227,27 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
     r.get('/upload', mustSignIn('/upload', 'Uploads belong to your OpenVibe account: sign in to upload a video.'), async (req, res) => page(req, res, {
         title: 'Upload a video',
         crumbs: [{ label: 'Home', href: '/' }, { label: 'Upload' }],
+        styles: ['ov-upload.css'],
+        sharedScripts: ['ov-upload.js'],
         scripts: ['js/video-upload.js'],
         body: html`<h1>Upload a video</h1>
 <form class="ovv-upload ovv-panel" data-video-upload method="post" action="/upload">
-<label class="ovv-field"><span>Video file</span><input name="file" type="file" accept="video/mp4,video/quicktime,video/x-m4v,video/webm,video/x-matroska,.mp4,.mov,.m4v,.webm,.mkv" required></label>
+<div class="ovv-upload-pick"><div data-ov-upload-picker></div>
+<ov-progress data-ov-upload-progress hidden></ov-progress></div>
+<div class="ovv-upload-details">
 <label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="120" required></label>
 <label class="ovv-field"><span>Description</span><textarea name="description" rows="4" maxlength="5000"></textarea></label>
-<label class="ovv-field"><span>Who can see it</span><select name="visibility">${visibilityOptions('public')}</select></label>
-<p class="ovv-fine">Public is listed on your channel and searchable; unlisted opens only by its link; private only for you. MP4, MOV, WebM or MKV, up to ${Math.round(cfg.maxBytes / GB)} GB a video and ${Math.round(cfg.quotaBytes / GB)} GB in all, ${cfg.perDay} uploads a day. Upload only what you made or may share: reported videos are hidden while staff look.</p>
-<progress hidden value="0" max="1"></progress>
+<fieldset class="ovv-visibility"><legend>Who can see it?</legend>
+<label><input type="radio" name="visibility" value="public" checked><span><b>Public</b><small>Anyone can find and watch it.</small></span></label>
+<label><input type="radio" name="visibility" value="unlisted"><span><b>Unlisted</b><small>Only people with the link.</small></span></label>
+<label><input type="radio" name="visibility" value="private"><span><b>Only you</b><small>Your private video.</small></span></label></fieldset>
+<p class="ovv-fine">Upload only what you may share. <button type="button" class="ovv-link-button" data-upload-rules>Rules and limits</button></p>
 <p class="ovv-upload-status" role="status" aria-live="polite"></p>
-<button class="ovv-btn ovv-btn--primary" type="submit">Upload</button>
+<button class="ovv-btn ovv-btn--primary" type="submit" disabled>Save details</button>
+</div>
 <noscript><p class="ovv-fine">Uploading needs JavaScript: a video goes up in parts so a big file and a dropped connection both work.</p></noscript>
 </form>
+<dialog class="ovv-rules" data-upload-rules-sheet aria-label="Upload rules"><h2>Before you upload</h2><p>MP4, MOV, WebM or MKV, up to ${Math.round(cfg.maxBytes / GB)} GB each and ${Math.round(cfg.quotaBytes / GB)} GB total. You may upload ${cfg.perDay} videos a day. Upload only what you made or have permission to share. Reported videos are hidden while staff review them.</p><form method="dialog"><button class="ovv-btn ovv-btn--primary">Got it</button></form></dialog>
 <p><a href="/record">Record from your camera or screen instead</a> · <a href="/me/videos">Your videos</a></p>`,
     }));
 
@@ -223,11 +286,21 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
         return page(req, res, {
             title: 'Your videos',
             crumbs: [{ label: 'Home', href: '/' }, { label: 'Your videos' }],
+            styles: ['ov-upload.css'],
+            sharedScripts: ['ov-upload.js'],
+            scripts: ['js/my-videos.js'],
             body: html`<h1>Your videos</h1>
-<p><a class="ovv-btn ovv-btn--primary" href="/upload"><i class="fa-solid fa-upload" aria-hidden="true"></i> Upload a video</a></p>
-${fresh.length ? html`<table class="ovv-table"><thead><tr><th scope="col">Video</th><th scope="col">State</th><th scope="col">Length</th><th scope="col">Views</th><th scope="col">Uploaded</th></tr></thead><tbody>
-${fresh.map((x) => html`<tr><td><a href="${x.watch_id ? `/watch?v=${x.watch_id}` : `/u/${x.id}`}">${x.title}</a></td><td>${statusText(x)}</td><td>${x.duration_seconds ? durationLabel(x.duration_seconds) : ''}</td><td>${Number(x.views) || 0}</td><td>${dateLabel(x.created_at) || ''}</td></tr>`)}
-</tbody></table>` : html`<p class="muted">Nothing uploaded yet.</p>`}`,
+<div class="ovv-my-head"><p class="ovv-lede">${fresh.length
+        ? `${fresh.length} video${fresh.length === 1 ? '' : 's'}, newest first. A processing video finishes in the background, so you can close the page.`
+        : 'Everything you upload to OpenVibe.Video appears here, with its state and who can see it.'}</p>
+<a class="ovv-btn ovv-btn--primary" href="/upload"><i class="fa-solid fa-upload" aria-hidden="true"></i> Upload a video</a></div>
+${fresh.length ? html`<ul class="ovv-mylist">${fresh.map(myVideoRow)}</ul>` : html`<div class="ovv-my-empty"><i class="fa-solid fa-film" aria-hidden="true"></i><h2>No videos yet</h2><p>Choose a video and the upload starts while you fill in the title.</p><a class="ovv-btn ovv-btn--primary" href="/upload">Upload your first video</a></div>`}
+<dialog class="ovv-rules" data-delete-sheet aria-label="Delete this video">
+<h2>Delete this video?</h2>
+<p data-delete-message>Its file is removed from OpenVibe.Media too. This cannot be undone.</p>
+<form method="post" data-delete-form><input type="hidden" name="confirm" value="1">
+<p class="ovv-sheet-actions"><button class="ovv-btn ovv-btn--danger" type="submit">Delete for good</button> <button class="ovv-btn" type="button" data-delete-cancel>Keep it</button></p></form>
+</dialog>`,
         });
     });
 
