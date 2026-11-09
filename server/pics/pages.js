@@ -41,6 +41,9 @@ const { createPicsApi } = require('./api');
 const { createPicVariants } = require('./variants');
 const kit = require('openvibe-shared/kit');
 const gallery = require('./gallery');
+const glyphs = require('openvibe-shared/glyphs');
+/** A line glyph from Shared's set, decorative (its button says what it does). */
+const glyph = (name, size = 16) => raw(`<span class="ovp-glyph" aria-hidden="true">${glyphs.svg(name, { size })}</span>`);
 const showcase = require('openvibe-shared/showcase');
 const { PATHS: POLICY_PATHS, policyPage } = require('./policy');
 
@@ -402,13 +405,20 @@ ${hidden ? notice(row.state === 'hidden' ? 'This picture is hidden while staff l
 ${labelsUi.chips(labelsUi.inForce(row))}
 <figure class="ovp-figure"${labelsUi.attrs(labelsUi.inForce(row), { owner: row.owner, opened: true })}><a href="/i/${row.slug}.${row.ext}"><img src="/i/${row.slug}.${row.ext}" alt="${pics.altOf(row)}" width="${row.width}" height="${row.height}" decoding="async"></a></figure>
 <p class="ovp-meta">${Number(row.width)} × ${Number(row.height)} · ${KIND[row.ext] || row.ext}${row.animated ? ' (animated)' : ''} · ${formatBytes(row.bytes)} · uploaded ${time(row.created_at)}</p>
-${raw(shareButton({ url: L.page, title, text: row.description || `${title}: a picture on ${SITE_NAME}.`, image: L.direct, kind: 'picture', id: row.id }))}
-${gallery.isPublic(row) ? html`<p>${row.author_name || 'OpenVibe member'} · ${(await gallery.counts(s, row.id)).views} views · <span data-like-count>${(await gallery.counts(s, row.id)).likes}</span> likes</p><button class="ovp-btn" data-like="${row.slug}">Like</button><p role="status" data-like-status></p>` : ''}
-${!hidden ? html`<p class="ovp-gallery-tabs"><a class="ovp-btn" href="https://openvibe.studio/image-tools?picture=${row.slug}">Edit with AI</a><a class="ovp-btn" href="https://openvibe.meme/make?picture=${row.slug}">Make a meme</a><a class="ovp-btn" href="https://openvibe.cam/">Take a photo</a></p>` : ''}
+${await (async () => {
+    const pub = gallery.isPublic(row);
+    const n = pub ? await gallery.counts(s, row.id) : null;
+    const who = row.author_name || 'OpenVibe member';
+    const share = raw(shareButton({ url: L.page, title, text: row.description || `${title}: a picture on ${SITE_NAME}.`, image: L.direct, kind: 'picture', id: row.id }));
+    return html`<div class="ovp-pic-bar">${pub ? html`<div class="ovp-pic-who"><span class="ovp-pic-av" aria-hidden="true">${who.trim().charAt(0).toUpperCase() || 'O'}</span><span class="ovp-pic-who-txt"><b>${who}</b><small>${n.views} ${n.views === 1 ? 'view' : 'views'}</small></span></div>` : ''}
+<div class="ovp-pic-acts">${pub ? html`<button type="button" class="ovk-btn ovk-btn--quiet ovp-like" data-like="${row.slug}" aria-pressed="false">${glyph('heart', 18)}<span data-like-word>Like</span><span class="ovp-like-n" data-like-count>${n.likes}</span></button>` : ''}${share}</div></div>
+${pub ? html`<p class="ovp-pic-status" role="status" data-like-status></p>` : ''}
+${!hidden ? html`<nav class="ovp-pic-make" aria-label="Make something with this picture"><a class="ovk-btn ovk-btn--quiet" href="https://openvibe.studio/image-tools?picture=${row.slug}">${glyph('spark', 17)}<span>Edit with AI</span></a><a class="ovk-btn ovk-btn--quiet" href="https://openvibe.meme/make?picture=${row.slug}">${glyph('laugh', 17)}<span>Make a meme</span></a><a class="ovk-btn ovk-btn--quiet" href="https://openvibe.cam/">${glyph('camera', 17)}<span>Take a photo</span></a></nav>` : ''}`;
+})()}
 ${row.description ? html`<p class="ovp-desc">${row.description}</p>` : ''}
 ${row.ai_caption && row.alt_source === 'ai' ? html`<p class="ovp-ai"><span class="ovp-ai-label">Described by AI</span> ${row.ai_caption}</p>` : ''}
 </article>
-${gallery.isPublic(row) ? html`<section class="ovp-section"><h2>Comments</h2><button class="ovp-btn" data-comments="${row.id}">Show Community discussion</button><div data-comments-list aria-live="polite"></div></section>` : ''}
+${gallery.isPublic(row) ? html`<section class="ovp-section ovp-comments" aria-labelledby="h-comments"><div class="ovp-comments-head"><h2 id="h-comments">Comments</h2><button type="button" class="ovk-btn ovk-btn--quiet" data-comments="${row.id}">${glyph('chat', 17)}<span>Show the discussion</span></button></div><div class="ovp-comments-list" data-comments-list aria-live="polite"></div></section>` : ''}
 <section class="ovp-share" aria-labelledby="h-share"><h2 id="h-share">Share and embed</h2>
 <p class="ovp-share-lede">These links follow the audience you choose in Share. Private pictures are visible only to you. The direct link is the picture itself, at full size — no page around it.</p>
 <div class="ovp-link-grid">

@@ -48,7 +48,9 @@
             if (!response.ok) throw new Error(response.status === 401 ? 'Sign in to like this picture.' : 'Could not update your like. Try again.');
             var data = await response.json();
             document.querySelector('[data-like-count]').textContent = data.likes;
-            like.setAttribute('aria-pressed', String(!removing)); like.textContent = removing ? 'Like' : 'Liked'; status.textContent = '';
+            like.setAttribute('aria-pressed', String(!removing));
+            var word = like.querySelector('[data-like-word]'); if (word) word.textContent = removing ? 'Like' : 'Liked'; else like.textContent = removing ? 'Like' : 'Liked';
+            status.textContent = '';
         } catch (error) { status.textContent = error.message; }
         finally { like.disabled = false; }
     });

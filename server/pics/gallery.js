@@ -9,6 +9,7 @@
  */
 const { html, raw } = require('../render/html');
 const glyphs = require('openvibe-shared/glyphs');
+const kit = require('openvibe-shared/kit');
 const labelsUi = require('../render/labels-ui');
 const PUBLIC = "i.listed = true AND i.state = 'active' AND i.audience = 'public' AND EXISTS (SELECT 1 FROM shares sh WHERE sh.service = 'mediahub' AND sh.kind = 'picture' AND sh.resource_id = i.id AND sh.audience = 'public')";
 const isPublic = (row) => Boolean(row.listed && row.state === 'active' && row.audience === 'public');
@@ -76,7 +77,9 @@ function render(pics, result) {
 <nav class="ovp-gallery-tabs" aria-label="Gallery order">${['popular', 'new', 'rising'].map((sort) => html`<a href="${href(sort)}" ${sort === result.sort ? raw('aria-current="page"') : ''}>${sort[0].toUpperCase() + sort.slice(1)}</a>`)}</nav></div>
 ${result.tag ? html`<p class="ovp-gallery-tagged">Tagged <b>#${result.tag}</b> <a href="${href(result.sort).replace(/&?tag=[^&]*/, '')}">Clear</a></p>` : ''}
 <div class="ovp-gallery" data-gallery>${cards(pics, result.rows)}</div>
-${!result.rows.length ? html`<p class="ovp-gallery-empty">${result.q || result.tag ? 'No public pictures match yet. Try another search.' : 'The gallery is ready for its first public picture. Upload one, then choose Publish to gallery on its page.'}</p>` : ''}
+${!result.rows.length ? raw(`<div class="ovp-gallery-empty">${result.q || result.tag
+    ? kit.empty({ icon: 'search', title: 'No public pictures match yet', text: 'Try another word or tag, or see everything published so far.', action: { href: '/', label: 'Clear the search', icon: 'image' } })
+    : kit.empty({ icon: 'image', title: 'The gallery is waiting for its first picture', text: 'Upload a picture, then choose Publish to gallery on its page. Until you do, it stays unlisted.', action: { href: '/mine', label: 'Your pictures', icon: 'image' } })}</div>`) : ''}
 ${result.next ? html`<a class="ovp-btn" data-gallery-next href="${href(result.sort, result.next)}">More pictures</a>` : ''}<p role="status" data-gallery-status></p></section>`;
 }
 module.exports = { PUBLIC, isPublic, tags, parseTags, options, browse, counts, publish, wire, cards, render };
