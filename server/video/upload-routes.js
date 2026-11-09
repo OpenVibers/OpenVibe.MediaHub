@@ -63,6 +63,32 @@ function createUploadApi({ ctx, config }) {
         } catch (err) { return problem(res, err); }
     });
 
+    r.get('/:id/status', async (req, res) => {
+        if (!guard(req, res)) return undefined;
+        const row = await own(req, res);
+        if (!row) return undefined;
+        return res.json({ upload: { id: row.id, status: row.status, part_size: row.part_size, parts_expected: row.parts_expected, parts_received: row.parts_received, size: Number(row.size_bytes), title: row.title, description: row.description, visibility: row.visibility } });
+    });
+
+    r.patch('/:id', express.json({ limit: '16kb' }), async (req, res) => {
+        if (!guard(req, res)) return undefined;
+        const row = await own(req, res);
+        if (!row) return undefined;
+        try {
+            const b = req.body || {};
+            const updated = await up.update(row, { title: b.title, description: b.description, visibility: b.visibility });
+            return res.json({ upload: { id: updated.id, title: updated.title, visibility: updated.visibility } });
+        } catch (err) { return problem(res, err); }
+    });
+
+    r.delete('/:id', async (req, res) => {
+        if (!guard(req, res)) return undefined;
+        const row = await own(req, res);
+        if (!row) return undefined;
+        await up.remove(row);
+        return res.status(204).end();
+    });
+
     r.put('/:id/parts/:n', express.raw({ type: () => true, limit: `${Math.ceil(up.PART_SIZE / 1024) + 64}kb` }), async (req, res) => {
         if (!guard(req, res)) return undefined;
         const row = await own(req, res);
@@ -172,19 +198,25 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
     r.get('/upload', mustSignIn('/upload', 'Uploads belong to your OpenVibe account: sign in to upload a video.'), async (req, res) => page(req, res, {
         title: 'Upload a video',
         crumbs: [{ label: 'Home', href: '/' }, { label: 'Upload' }],
+        styles: ['ov-upload.css'],
+        sharedScripts: ['ov-upload.js'],
         scripts: ['js/video-upload.js'],
         body: html`<h1>Upload a video</h1>
 <form class="ovv-upload ovv-panel" data-video-upload method="post" action="/upload">
-<label class="ovv-field"><span>Video file</span><input name="file" type="file" accept="video/mp4,video/quicktime,video/x-m4v,video/webm,video/x-matroska,.mp4,.mov,.m4v,.webm,.mkv" required></label>
+<div data-ov-upload-picker></div>
+<ov-progress data-ov-upload-progress></ov-progress>
 <label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="120" required></label>
 <label class="ovv-field"><span>Description</span><textarea name="description" rows="4" maxlength="5000"></textarea></label>
-<label class="ovv-field"><span>Who can see it</span><select name="visibility">${visibilityOptions('public')}</select></label>
-<p class="ovv-fine">Public is listed on your channel and searchable; unlisted opens only by its link; private only for you. MP4, MOV, WebM or MKV, up to ${Math.round(cfg.maxBytes / GB)} GB a video and ${Math.round(cfg.quotaBytes / GB)} GB in all, ${cfg.perDay} uploads a day. Upload only what you made or may share: reported videos are hidden while staff look.</p>
-<progress hidden value="0" max="1"></progress>
+<fieldset class="ovv-visibility"><legend>Who can see it?</legend>
+<label><input type="radio" name="visibility" value="public" checked><span><b>Public</b><small>Anyone can find and watch it.</small></span></label>
+<label><input type="radio" name="visibility" value="unlisted"><span><b>Unlisted</b><small>Only people with the link.</small></span></label>
+<label><input type="radio" name="visibility" value="private"><span><b>Only you</b><small>Your private video.</small></span></label></fieldset>
+<p class="ovv-fine">Upload only what you may share. <button type="button" class="ovv-link-button" data-upload-rules>Rules and limits</button></p>
 <p class="ovv-upload-status" role="status" aria-live="polite"></p>
-<button class="ovv-btn ovv-btn--primary" type="submit">Upload</button>
+<button class="ovv-btn ovv-btn--primary" type="submit" disabled>Save details</button>
 <noscript><p class="ovv-fine">Uploading needs JavaScript: a video goes up in parts so a big file and a dropped connection both work.</p></noscript>
 </form>
+<dialog class="ovv-rules" data-upload-rules-sheet aria-label="Upload rules"><h2>Before you upload</h2><p>MP4, MOV, WebM or MKV, up to ${Math.round(cfg.maxBytes / GB)} GB each and ${Math.round(cfg.quotaBytes / GB)} GB total. You may upload ${cfg.perDay} videos a day. Upload only what you made or have permission to share. Reported videos are hidden while staff review them.</p><form method="dialog"><button class="ovv-btn ovv-btn--primary">Got it</button></form></dialog>
 <p><a href="/record">Record from your camera or screen instead</a> · <a href="/me/videos">Your videos</a></p>`,
     }));
 

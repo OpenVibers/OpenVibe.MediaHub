@@ -71,6 +71,7 @@ ${appIcon.headTags({ site: 'media-hub' })}
 <link rel="stylesheet" href="${asset('css/app.css')}">
 <link rel="stylesheet" href="${asset('css/video.css')}">
 ${(o.styles || []).map((name) => `<link rel="stylesheet" href="${ovServe.url(name)}">`).join('\n')}
+${(o.sharedScripts || []).map((name) => `<script src="${ovServe.url(name)}" defer></script>`).join('\n')}
 ${(o.localStyles || []).map((rel) => `<link rel="stylesheet" href="${asset(rel)}">\n`).join('')}${o.player ? `<link rel="stylesheet" href="${ovServe.url('player.css')}">\n<script src="${ovServe.url('player.js')}" defer></script>\n` : ''}${o.path === '/record' ? `<script src="${CAM_KIT_URL}" integrity="${CAM_KIT_SRI}" crossorigin="anonymous" defer></script>\n` : ''}${(o.scripts || []).map((rel) => `<script src="${asset(rel)}" defer></script>`).join('\n')}`;
     const account = signedIn
         ? html`Signed in as <strong>${viewer.displayName || viewer.username || 'you'}</strong> · <a href="/auth/logout?next=${encodeURIComponent(pathNow)}">Sign out</a>`
