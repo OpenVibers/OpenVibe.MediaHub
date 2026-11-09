@@ -90,6 +90,10 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         assert.strictEqual(initial.status, 200);
         assert.strictEqual(initial.json().upload.parts_received, 0);
         assert.strictEqual((await vreq(t.base, `/api/v1/videos/${id}/status`, { cookie: samCookie })).status, 404);
+        const stopped = await vreq(t.base, '/me/videos', { cookie: kimCookie });
+        assert.strictEqual(stopped.status, 200);
+        assert.ok(stopped.text.includes('Upload stopped at 0%') && stopped.text.includes('Resume upload'), 'a stopped upload is resumable from Your videos');
+        assert.ok(stopped.text.includes('data-ov-upload-progress') && stopped.text.includes('/shared/ov-upload.js'), 'the shared meter on its row');
         const details = await vreq(t.base, `/api/v1/videos/${id}`, { method: 'PATCH', cookie: kimCookie, json: { title: 'Trip to the coast', description: 'Line one\nLine two', visibility: 'public' } });
         assert.strictEqual(details.status, 200, details.text);
         assert.match(id, /^vup_[0-9A-Z]{26}$/);
@@ -136,6 +140,9 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         assert.ok((await vreq(t.base, '/sitemap.xml')).text.includes(`https://openvibe.video/watch?v=${wid}`), 'the sitemap');
         const mine = await vreq(t.base, '/me/videos', { cookie: kimCookie });
         assert.ok(mine.text.includes('Trip to the coast') && mine.text.includes('Public'));
+        assert.ok(mine.text.includes('/shared/ov-upload.css') && mine.text.includes('js/my-videos.js'), 'Your videos uses the kit');
+        assert.ok(mine.text.includes('data-delete-sheet') && mine.text.includes(`data-delete-video="${id}"`), 'Delete opens the kit sheet');
+        assert.ok(!/window\.confirm|onclick="return confirm/.test(mine.text), 'never a browser confirm');
     });
 
     await check('a ready upload goes in a playlist (kind upload, by its number): listed, played, and next in line', async () => {
