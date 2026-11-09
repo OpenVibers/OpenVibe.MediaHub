@@ -141,6 +141,17 @@ function hreq(base, host, path, { method = 'GET', cookie, form, body, type, same
             assert.ok(!r.text.includes('name="labels"'), 'no picker for a viewer');
         });
 
+        await check('beside the player: more from the channel, never the one playing', async () => {
+            const v = await video('/v/301');
+            const more = (v.text.split('<section class="ovv-panel ovv-more"')[1] || '').split('</section>')[0];
+            assert.ok(!/Kim labelled/.test(more), 'never the recording playing');
+            assert.ok(!/Kim clip/.test(more), 'its own clips are in Clips from this stream, not again here');
+            const c = await video('/c/401');
+            const moreC = (c.text.split('<section class="ovv-panel ovv-more"')[1] || '').split('</section>')[0];
+            assert.ok(moreC.includes('More from Kim'), 'the section names the channel');
+            assert.ok(/Kim labelled/.test(moreC) && !/Kim clip/.test(moreC), 'on a clip: the channel\'s recording, not the clip playing');
+        });
+
         await check('cards: the picture in a cover outside the hidden link, the chips under the title', async () => {
             const r = await video('/@kim');
             assert.strictEqual(r.status, 200, r.text.slice(0, 300));
