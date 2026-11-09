@@ -58,15 +58,23 @@ async function publish(ctx, row, viewer, input) {
     return { ok: true };
 }
 const wire = (pics, row) => ({ ...pics.toWire(row), author: row.author_name || 'OpenVibe member', tags: tags(row), likes: Number(row.likes || 0), views: Number(row.views || 0), published_at: row.published_at });
-const card = (pics, row) => html`<article class="ovp-gallery-card"${labelsUi.attrs(labelsUi.inForce(row), { owner: row.owner })}><a href="/i/${row.slug}"><img src="/i/${row.slug}/thumb.webp" alt="${pics.altOf(row)}" width="${row.width}" height="${row.height}" loading="lazy" decoding="async"><h3>${row.title || 'Untitled picture'}</h3></a><p class="ovp-gallery-author">${row.author_name || 'OpenVibe member'}</p><p class="ovp-gallery-counts">${Number(row.views || 0)} views · ${Number(row.likes || 0)} likes</p>${tags(row).map((t) => html`<a class="ovp-tag" href="/?tag=${encodeURIComponent(t)}">#${t}</a>`)}</article>`;
+/** 1234 → "1.2K": counts on a card are read at a glance; the exact number is in the title and the screen-reader text. */
+const compact = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}K` : String(n)).replace('.0', '');
+const glyph = (name, size = 14) => raw(`<span class="ovp-gc-ic" aria-hidden="true">${glyphs.svg(name, { size })}</span>`);
+const count = (n, one, many, name) => html`<span class="ovp-gc-n" title="${n} ${n === 1 ? one : many}">${glyph(name)}<span aria-hidden="true">${compact(n)}</span><span class="ovp-sr">${n} ${n === 1 ? one : many}</span></span>`;
+// The picture is a link too (a second way in, out of the tab order); the title is the card's one link a keyboard meets.
+const card = (pics, row) => html`<article class="ovp-gallery-card"${labelsUi.attrs(labelsUi.inForce(row), { owner: row.owner })}><a class="ovp-gc-pic" href="/i/${row.slug}" tabindex="-1"><img src="/i/${row.slug}/thumb.webp" alt="${pics.altOf(row)}" width="${row.width}" height="${row.height}" loading="lazy" decoding="async"></a>
+<div class="ovp-gc-body"><h3 class="ovp-gc-title"><a href="/i/${row.slug}">${row.title || 'Untitled picture'}</a></h3>
+<p class="ovp-gc-meta"><span class="ovp-gc-by">${row.author_name || 'OpenVibe member'}</span>${count(Number(row.views || 0), 'view', 'views', 'eye')}${count(Number(row.likes || 0), 'like', 'likes', 'heart')}</p>
+${tags(row).length ? html`<p class="ovp-gc-tags">${tags(row).map((t) => html`<a class="ovp-tag" href="/?tag=${encodeURIComponent(t)}">#${t}</a>`)}</p>` : ''}</div></article>`;
 const cards = (pics, rows) => rows.map((row) => card(pics, row));
 function render(pics, result) {
     const href = (sort, cursor = '') => `/?${new URLSearchParams({ sort, q: result.q, tag: result.tag, ...(cursor ? { cursor } : {}) })}`;
     return html`<section class="ovp-section sc-sec" aria-labelledby="sc-discover-pictures"><h2 id="sc-discover-pictures">${raw(headIcon('image'))}<span>Discover pictures</span></h2>
 <p class="sc-lede">Pictures people chose to share with everyone. An upload stays unlisted until its owner publishes it.</p>
-<form class="ovp-gallery-search" action="/" method="get"><label for="gallery-search">Search pictures and tags</label><input id="gallery-search" name="q" value="${result.q}" type="search" maxlength="120"><button class="ovp-btn" type="submit">Search</button></form>
-<nav class="ovp-gallery-tabs" aria-label="Gallery order">${['popular', 'new', 'rising'].map((sort) => html`<a class="ovp-btn" href="${href(sort)}" ${sort === result.sort ? raw('aria-current="page"') : ''}>${sort[0].toUpperCase() + sort.slice(1)}</a>`)}</nav>
-${result.tag ? html`<p>Tagged #${result.tag} · <a href="/">Clear</a></p>` : ''}
+<div class="ovp-gallery-bar"><form class="ovp-gallery-search" action="/" method="get" role="search">${glyph('search', 17)}<label class="ovp-sr" for="gallery-search">Search pictures and tags</label><input id="gallery-search" name="q" value="${result.q}" type="search" maxlength="120" placeholder="Search pictures or tags">${result.sort !== 'popular' ? html`<input type="hidden" name="sort" value="${result.sort}">` : ''}<button type="submit">Search</button></form>
+<nav class="ovp-gallery-tabs" aria-label="Gallery order">${['popular', 'new', 'rising'].map((sort) => html`<a href="${href(sort)}" ${sort === result.sort ? raw('aria-current="page"') : ''}>${sort[0].toUpperCase() + sort.slice(1)}</a>`)}</nav></div>
+${result.tag ? html`<p class="ovp-gallery-tagged">Tagged <b>#${result.tag}</b> <a href="${href(result.sort).replace(/&?tag=[^&]*/, '')}">Clear</a></p>` : ''}
 <div class="ovp-gallery" data-gallery>${cards(pics, result.rows)}</div>
 ${!result.rows.length ? html`<p class="ovp-gallery-empty">${result.q || result.tag ? 'No public pictures match yet. Try another search.' : 'The gallery is ready for its first public picture. Upload one, then choose Publish to gallery on its page.'}</p>` : ''}
 ${result.next ? html`<a class="ovp-btn" data-gallery-next href="${href(result.sort, result.next)}">More pictures</a>` : ''}<p role="status" data-gallery-status></p></section>`;
