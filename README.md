@@ -537,7 +537,7 @@ Part of the [OpenVibe network](https://openvibe.network). Built in the open by [
 
 `GET /api/v1/gallery?sort=popular|new|rising&q=&tag=&cursor=&limit=30` lists only active,
 explicitly published pictures whose sharing audience is Everyone. A new upload is unlisted: anyone with
-the link can open it and nobody else, and no picture is opted in by migration 0027. The owner publishes using
+the link can open it and nobody else, and no picture is opted in by migration 0028. The owner publishes using
 `POST /api/v1/images/:slug/publication` with `{ "listed": true, "tags": ["landscape"] }`.
 Setting `listed` false removes discovery without changing access; narrowing Share also clears publication.
 `GET /api/v1/pictures/:id` respects the current audience, and authenticated readers can retrieve raster
