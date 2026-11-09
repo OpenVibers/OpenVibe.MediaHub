@@ -102,6 +102,7 @@ ${render(o.body)}
             search: { page: '/search', label: 'OpenVibe.Video' },
             history: { type: 'page', title },
             sessionUrl: '/auth/me',
+            tokenUrl: '/auth/navbar-token',
             loginUrl: '/auth/login?next={path}',
             logoutUrl: '/auth/logout?next={path}',
             silentLogin: `${String(o.baseUrl).replace(/\/+$/, '')}/auth/login?silent=1&next={url}`,
