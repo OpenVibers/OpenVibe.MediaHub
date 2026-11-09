@@ -34,7 +34,10 @@ function assetVersion(rel) {
 }
 const asset = (rel) => `/${rel}?v=${assetVersion(rel)}`;
 // This hash pins the Cam PR's recorder until its next reviewed release.
-const CAM_KIT_SRI = 'sha384-kD5WfySp7D3rNJliBpLgJRrl4Geks+4EcgSaCIBGX+dZdecjmUVxEjzbcUw2Spp7';
+// Cam's kit, pinned by hash (Cam #116, 11-09). The query names the version, so Cloudflare never hands this check an
+// older copy cached under the plain URL. A Cam release that changes the kit ships with this pin.
+const CAM_KIT_SRI = 'sha384-yqqjh1FiP7a4l9uelJHaryd8Y5IwnHVbqjt1d0AXbgCcytI9Z5MMmItFqbwB4YZG';
+const CAM_KIT_URL = 'https://openvibe.cam/embed/cam-kit.js?v=yqqjh1FiP7a4';
 
 // The pages with a Markdown twin (openvibe-shared/agent-layer): the home and the watch pages of a
 // recording and a clip. The others (search, categories, an account's playlists) have none.
@@ -68,7 +71,7 @@ ${appIcon.headTags({ site: 'media-hub' })}
 <link rel="stylesheet" href="${asset('css/app.css')}">
 <link rel="stylesheet" href="${asset('css/video.css')}">
 ${(o.styles || []).map((name) => `<link rel="stylesheet" href="${ovServe.url(name)}">`).join('\n')}
-${(o.localStyles || []).map((rel) => `<link rel="stylesheet" href="${asset(rel)}">\n`).join('')}${o.player ? `<link rel="stylesheet" href="${ovServe.url('player.css')}">\n<script src="${ovServe.url('player.js')}" defer></script>\n` : ''}${o.path === '/record' ? `<script src="https://openvibe.cam/embed/cam-kit.js" integrity="${CAM_KIT_SRI}" crossorigin="anonymous" defer></script>\n` : ''}${(o.scripts || []).map((rel) => `<script src="${asset(rel)}" defer></script>`).join('\n')}`;
+${(o.localStyles || []).map((rel) => `<link rel="stylesheet" href="${asset(rel)}">\n`).join('')}${o.player ? `<link rel="stylesheet" href="${ovServe.url('player.css')}">\n<script src="${ovServe.url('player.js')}" defer></script>\n` : ''}${o.path === '/record' ? `<script src="${CAM_KIT_URL}" integrity="${CAM_KIT_SRI}" crossorigin="anonymous" defer></script>\n` : ''}${(o.scripts || []).map((rel) => `<script src="${asset(rel)}" defer></script>`).join('\n')}`;
     const account = signedIn
         ? html`Signed in as <strong>${viewer.displayName || viewer.username || 'you'}</strong> · <a href="/auth/logout?next=${encodeURIComponent(pathNow)}">Sign out</a>`
         : html`<a href="/auth/login?next=${encodeURIComponent(pathNow)}">Sign in with OpenVibe</a>`;

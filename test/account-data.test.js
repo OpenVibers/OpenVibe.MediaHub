@@ -39,11 +39,16 @@ const DELETION = 'del_01JABCDEFGHJKMNPQRSTVWXYZ0';
     const t = await boot({ env: { MEDIAHUB_EVENTS_SECRET: SECRET } });
     const kim = t.network.addUser('kim');
     const sam = t.network.addUser('sam');
+    await t.ctx.s.db.exec('INSERT INTO video_likes (kind, item_id, owner, created_at) VALUES ($1, $2, $3, $4), ($1, $2, $5, $4)', ['vod', 101, `user:${kim.subject}`, '2026-11-09T00:00:00Z', `user:${sam.subject}`]);
 
     const file = (await upload(t, kim, bytes(300, 'kim'), { name: 'kim.bin' })).json().file;
     const slug = (await share(t, kim, { file_id: file.id, hours: 24 })).json().share.slug;
     await t.get(`/s/${slug}/report`, { as: sam, form: { reason: 'malware', note: 'nope' }, headers: SAME });
     const sams = (await upload(t, sam, bytes(300, 'sam'), { name: 'sam.bin' })).json().file;
+    await t.ctx.s.db.exec('INSERT INTO mh_radio_tracks (id, file_id, owner, title, artist, source_kind, licence, licence_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8), ($9, $10, $11, $12, $13, $6, $7, $8)', [
+        'radio_kim', file.id, `user:${kim.subject}`, 'Kim track', 'Kim', 'creator', 'creator_grant', 'https://openvibe.radio/grant',
+        'radio_sam', sams.id, `user:${sam.subject}`, 'Sam track', 'Sam',
+    ]);
     // And kim files one against sam's file, so each has a report of their own in the export.
     const samSlug = (await share(t, sam, { file_id: sams.id, hours: 24 })).json().share.slug;
     await t.get(`/s/${samSlug}/report`, { as: kim, form: { reason: 'other', note: 'kim says' }, headers: SAME });
@@ -80,7 +85,9 @@ const DELETION = 'del_01JABCDEFGHJKMNPQRSTVWXYZ0';
         assert.ok(files, 'a files.json part');
         assert.strictEqual(files.content.length, 1);
         assert.strictEqual(files.content[0].id, file.id);
-        assert.deepStrictEqual(part.files.map((f) => f.name).sort(), ['files.json', 'reports.json', 'shares.json', 'usage.json'], 'and the rest of the person\'s own data');
+        assert.deepStrictEqual(part.files.map((f) => f.name).sort(), ['files.json', 'radio_tracks.json', 'reports.json', 'shares.json', 'usage.json', 'video_likes.json'], 'and the rest of the person\'s own data');
+        assert.deepStrictEqual(part.files.find((f) => f.name === 'radio_tracks.json').content.map((track) => track.id), ['radio_kim'], 'a person can export their radio publications');
+        assert.deepStrictEqual(part.files.find((f) => f.name === 'video_likes.json').content.map((like) => like.item_id), [101], 'a person can export their likes');
         assert.ok(part.files.find((f) => f.name === 'shares.json').content.some((s) => s.slug === slug));
         assert.strictEqual(part.files.find((f) => f.name === 'reports.json').content.length, 1, 'the report kim filed');
         assert.ok(!JSON.stringify(part).includes(sams.id), 'nothing of sam\'s');
@@ -105,6 +112,10 @@ const DELETION = 'del_01JABCDEFGHJKMNPQRSTVWXYZ0';
         assert.strictEqual(confirmation.subject, kim.subject);
         assert.ok(confirmation.erased.mh_files >= 1, JSON.stringify(confirmation));
         assert.ok(confirmation.erased.mh_shares >= 1, JSON.stringify(confirmation));
+        assert.strictEqual(confirmation.erased.mh_radio_tracks, 1, 'radio publications are erased with the account');
+        assert.strictEqual(confirmation.erased.video_likes, 1, 'likes are erased with the account');
+        assert.strictEqual(Number(await t.ctx.s.db.value('SELECT COUNT(*) FROM mh_radio_tracks WHERE owner = $1', [`user:${sam.subject}`])), 1, 'another person\'s radio publication remains');
+        assert.strictEqual(Number(await t.ctx.s.db.value('SELECT COUNT(*) FROM video_likes WHERE owner = $1', [`user:${sam.subject}`])), 1, 'another person\'s like remains');
 
         // Sam's drive is untouched.
         assert.strictEqual((await t.get(`/api/v1/files/${sams.id}`, { as: sam })).status, 200);

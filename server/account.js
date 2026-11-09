@@ -35,6 +35,7 @@ const TABLES = [
     // A playlist's items have no owner column of their own; they are exported with extraExport below and erased
     // by the playlists' ON DELETE CASCADE, so only the playlists table is listed here.
     { table: 'video_playlists', subject: 'owner', value: AS_REQUESTER, file: 'playlists.json' },
+    { table: 'video_likes', subject: 'owner', value: AS_REQUESTER, file: 'video_likes.json' },
     // An upload that never finished is this service's own state, not something the person made: it is erased with
     // the account but is not part of the export.
     { table: 'mh_uploads', subject: 'owner', value: AS_REQUESTER, file: null },
@@ -81,7 +82,7 @@ function createAccount({ db, config, media, log = console, onMediaVodReady = nul
         db,
         service: 'media-hub',
         tables: TABLES,
-        note: 'OpenVibe.MediaHub: your files, folders, share links, the reports you filed, your upload counts and your playlists, your OpenVibe.Pics pictures and albums, and the videos you uploaded to OpenVibe.Video. The bytes of your files, pictures and videos live in OpenVibe.Media.',
+        note: 'OpenVibe.MediaHub: your files, folders, share links, the reports you filed, your upload counts, playlists and video likes, your OpenVibe.Pics pictures and albums, and the videos you uploaded to OpenVibe.Video. The bytes of your files, pictures and videos live in OpenVibe.Media.',
         extraExport: async (db, subject) => {
             const rows = await db.many(
                 `SELECT i.playlist_id, i.kind, i.item_id, i.position, i.added_at
