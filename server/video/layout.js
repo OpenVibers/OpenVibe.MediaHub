@@ -33,6 +33,8 @@ function assetVersion(rel) {
     return v;
 }
 const asset = (rel) => `/${rel}?v=${assetVersion(rel)}`;
+// This hash pins the Cam PR's recorder until its next reviewed release.
+const CAM_KIT_SRI = 'sha384-kD5WfySp7D3rNJliBpLgJRrl4Geks+4EcgSaCIBGX+dZdecjmUVxEjzbcUw2Spp7';
 
 // The pages with a Markdown twin (openvibe-shared/agent-layer): the home and the watch pages of a
 // recording and a clip. The others (search, categories, an account's playlists) have none.
@@ -66,7 +68,7 @@ ${appIcon.headTags({ site: 'media-hub' })}
 <link rel="stylesheet" href="${asset('css/app.css')}">
 <link rel="stylesheet" href="${asset('css/video.css')}">
 ${(o.styles || []).map((name) => `<link rel="stylesheet" href="${ovServe.url(name)}">`).join('\n')}
-${(o.localStyles || []).map((rel) => `<link rel="stylesheet" href="${asset(rel)}">\n`).join('')}${o.player ? `<link rel="stylesheet" href="${ovServe.url('player.css')}">\n<script src="${ovServe.url('player.js')}" defer></script>\n` : ''}${(o.scripts || []).map((rel) => `<script src="${asset(rel)}" defer></script>`).join('\n')}`;
+${(o.localStyles || []).map((rel) => `<link rel="stylesheet" href="${asset(rel)}">\n`).join('')}${o.player ? `<link rel="stylesheet" href="${ovServe.url('player.css')}">\n<script src="${ovServe.url('player.js')}" defer></script>\n` : ''}${o.path === '/record' ? `<script src="https://openvibe.cam/embed/cam-kit.js" integrity="${CAM_KIT_SRI}" crossorigin="anonymous" defer></script>\n` : ''}${(o.scripts || []).map((rel) => `<script src="${asset(rel)}" defer></script>`).join('\n')}`;
     const account = signedIn
         ? html`Signed in as <strong>${viewer.displayName || viewer.username || 'you'}</strong> · <a href="/auth/logout?next=${encodeURIComponent(pathNow)}">Sign out</a>`
         : html`<a href="/auth/login?next=${encodeURIComponent(pathNow)}">Sign in with OpenVibe</a>`;
@@ -102,6 +104,7 @@ ${render(o.body)}
             search: { page: '/search', label: 'OpenVibe.Video' },
             history: { type: 'page', title },
             sessionUrl: '/auth/me',
+            tokenUrl: '/auth/navbar-token',
             loginUrl: '/auth/login?next={path}',
             logoutUrl: '/auth/logout?next={path}',
             silentLogin: `${String(o.baseUrl).replace(/\/+$/, '')}/auth/login?silent=1&next={url}`,

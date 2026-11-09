@@ -659,6 +659,34 @@ html.ov-motion .ovv-stat.is-live .ovv-dot { animation: ovv-pulse 1.6s ease-out i
 .ovv-card-body > .ovk-labels { margin: .3rem 0 0; }
 .ovv-head > .ovk-labels { margin: .35rem 0 .1rem; }
 
+/* Video's app home: one feed, with touch-sized filters and the same cards on every width. */
+.ovv-app-home { min-width: 0; }
+.ovv-app-head { display: flex; align-items: center; gap: 16px; margin: 2px 0 20px; }
+.ovv-app-head h1 { margin: 0; font-size: clamp(20px, 2.6vw, 26px); line-height: 1.2; }
+.ovv-feed-signin { display: inline-flex; align-items: center; min-height: 44px; margin-left: auto; padding: 8px 18px; border: 1px solid var(--ovv-line); border-radius: 999px; color: inherit; font-weight: 700; text-decoration: none; }
+.ovv-feed-chips { display: flex; gap: 8px; overflow-x: auto; margin: 0 0 28px; padding: 0 0 5px; scrollbar-width: none; }
+.ovv-feed-chips::-webkit-scrollbar { display: none; }
+.ovv-feed-chips a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 9px 18px; flex: none; border: 1px solid var(--ovv-line); border-radius: 999px; background: var(--ovv-card); color: inherit; text-decoration: none; font-size: 14px; font-weight: 700; }
+.ovv-feed-chips a[aria-current="page"] { border-color: var(--accent-strong, #2563eb); background: var(--accent-strong, #2563eb); color: var(--on-accent-strong, #fff); }
+.ovv-feed-chips a:hover, .ovv-feed-signin:hover { border-color: var(--ovv-accent); }
+.ovv-app-feed h2, .ovv-continue h2 { margin: 0 0 14px; font-size: 19px; }
+.ovv-app-feed .ovv-grid { grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 26px 16px; }
+.ovv-card-body { display: flex; gap: 10px; }
+.ovv-card-copy { min-width: 0; }
+.ovv-card-avatar { display: block; flex: 0 0 36px; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; }
+.ovv-card-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ovv-continue { margin: 0 0 26px; }
+.ovv-continue-card { display: flex; align-items: center; gap: 14px; max-width: 480px; min-height: 90px; padding: 8px; border: 1px solid var(--ovv-line); border-radius: 14px; background: var(--ovv-card); color: inherit; text-decoration: none; }
+.ovv-continue-card img { width: 126px; aspect-ratio: 16 / 9; border-radius: 8px; object-fit: cover; }
+.ovv-continue-copy { display: grid; gap: 5px; min-width: 0; }.ovv-continue-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.ovv-continue-copy > span { color: var(--ovv-dim); font-size: 13px; }
+.ovv-record-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+@media (max-width: 599px) {
+  .ovv-page:has(.ovv-app-home) { padding: 16px 16px 90px; }
+  .ovv-app-head { margin-bottom: 16px; }.ovv-app-head h1 { font-size: 18px; }
+  .ovv-app-feed .ovv-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .ovv-app-feed .ovv-card-title { font-size: 16px; }
+}
+
 /* The owner's Delete in More: a quiet button, a red one inside its question. */
 .ovv-deleter > summary { color: var(--danger-text, var(--danger, #f87171)); }
 .ovv-deleter .ovv-pop-panel form { margin-top: 10px; }
@@ -692,6 +720,7 @@ html.ov-motion .ovv-stat.is-live .ovv-dot { animation: ovv-pulse 1.6s ease-out i
 @keyframes ovv-like-pop { 50% { transform: scale(1.32) rotate(-9deg); } }
 .ovv-watch .ovv-more-actions { display: grid; gap: 2px; }
 .ovv-watch .ovv-more-actions > :is(a, button), .ovv-watch .ovv-more-actions .ovv-deleter > summary { box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 10px 12px; border: 0; border-radius: 9px; background: transparent; color: inherit !important; font: inherit; font-size: .9rem; font-weight: 700; text-align: left; text-decoration: none; cursor: pointer; }
+.ovv-watch .ovv-more-actions > [hidden] { display: none; }
 .ovv-watch .ovv-more-actions > :is(a, button):hover, .ovv-watch .ovv-more-actions .ovv-deleter > summary:hover { background: var(--bg-hover, #1c2a44); }
 .ovv-watch .ovv-actions .ovv-more-actions > a.ovv-btn, .ovv-watch .ovv-actions .ovv-more-actions .ovv-deleter > summary.ovv-btn { display: flex; justify-content: flex-start; width: 100%; min-height: 44px; padding: 10px 12px; border: 0; border-radius: 9px; background: transparent; box-shadow: none; transform: none; }
 .ovv-watch .ovv-more-actions .ovv-pop-list { border-top: 1px solid var(--ovv-line); padding-top: 4px; }

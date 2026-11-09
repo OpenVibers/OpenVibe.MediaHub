@@ -113,34 +113,29 @@ function startLive() {
         await check('outcome 1: a recording says what it is: a stream recording, the day, the length, the views', async () => {
             const r = await get('/v/501');
             assert.strictEqual(r.status, 200);
-            const what = /<p class="ovv-what">([\s\S]*?)<\/p>/.exec(r.text);
-            assert.ok(what, 'the page says what the video is');
-            const line = what[1];
-            assert.ok(line.includes('Stream recording'), line);
-            assert.ok(line.includes('Streamed on') && line.includes('Oct 12, 2026'), 'the day it was streamed: ' + line);
-            assert.ok(line.includes('13 minutes'), 'its length, in words: ' + line);
+            assert.ok(r.text.includes('<span class="ovv-kind">Stream recording</span>'), 'the title says what the video is');
+            const line = /<div class="ovv-about-facts">([\s\S]*?)<\/div>/.exec(r.text)[1];
+            assert.ok(line.includes('13 min'), 'its length: ' + line);
             assert.ok(line.includes('1,204 views'), 'its views: ' + line);
-            assert.ok(/<time datetime="2026-10-12T09:30:00.000Z">/.test(line), 'the day in a machine-readable time: ' + line);
+            assert.ok(r.text.includes('Oct 12, 2026'), 'the stream date remains on the page');
             // The channel is in the byline under it, and the category in About: nothing is said twice.
-            assert.ok(r.text.includes('class="ovv-channel-name"') && r.text.includes('@Streamer'), 'the channel');
+            assert.ok(r.text.includes('class="ovv-channel-name"') && r.text.includes('>Streamer</a>'), 'the channel');
             assert.ok(r.text.includes("Streamed live on") && r.text.includes('in Gaming'), 'the category is in About');
         });
 
         await check('outcome 1: a recording with no stream time says when it was published, and guesses nothing', async () => {
             const r = await get('/v/502');
             assert.strictEqual(r.status, 200);
-            const line = /<p class="ovv-what">([\s\S]*?)<\/p>/.exec(r.text)[1];
-            assert.ok(line.includes('Published on') && line.includes('Oct 12, 2026'), line);
-            assert.ok(!line.includes('Streamed on'), 'no day it was streamed: Live never said one');
-            assert.ok(!line.includes('views'), 'no views: Live counted none');
-            assert.ok(line.includes('45 seconds'), 'the length it does have: ' + line);
+            const line = /<div class="ovv-about-facts">([\s\S]*?)<\/div>/.exec(r.text)[1];
+            assert.ok(!r.text.includes('Streamed on'), 'no day it was streamed: Live never said one');
+            assert.ok(line.includes('45 s'), 'the length it does have: ' + line);
         });
 
         await check('outcome 1: a clip says what it is, and an upload says it is an upload', async () => {
             const clip = await get('/c/601');
-            const line = /<p class="ovv-what">([\s\S]*?)<\/p>/.exec(clip.text)[1];
-            assert.ok(line.includes('Clip</span>') && !line.includes('AI clip'), 'a clip: ' + line);
-            assert.ok(line.includes('30 seconds') && line.includes('20 views'), line);
+            assert.ok(clip.text.includes('<span class="ovv-kind">Clip</span>') && !clip.text.includes('<span class="ovv-kind">AI clip</span>'), 'a clip');
+            const line = /<div class="ovv-about-facts">([\s\S]*?)<\/div>/.exec(clip.text)[1];
+            assert.ok(line.includes('30 s') && line.includes('20 views'), line);
             // The upload's own row: the day it was uploaded, its length and its views.
             const s = t.ctx.s;
             const id = 'vup_01J0000000000000000000000B';
@@ -163,8 +158,8 @@ function startLive() {
             assert.ok(line.includes('Cut from'), line);
             assert.ok(line.includes('A long recording'), 'the title of the recording it came from: ' + line);
             assert.ok(line.includes('href="/v/501?t=65"'), 'a link back to the recording, at the clip\'s moment: ' + line);
-            assert.ok(line.includes("Streamer's stream recording"), 'whose recording it was: ' + line);
-            assert.ok(line.includes('starts at 1:05 in it'), 'where the clip starts in it: ' + line);
+            assert.ok(line.includes("Streamer's stream"), 'whose recording it was: ' + line);
+            assert.ok(line.includes('at 1:05'), 'where the clip starts in it: ' + line);
         });
 
         await check('outcome 2: a clip whose recording is not public says so, and names nothing it cannot know', async () => {

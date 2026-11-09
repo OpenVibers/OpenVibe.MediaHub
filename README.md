@@ -234,11 +234,10 @@ pages read Live's public JSON API server-side, signed out (Live already applies 
   hides it at once, and three reports hide it until staff decide; the owner still sees it, labelled.
 - **Account deletion:** erases the rows and deletes the VODs in Media.
 - **Recording** (`/record`, `public/js/video-record.js`):
-  - Record from the camera or the screen (with the microphone) in the browser. It is never live.
-  - MediaRecorder hands over a piece every 4 seconds, and each piece goes up in order
-    (`POST /api/v1/videos/recordings`, then `PUT /api/v1/videos/:id/chunks/:n`, up to 9 MB each) to the same kind of
-    Media VOD.
-  - Stop completes it like an upload. Size and quota are checked as it grows, and a recording is private by default.
+  - Loads the SRI-pinned Cam kit from `openvibe.cam` on the Video page. The person records a camera or screen clip,
+    reviews, trims and chooses Use this. Nothing uploads until that choice.
+  - The returned `File` goes through the ordinary multipart upload form, with progress and retries. A recording is
+    private by default. The older `/api/v1/videos/recordings` chunk API remains available to its existing callers.
 - **AI edit** (`server/video/ai-edit.js`, migration `0009_video_ai.sql`):
   - Every few minutes, OpenVibe.AI's `media.analyze` runs on each finished upload or recording. It reads the video
     through Media's signed URL (private ones too), runs locally (whisper.cpp, the local model) and never uses a paid
@@ -531,5 +530,5 @@ Part of the [OpenVibe network](https://openvibe.network). Built in the open by [
 <!-- versions:start -->
 - openvibe-contracts: v0.338.0
 - openvibe-sdk: v0.97.1
-- openvibe-shared: v4.157.0
+- openvibe-shared: v4.159.0
 <!-- versions:end -->

@@ -126,8 +126,8 @@ async function createApp(opts = {}) {
             directives: {
                 defaultSrc: ["'self'"],
                 // The OpenVibe Frame (theme-loader, navbar, footer) comes from the Network; the inline init is ours.
-                scriptSrc: ["'self'", "'unsafe-inline'", 'https://openvibe.network', 'https://static.cloudflareinsights.com'],
-                styleSrc: ["'self'", "'unsafe-inline'", 'https://openvibe.network', 'https://fonts.googleapis.com'],
+                scriptSrc: ["'self'", "'unsafe-inline'", 'https://openvibe.network', 'https://openvibe.cam', 'https://static.cloudflareinsights.com'],
+                styleSrc: ["'self'", "'unsafe-inline'", 'https://openvibe.network', 'https://openvibe.cam', 'https://fonts.googleapis.com'],
                 fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
                 // The Video home's live-now cards show OpenVibe.Live's own stream thumbnails (its /api/thumbnails).
                 imgSrc: ["'self'", 'data:', 'https://openvibe.network', 'https://openvibe.media', liveOrigin],
@@ -164,7 +164,7 @@ async function createApp(opts = {}) {
     // Mounted before the host routing too: both hosts sign in through the same routes, and createSso picks the
     // callback URI from the Host header (the drive's, or the video host's).
     // /auth/me is the navbar's who-is-signed-in read on every page, so it is not counted with sign-ins: 60 page views in 15 minutes made a signed-in visitor look signed out.
-    app.use('/auth/', rateLimit({ windowMs: 15 * 60_000, limit: 60, skip: (req) => req.path === '/me', standardHeaders: true, legacyHeaders: false }));
+    app.use('/auth/', rateLimit({ windowMs: 15 * 60_000, limit: 60, skip: (req) => req.path === '/me' || req.path === '/navbar-token', standardHeaders: true, legacyHeaders: false }));
     app.use('/auth', sso.routes());
 
     // /release.json (and loopback /metrics) answer on both hosts: the shared release check on openvibe.video reads its own

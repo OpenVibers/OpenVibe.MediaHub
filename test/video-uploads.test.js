@@ -196,6 +196,10 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         assert.strictEqual((await vreq(t.base, `/api/v1/videos/${rid}/chunks/4`, { method: 'PUT', body: pieces[2], cookie: samCookie })).status, 409, 'closed once complete');
         const rec = await vreq(t.base, '/record', { cookie: samCookie });
         assert.ok(rec.text.includes('data-video-record') && rec.text.includes('js/video-record.js'), 'the recorder page');
+        assert.ok(rec.text.includes('https://openvibe.cam/embed/cam-kit.js') && rec.text.includes('integrity="sha384-'), 'Cam kit is pinned');
+        assert.ok(rec.text.includes('data-video-upload') && rec.text.includes('js/video-upload.js'), 'Cam returns a file to the existing upload path');
+        assert.ok(rec.text.includes('data-record-open="video"') && rec.text.includes('data-record-open="screen"'));
+        assert.ok(!rec.text.includes('ovv-record-preview'), 'the old recorder UI is gone');
         assert.strictEqual((await vreq(t.base, '/record')).status, 401, 'signed out: sign in first');
     });
 

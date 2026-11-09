@@ -210,6 +210,20 @@
                 } catch (_) { location.href = url.href; }
             });
         });
+        const video = document.querySelector('video[data-ovv-video]');
+        const pip = document.querySelector('[data-ovv-pip]');
+        if (video && pip && document.pictureInPictureEnabled && typeof video.requestPictureInPicture === 'function') {
+            const ready = function () { if (video.readyState >= 1) pip.hidden = false; };
+            ready();
+            video.addEventListener('loadedmetadata', ready, { once: true });
+            pip.addEventListener('click', async function () {
+                try {
+                    if (document.pictureInPictureElement === video) await document.exitPictureInPicture();
+                    else await video.requestPictureInPicture();
+                    pip.closest('details').open = false;
+                } catch (_) { pip.title = 'Picture in picture is unavailable for this video.'; }
+            });
+        }
     }
 
     // "Copy for YouTube": the chapters' text on the clipboard, where the browser lets a page write it.
@@ -545,6 +559,19 @@
         const video = document.querySelector('video[data-ovv-video]');
         transcript(video);
         if (!video) return;
+        // Keep one local resume point for the app home. The URL and time stay on this device.
+        let lastResumeWrite = 0;
+        video.addEventListener('timeupdate', function () {
+            if (Date.now() - lastResumeWrite < 5000 || !Number.isFinite(video.duration)) return;
+            lastResumeWrite = Date.now();
+            try {
+                if (video.currentTime < 5 || video.duration - video.currentTime < 5) {
+                    if (video.duration - video.currentTime < 5) localStorage.removeItem('ovv-continue');
+                    return;
+                }
+                localStorage.setItem('ovv-continue', JSON.stringify({ href: location.pathname + location.search, title: (document.querySelector('.ovv-head h1') || {}).textContent || document.title, poster: video.poster || '', at: Math.floor(video.currentTime), duration: Math.floor(video.duration), updated: Date.now() }));
+            } catch { /* private browsing may disable storage */ }
+        });
 
         // "Make a clip": opening the Clip menu starts it where the video is (owner, 2026-10-27: "it should have the
         // start/end time set based on the current timestamp the user is on rather than being at 0"): the start at the
