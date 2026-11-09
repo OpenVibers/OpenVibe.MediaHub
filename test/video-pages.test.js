@@ -525,7 +525,7 @@ function countOccurrences(haystack, needle) {
         const clipFeed = clips.text.slice(clips.text.indexOf('class="ovv-app-feed"'));
         assert.ok(clipFeed.includes('/c/201') && !clipFeed.includes('href="/v/101"'));
         const following = await getVideo('/?feed=following');
-        assert.ok(following.text.includes('href="https://openvibe.live/browse?following=1"'));
+        assert.ok(following.text.includes('href="https://openvibe.live/rundown?following=1"'));
     });
 
     await check('a category page lists its recordings from Search, with the thumbnails Live has', async () => {

@@ -1132,7 +1132,7 @@ ${[['all', 'All'], ['streams', 'Streams'], ['clips', 'Clips'], ['uploads', 'Uplo
 </nav>
 <section class="ovv-continue" id="continue-watching" aria-label="Continue watching" hidden></section>
 <section class="ovv-app-feed" aria-labelledby="feed-title"><h2 id="feed-title">${{ all: 'For you', streams: 'Streams', clips: 'Clips', uploads: 'Uploads', following: 'Following' }[feedKind]}</h2>
-${feedKind === 'following' ? html`<p class="muted">Your followed channels are on <a href="${livePublic}/browse?following=1">OpenVibe.Live Following</a>.</p>` : grid(feedEntries.map((entry) => entry.kind === 'upload' ? uploadCard(entry.item) : feedCard(entry.item, { views: true })), 'No videos here yet.')}
+${feedKind === 'following' ? html`<p class="muted">See updates from followed channels on <a href="${livePublic}/rundown?following=1">OpenVibe.Live</a>.</p>` : grid(feedEntries.map((entry) => entry.kind === 'upload' ? uploadCard(entry.item) : feedCard(entry.item, { views: true })), 'No videos here yet.')}
 </section></div>`,
         });
     });
