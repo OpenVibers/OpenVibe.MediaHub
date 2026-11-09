@@ -536,7 +536,7 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 @media (hover: none) { .ovv-pip-bar { opacity: 1; } }
 
 /* ── The owner's tools (2026-10-27: "I don't see any way to edit things … I just had to scroll way down") ──
-   Edit is first in the action row; the panel opens right under the player and stays out of the way until then (a
+   Edit is in More; the panel opens right under the player and stays out of the way until then (a
    link to #manage without JavaScript still shows it). Who can see it is three choices, and the meta line says which. */
 .ovv-btn--edit { border-color: color-mix(in srgb, var(--ovv-accent) 55%, var(--ovv-line-strong)); color: var(--text-primary, #e6edf7); }
 .ovv-btn--edit i { color: var(--ovv-accent); }
@@ -659,7 +659,89 @@ html.ov-motion .ovv-stat.is-live .ovv-dot { animation: ovv-pulse 1.6s ease-out i
 .ovv-card-body > .ovk-labels { margin: .3rem 0 0; }
 .ovv-head > .ovk-labels { margin: .35rem 0 .1rem; }
 
-/* The owner's Delete in the action row (beside Edit): a quiet button, a red one inside its question. */
+/* The owner's Delete in More: a quiet button, a red one inside its question. */
 .ovv-deleter > summary { color: var(--danger-text, var(--danger, #f87171)); }
 .ovv-deleter .ovv-pop-panel form { margin-top: 10px; }
 .ovv-deleter .ovv-pop-panel .ovv-btn--danger { width: 100%; justify-content: center; }
+
+/* Watch page: compact title, channel and one family of actions. */
+.ovv-watch .ovv-head { min-width: 0; }
+.ovv-watch .ovv-stage, .ovv-watch .ovv-player-wrap { min-width: 0; max-width: 100%; }
+.ovv-watch .ovv-title-line { display: flex; align-items: baseline; gap: 9px; min-width: 0; margin-bottom: 14px; }
+.ovv-watch .ovv-kind { flex: none; color: var(--ovv-faint); font-size: .76rem; font-weight: 700; letter-spacing: .02em; }
+.ovv-watch .ovv-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; margin: 0; font-size: clamp(1.25rem, 2vw, 1.65rem); line-height: 1.3; letter-spacing: -.02em; }
+.ovv-watch .ovv-head-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; min-width: 0; }
+.ovv-watch .ovv-head .ovv-byline { flex: 0 0 auto; gap: 9px; min-width: 0; }
+.ovv-watch .ovv-byline-text { flex: 0 1 auto; min-width: 0; }
+.ovv-watch .ovv-avatar { width: 40px; height: 40px; }
+.ovv-watch .ovv-follow { min-height: 40px; margin-left: 6px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--live-red, #ef4444); color: #fff !important; }
+.ovv-watch .ovv-follow:hover { filter: brightness(1.08); background: var(--live-red, #ef4444); }
+.ovv-watch .ovv-actions-shell { position: relative; flex: 1 1 100%; min-width: 0; }
+.ovv-watch .ovv-actions { display: flex; flex-wrap: nowrap; align-items: center; width: max-content; gap: 8px; }
+.ovv-watch .ovv-actions > * { flex: none; }
+.ovv-watch .ovv-actions .ovv-btn, .ovv-watch .ovv-actions details > summary.ovv-btn { box-sizing: border-box; display: inline-flex; flex-direction: row; align-items: center; justify-content: center; gap: 8px; width: auto; min-height: 44px; padding: 0 16px; border-radius: 999px; font-size: .84rem; line-height: 1; white-space: nowrap; cursor: pointer; transition: background .18s ease, border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
+.ovv-watch .ovv-actions .ovv-btn:hover, .ovv-watch .ovv-actions details > summary.ovv-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 14px rgba(0, 0, 0, .12); }
+.ovv-watch .ovv-actions .ovv-btn:active, .ovv-watch .ovv-actions details > summary.ovv-btn:active { transform: scale(.97); }
+.ovv-watch .ovv-actions .ovv-btn :is(i, svg) { width: 20px; height: 20px; margin: 0; font-size: 20px; line-height: 20px; }
+.ovv-watch .ovv-actions .ovv-btn--icon { width: 44px; min-width: 44px; padding: 0; }
+.ovv-watch .ovv-actions > .ovk-ask { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: auto; height: 44px; min-height: 44px; padding: 0 16px; border: 1px solid var(--ovv-line-strong); border-radius: 999px; background: var(--bg-tertiary, #16223a); color: var(--text-primary, #e6edf7); font: inherit; font-size: .84rem; font-weight: 700; line-height: 1; white-space: nowrap; cursor: pointer; transition: background .18s ease, transform .18s ease; }
+.ovv-watch .ovv-actions > .ovk-ask:hover { background: var(--bg-hover, #1c2a44); transform: translateY(-2px); }
+.ovv-watch .ovv-actions > .ovk-ask :is(.ovk-i, svg, i) { flex: none; width: 20px; height: 20px; font-size: 20px; }
+.ovv-watch .ovv-like[aria-pressed="true"] { color: var(--live-red, #ef4444) !important; border-color: color-mix(in srgb, var(--live-red, #ef4444) 35%, transparent); }
+.ovv-watch .ovv-like.ovv-like--pop i { animation: ovv-like-pop .32s ease-out; }
+@keyframes ovv-like-pop { 50% { transform: scale(1.32) rotate(-9deg); } }
+.ovv-watch .ovv-more-actions { display: grid; gap: 2px; }
+.ovv-watch .ovv-more-actions > :is(a, button), .ovv-watch .ovv-more-actions .ovv-deleter > summary { box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 10px 12px; border: 0; border-radius: 9px; background: transparent; color: inherit !important; font: inherit; font-size: .9rem; font-weight: 700; text-align: left; text-decoration: none; cursor: pointer; }
+.ovv-watch .ovv-more-actions > :is(a, button):hover, .ovv-watch .ovv-more-actions .ovv-deleter > summary:hover { background: var(--bg-hover, #1c2a44); }
+.ovv-watch .ovv-actions .ovv-more-actions > a.ovv-btn, .ovv-watch .ovv-actions .ovv-more-actions .ovv-deleter > summary.ovv-btn { display: flex; justify-content: flex-start; width: 100%; min-height: 44px; padding: 10px 12px; border: 0; border-radius: 9px; background: transparent; box-shadow: none; transform: none; }
+.ovv-watch .ovv-more-actions .ovv-pop-list { border-top: 1px solid var(--ovv-line); padding-top: 4px; }
+
+/* The description is server rendered in both states. Its summary is the short preview. */
+.ovv-watch .ovv-about { display: block; min-width: 0; border: 0; border-radius: 14px; padding: 12px 16px; background: color-mix(in srgb, var(--ovv-card) 88%, var(--text-primary, #e6edf7) 12%); }
+.ovv-watch .ovv-about > summary { display: block; list-style: none; cursor: pointer; }
+.ovv-watch .ovv-about > summary::-webkit-details-marker { display: none; }
+.ovv-watch .ovv-about-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; font-size: .84rem; font-weight: 700; }
+.ovv-watch .ovv-about-facts .ovv-what { display: contents; margin: 0; color: inherit; font-size: inherit; }
+.ovv-watch .ovv-about-facts .ovv-what-kind { display: none; }
+.ovv-watch .ovv-about-preview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; margin-top: 5px; font-size: .9rem; line-height: 1.5; white-space: pre-line; }
+.ovv-watch .ovv-about-more, .ovv-watch .ovv-about-toggle-less { display: block; margin-top: 3px; font-size: .83rem; font-weight: 700; }
+.ovv-watch .ovv-about-toggle-less { display: none; }
+.ovv-watch .ovv-about[open] .ovv-about-preview, .ovv-watch .ovv-about[open] .ovv-about-more { display: none; }
+.ovv-watch .ovv-about[open] .ovv-about-toggle-less { display: block; }
+.ovv-watch .ovv-about-rest { display: grid; gap: 10px; padding-top: 10px; }
+.ovv-watch .ovv-about-rest h3 { margin: 0; font-size: .88rem; }
+.ovv-watch .ovv-about-chapters { display: grid; gap: 4px; }
+.ovv-watch .ovv-about-rest .ovv-about-text { line-height: 1.55; }
+.ovv-watch .ovv-about-source .ovv-source { margin: 5px 0 0; font-size: .82rem; }
+.ovv-watch .ovv-about::details-content { height: 0; overflow: hidden; interpolate-size: allow-keywords; transition: content-visibility .25s allow-discrete, height .25s ease; }
+.ovv-watch .ovv-about[open]::details-content { height: auto; }
+.ovv-watch .ovv-about > summary:focus-visible { outline: 2px solid var(--ovv-accent); outline-offset: 4px; border-radius: 6px; }
+@media (min-width: 1100px) { .ovv-watch .ovv-actions-shell { flex: 1 1 100%; overflow-x: auto; scrollbar-width: thin; } .ovv-watch--clip:not(:has(.ovv-col--side > *)) { grid-template-columns: minmax(0, 1040px); } }
+@media (min-width: 1600px) {
+  .ovv-page:has(.ovv-watch) { max-width: 1600px; }
+  .ovv-watch--clip:not(:has(.ovv-col--side > *)) { grid-template-columns: minmax(0, 1400px); }
+  .ovv-watch .ovv-head-row { flex-wrap: nowrap; }
+  .ovv-watch .ovv-actions-shell { flex: 1 1 auto; }
+}
+@media (max-width: 1099px) {
+  .ovv-watch .ovv-actions-shell { overflow-x: auto; scrollbar-width: none; }
+  .ovv-watch .ovv-actions-shell::-webkit-scrollbar { display: none; }
+  .ovv-watch .ovv-head-row { position: relative; }
+  .ovv-watch .ovv-head-row::after { content: ''; position: absolute; z-index: 1; right: 0; bottom: 0; width: 28px; height: 44px; pointer-events: none; background: linear-gradient(to right, transparent, var(--bg-primary, #0b1120)); }
+}
+@media (max-width: 1000px) {
+  .ovv-watch .ovv-about { order: 2; }
+  .ovv-watch .ovv-companion { order: 3; }
+  .ovv-watch .ovv-upnext { order: 4; }
+}
+@media (max-width: 600px) {
+  .ovv-watch .ovv-head-row { display: block; }
+  .ovv-watch .ovv-head .ovv-byline { display: flex; width: 100%; margin-bottom: 12px; }
+  .ovv-watch .ovv-follow { margin-left: auto; }
+  .ovv-watch .ovv-title-line { align-items: flex-start; }
+  .ovv-watch .ovv-kind { margin-top: 4px; }
+  .ovv-watch .ovv-actions-shell { width: 100%; }
+  .ovv-watch .ovv-actions .ovv-btn, .ovv-watch .ovv-actions details > summary.ovv-btn { min-height: 44px; padding: 0 16px; font-size: .84rem; }
+  .ovv-watch .ovv-actions .ovv-btn--icon { width: 44px; padding: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .ovv-watch .ovv-actions .ovv-btn, .ovv-watch .ovv-actions details > summary.ovv-btn, .ovv-watch .ovv-about::details-content { transition: none; animation: none; } .ovv-watch .ovv-like.ovv-like--pop i { animation: none; } }

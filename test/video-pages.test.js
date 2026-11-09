@@ -60,6 +60,7 @@ function startLive() {
     };
     const publicClip = {
         id: 201, vod_id: 101, title: 'A clip', start_time: 5, end_time: 15, duration_seconds: 10,
+        created_at: '2026-10-26T11:00:00.000Z', view_count: 49,
         playback_url: 'https://openvibe.media/c/201', thumbnail_url: null, visibility: 'public',
         auto_generated: false, username: 'clipper', display_name: 'Clipper',
         source_streamer_username: 'streamer', source_streamer_display_name: 'Streamer',
@@ -374,6 +375,9 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('Chapters'));
         assert.ok(r.text.includes('Transcript'));
         assert.ok(r.text.includes('A public overview'));
+        assert.ok(r.text.includes('<details class="ovv-about" id="about">') && r.text.includes('<span class="ovv-about-preview">A public stream</span>'), 'description has a collapsed preview');
+        assert.ok(/class="ovv-about-facts"><span>100 views<\/span>.*ovv-vis-badge.*<span>· 45 s<\/span>/.test(r.text), 'views, visibility and short duration lead the description');
+        assert.ok(r.text.includes('<p class="ovv-about-text">A public stream</p>') && r.text.includes('ovv-about-toggle-less'), 'full description is in the HTML for expansion');
         assert.ok(r.text.includes('/@streamer'));
         assert.ok(!r.text.includes('Edit this recording'), 'owner tools only for the channel (video-owner.test.js)');
         assert.ok(r.text.includes('Discuss on OpenVibe.Community'));
@@ -410,6 +414,8 @@ function countOccurrences(haystack, needle) {
         assert.strictEqual(cld.duration, 'PT10S');
         assert.ok(r.text.includes('src="https://openvibe.media/c/201"'), 'the clip playback url');
         assert.ok(r.text.includes('Made by Clipper'), 'attributed to the person who made it');
+        assert.ok(r.text.includes('<span>49 views</span>') && r.text.includes('<span>· 10 s</span>'), 'clip stats use the short description line');
+        assert.ok(/<summary>[\s\S]*Cut from <a href="\/v\/101\?t=5">/.test(r.text), 'the source link is in the short description');
         assert.ok(r.text.includes('Full recording</a>') && r.text.includes('title="Watch the recording it was cut from, from this moment"'));
         assert.ok(r.text.includes('/v/101?t=5'), 'the full recording link carries the clip start');
         assert.ok(r.text.includes('Discuss on OpenVibe.Community'));

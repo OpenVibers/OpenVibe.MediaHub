@@ -39,6 +39,7 @@ const DELETION = 'del_01JABCDEFGHJKMNPQRSTVWXYZ0';
     const t = await boot({ env: { MEDIAHUB_EVENTS_SECRET: SECRET } });
     const kim = t.network.addUser('kim');
     const sam = t.network.addUser('sam');
+    await t.ctx.s.db.exec('INSERT INTO video_likes (kind, item_id, owner, created_at) VALUES ($1, $2, $3, $4), ($1, $2, $5, $4)', ['vod', 101, `user:${kim.subject}`, '2026-11-09T00:00:00Z', `user:${sam.subject}`]);
 
     const file = (await upload(t, kim, bytes(300, 'kim'), { name: 'kim.bin' })).json().file;
     const slug = (await share(t, kim, { file_id: file.id, hours: 24 })).json().share.slug;
@@ -80,7 +81,8 @@ const DELETION = 'del_01JABCDEFGHJKMNPQRSTVWXYZ0';
         assert.ok(files, 'a files.json part');
         assert.strictEqual(files.content.length, 1);
         assert.strictEqual(files.content[0].id, file.id);
-        assert.deepStrictEqual(part.files.map((f) => f.name).sort(), ['files.json', 'reports.json', 'shares.json', 'usage.json'], 'and the rest of the person\'s own data');
+        assert.deepStrictEqual(part.files.map((f) => f.name).sort(), ['files.json', 'reports.json', 'shares.json', 'usage.json', 'video_likes.json'], 'and the rest of the person\'s own data');
+        assert.deepStrictEqual(part.files.find((f) => f.name === 'video_likes.json').content.map((like) => like.item_id), [101], 'a person can export their likes');
         assert.ok(part.files.find((f) => f.name === 'shares.json').content.some((s) => s.slug === slug));
         assert.strictEqual(part.files.find((f) => f.name === 'reports.json').content.length, 1, 'the report kim filed');
         assert.ok(!JSON.stringify(part).includes(sams.id), 'nothing of sam\'s');
@@ -105,6 +107,8 @@ const DELETION = 'del_01JABCDEFGHJKMNPQRSTVWXYZ0';
         assert.strictEqual(confirmation.subject, kim.subject);
         assert.ok(confirmation.erased.mh_files >= 1, JSON.stringify(confirmation));
         assert.ok(confirmation.erased.mh_shares >= 1, JSON.stringify(confirmation));
+        assert.strictEqual(confirmation.erased.video_likes, 1, 'likes are erased with the account');
+        assert.strictEqual(Number(await t.ctx.s.db.value('SELECT COUNT(*) FROM video_likes WHERE owner = $1', [`user:${sam.subject}`])), 1, 'another person\'s like remains');
 
         // Sam's drive is untouched.
         assert.strictEqual((await t.get(`/api/v1/files/${sams.id}`, { as: sam })).status, 200);

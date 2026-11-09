@@ -87,18 +87,34 @@ function vreq(base, path, { method = 'GET', cookie, form, same = true } = {}) {
         const mine = await vreq(t.base, '/v/101', { cookie: kimCookie });
         assert.strictEqual(mine.status, 200);
         assert.ok(mine.text.includes('Edit this recording') && mine.text.includes('action="/v/101/manage"'), 'the owner panel');
-        // 2026-10-27: Edit is first in the action row and opens the panel under the player; who can see it is three
-        // choices; the meta line tells the owner which it is now.
-        assert.ok(/<div class="ovv-actions"><a class="ovv-btn ovv-btn--edit" href="#manage" data-ovv-open="manage"/.test(mine.text), 'Edit leads the actions');
-        assert.ok(mine.text.indexOf('id="manage"') < mine.text.indexOf('id="h-about"'), 'the panel sits under the player, before About');
+        // Owner tools live in More, with the panel under the player.
+        assert.ok(/class="ovv-more-actions"[\s\S]*class="ovv-btn ovv-btn--edit" href="#manage" data-ovv-open="manage"/.test(mine.text), 'Edit is in More');
+        assert.ok(mine.text.indexOf('id="manage"') < mine.text.indexOf('id="about"'), 'the panel sits under the player, before About');
         assert.strictEqual((mine.text.match(/<input type="radio" name="visibility" value="(public|unlisted|private)"/g) || []).length, 3, 'three visibility choices');
         assert.ok(/class="ovv-vis-badge ovv-vis-badge--/.test(mine.text), 'the owner sees who can see it');
         assert.ok(mine.text.includes('value="Kim stream"') && mine.text.includes('<input type="radio" name="visibility" value="public" checked>'), 'prefilled');
         const other = await vreq(t.base, '/v/101', { cookie: samCookie });
         assert.ok(!other.text.includes('Edit this recording'), 'not for someone else');
-        assert.ok(!/class="ovv-vis-badge/.test(other.text) && !other.text.includes('ovv-btn--edit'), 'no badge or Edit for someone else');
+        assert.ok(!other.text.includes('ovv-btn--edit'), 'no Edit for someone else');
         const anon = await vreq(t.base, '/v/101');
         assert.ok(!anon.text.includes('Edit this recording'), 'not signed out');
+    });
+
+    await check('recording likes are counted per signed-in person', async () => {
+        const path = '/watch/like';
+        const body = { kind: 'vod', id: '101' };
+        assert.strictEqual((await vreq(t.base, path, { method: 'POST', form: body })).status, 401);
+        let r = await vreq(t.base, path, { method: 'POST', cookie: kimCookie, form: body });
+        assert.strictEqual(r.status, 200);
+        assert.deepStrictEqual(JSON.parse(r.text), { count: 1, liked: true });
+        r = await vreq(t.base, '/v/101', { cookie: samCookie });
+        assert.match(r.text, /class="ovv-like-count">1<\/span>/);
+        r = await vreq(t.base, path, { method: 'POST', cookie: samCookie, form: body });
+        assert.deepStrictEqual(JSON.parse(r.text), { count: 2, liked: true });
+        r = await vreq(t.base, path, { method: 'POST', cookie: kimCookie, form: body });
+        assert.deepStrictEqual(JSON.parse(r.text), { count: 1, liked: false });
+        assert.strictEqual((await vreq(t.base, path, { method: 'POST', cookie: kimCookie, form: { kind: 'clip', id: '999' } })).status, 404);
+        assert.strictEqual((await vreq(t.base, path, { method: 'POST', cookie: kimCookie, form: body, same: false })).status, 403);
     });
 
     await check('an edit is made on Live as the person, then the page shows it', async () => {
