@@ -136,8 +136,9 @@ function createPics({ s, media, config, log = console, events = null, sharing = 
         });
         if (events && !anonymous) await events.pictureUploaded(r);
         return r; });
-        // Everyone by default: a picture has always been reachable by its link. The person can narrow it in the sheet.
-        if (sharing) await sharing.register(row.owner, 'picture', row.id, 'public');
+        // Unlisted by default: a picture is reachable by its link and by nobody else, until its owner publishes it
+        // to the gallery. The share row is the authority, so the page, the file and the thumbnail all agree.
+        if (sharing) await sharing.register(row.owner, 'picture', row.id, 'unlisted');
         return { ok: true, image: row, ...(deleteKey ? { deleteKey } : {}), ...(similar ? { similar: { id: similar.id, slug: similar.slug } } : {}) };
     }
 
@@ -261,6 +262,7 @@ function createPics({ s, media, config, log = console, events = null, sharing = 
         ai: row.ai_described_at ? { caption: row.ai_caption || null, tags: tagsOf(row), described_at: row.ai_described_at } : null,
         // L1 labels: `{ labels, suggested }` (common.content-labels@1). A suggestion is shown, never applied.
         content_labels: contentLabels.labelsOf(row),
+        listed: Boolean(row.listed), tags: JSON.parse(row.tags || '[]'),
         state: row.state, created_at: row.created_at, links: links(row),
         ...(owner ? { report_count: Number(row.report_count) } : {}),
     });

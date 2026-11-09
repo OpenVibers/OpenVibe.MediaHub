@@ -1,7 +1,7 @@
 'use strict';
 /**
  * Sharing on MediaHub pictures and albums (design 2026-11-06, VISIBILITY-EVERYWHERE step 4;
- * openvibe-sdk/share). Everyone by default (a picture has always been reachable by its link),
+ * openvibe-sdk/share). Unlisted by default (publishing is explicit),
  * Only me and Specific people narrow it; the share row decides the page, the file, the thumbnail
  * and an album, and the gate never shows the picture.
  */
@@ -49,10 +49,10 @@ function hostClient(t) {
     const putShare = (kind, id, body) => share(kind, id, { method: 'PUT', as: kate, json: body });
     const row = async (id) => await t.ctx.s.db.maybe('SELECT * FROM shares WHERE service = $1 AND kind = $2 AND resource_id = $3', ['mediahub', 'picture', id]);
 
-    await check('a new picture is registered Everyone, owned by its uploader', async () => {
+    await check('a new picture is registered for anyone with the link, owned by its uploader', async () => {
         const img = await upload();
         const s = await row(img.id);
-        assert.strictEqual(s.audience, 'public');
+        assert.strictEqual(s.audience, 'link');
         assert.deepStrictEqual(s.owner_subject, { type: 'user', id: kate.subject });
         assert.strictEqual((await get(`/i/${img.slug}`)).status, 200);
         assert.strictEqual((await get(`/i/${img.slug}.png`)).status, 200);

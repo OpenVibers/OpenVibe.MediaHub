@@ -95,7 +95,9 @@ function createSharing({ db, config, outbox, now = Date.now, fetchImpl = globalT
             if (ref.kind === 'picture' || ref.kind === 'album') {
                 const table = ref.kind === 'picture' ? 'pics_images' : 'pics_albums';
                 await tx.exec(`UPDATE ${table} SET audience = $1 WHERE id = $2`, [audience, ref.id]);
+                if (ref.kind === 'picture' && audience !== 'public') await tx.exec('UPDATE pics_images SET listed = false WHERE id = $1', [ref.id]);
                 if (ref.kind === 'album') {
+                    if (audience !== 'public') await tx.exec('UPDATE pics_images SET listed = false WHERE id IN (SELECT image_id FROM pics_album_images WHERE album_id = $1)', [ref.id]);
                     await tx.exec('UPDATE pics_images SET audience = $1 WHERE id IN (SELECT image_id FROM pics_album_images WHERE album_id = $2)', [audience, ref.id]);
                     await tx.exec("UPDATE shares SET audience = $1, revision = revision + 1 WHERE service = $2 AND kind = 'picture' AND resource_id IN (SELECT image_id FROM pics_album_images WHERE album_id = $3)", [audience, SERVICE, ref.id]);
                 }

@@ -46,6 +46,9 @@ const TABLES = [
     { table: 'pics_albums', subject: 'owner', value: AS_REQUESTER, file: 'pics_albums.json' },
     { table: 'pics_images', subject: 'owner', value: AS_REQUESTER, file: 'pics_images.json' },
     { table: 'pics_usage', subject: 'uploader', value: AS_REQUESTER, file: 'pics_usage.json' },
+    // A Pics resumable upload that never finished (migrations/0028_pics_gallery.sql) is this service's own state,
+    // like mh_uploads: erased with the account, not part of the export. The chunks cascade from it.
+    { table: 'pics_uploads', subject: 'owner', value: AS_REQUESTER, file: null },
     // OpenVibe.Video uploads (migrations/0008_video_uploads.sql): the reports a person filed, then their videos (other
     // people's reports on them cascade). The bytes are Media VODs, deleted with extraErase.
     { table: 'video_upload_reports', subject: 'reporter', value: AS_REQUESTER, file: 'video_upload_reports.json' },
