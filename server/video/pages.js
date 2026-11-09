@@ -1024,6 +1024,24 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
         return `/${kind === 'vod' ? 'v' : 'c'}/${itemId}`;
     }
 
+    /**
+     * More from the channel, beside the player (11-09: the watch page's right side stood empty on a computer): its other
+     * public recordings and clips, newest first, never the one playing. Live not answering leaves the section out.
+     */
+    async function moreFromChannel(username, name, kind, id) {
+        if (!username) return '';
+        const pub = (x) => x && x.visibility !== 'private' && x.visibility !== 'unlisted';
+        const [v, c] = await Promise.all([
+            Promise.resolve().then(() => live.vodsByUser(username, { limit: 7 })).catch(() => null),
+            Promise.resolve().then(() => live.clipsByUser(username, { limit: 7 })).catch(() => null),
+        ]);
+        const vods = (Array.isArray(v && v.vods) ? v.vods : []).filter(pub).filter((x) => !(kind === 'vod' && Number(x.id) === Number(id))).slice(0, 4);
+        // On a recording, its own clips are in "Clips from this stream" already: only the channel's other clips here.
+        const clipsOf = (Array.isArray(c && c.clips) ? c.clips : []).filter(pub).filter((x) => !(kind === 'clip' && Number(x.id) === Number(id)) && !(kind === 'vod' && Number(x.vod_id) === Number(id))).slice(0, 4);
+        if (!vods.length && !clipsOf.length) return '';
+        return html`<section class="ovv-panel ovv-more" aria-labelledby="h-more"><h2 id="h-more">More from ${name || username}</h2><div class="ovv-grid ovv-grid--side">${vods.map(vodCard)}${clipsOf.map(clipCard)}</div></section>`;
+    }
+
     async function upNext(req, kind, id) {
         const listId = String(req.query.list || '');
         if (!playlists.isPlaylistId(listId)) return { html: '', nextUrl: null };
@@ -1397,7 +1415,7 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
         // Chapters, comments, chat replay, the playlist form and up next do not depend on each other: asked together
         // (one after another, five services' answers in turn, the page's p95 was 581 ms on 2026-10-17).
         const fail = Symbol('failed');
-        const [m, cm, replay, saveForm, up, hist] = await Promise.all([
+        const [m, cm, replay, saveForm, up, hist, more] = await Promise.all([
             // A private recording's moments are Live's answer to its owner only.
             Promise.resolve().then(() => (ownOnly ? asPerson(req, res, (token) => live.vodMemoriesAs(token, id)) : live.vodMemories(id))).catch(() => fail),
             Promise.resolve().then(() => live.comments('vod', id)).catch(() => fail),
@@ -1407,6 +1425,7 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
             // The stream's history: the picture's shape where this video starts, and for one part of a stream recorded in
             // parts (its broadcaster reconnected) the other parts, to move between.
             Promise.resolve().then(() => (live.isId(vod.stream_id) ? live.streamHistory(vod.stream_id) : null)).catch(() => fail),
+            moreFromChannel(vod.username, vod.display_name, 'vod', id).catch(() => ''),
         ]);
         let mems = [];
         try { if (m !== fail) mems = chapters(moments(m && m.memories), vod.duration_seconds); } catch { mems = []; }
@@ -1493,6 +1512,7 @@ ${commentsOk ? html`<section class="ovv-panel ovv-comments" aria-labelledby="h-c
 ${side || ''}
 ${up.html}
 ${clips.length ? html`<section class="ovv-panel ovv-clips" aria-labelledby="h-clips"><h2 id="h-clips">Clips from this stream</h2><div class="ovv-grid ovv-grid--side">${clips.map(clipCard)}</div></section>` : ''}
+${more || ''}
 </aside>
 </div>`,
         });
@@ -1532,11 +1552,12 @@ ${clips.length ? html`<section class="ovv-panel ovv-clips" aria-labelledby="h-cl
         const sourceAnswer = clip.vod_id && live.isId(String(clip.vod_id))
             ? live.vod(String(clip.vod_id)).then((s) => (s && s.vod) || null).catch(() => 'down')
             : Promise.resolve('none');
-        const [cm, saveForm, up, sourceVod] = await Promise.all([
+        const [cm, saveForm, up, sourceVod, more] = await Promise.all([
             Promise.resolve().then(() => live.comments('clip', id)).catch(() => null),
             playlistForm(req, 'clip', id),
             upNext(req, 'clip', id),
             sourceAnswer,
+            moreFromChannel(clip.username, clip.display_name, 'clip', id).catch(() => ''),
         ]);
         let threadUrl = null;
         try { threadUrl = httpsUrl(cm && cm.thread && cm.thread.url); } catch { threadUrl = null; }
@@ -1615,6 +1636,7 @@ ${commentRows ? html`<section class="ovv-panel ovv-comments" aria-labelledby="h-
 <aside class="ovv-col ovv-col--side">
 ${side || ''}
 ${up.html}
+${more || ''}
 </aside>
 </div>`,
         });
