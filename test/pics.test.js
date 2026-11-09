@@ -73,7 +73,7 @@ function multipart(fields, file) {
             assert.ok(/<script type="application\/ld\+json">[^<]*"@type":"WebSite"/.test(home.text), 'the home says what the site is (JSON-LD)');
             assert.strictEqual((await t.get('/files', { headers: PICS, as: kim })).status, 404, 'no drive pages on the pics host');
             assert.ok((await t.get('/', { headers: { Host: 'openvibe.download' } })).text.indexOf('Share pictures.') === -1, 'the drive host is not Pics');
-            assert.strictEqual((await t.get('/robots.txt', { headers: PICS })).text.includes('Disallow: /i/'), true, 'pictures are not crawled');
+            assert.strictEqual((await t.get('/robots.txt', { headers: PICS })).text.includes('Disallow: /i/'), false, 'public pictures can be crawled; private pages stay noindex');
         });
 
         await check('the home: how it works, the links, the API, the limits from config, questions that match its FAQPage', async () => {
@@ -81,13 +81,14 @@ function multipart(fields, file) {
             assert.strictEqual((home.match(/<h1[\s>]/g) || []).length, 1, 'one h1');
             assert.match(home, /<title>OpenVibe\.Pics: share and embed pictures with a link<\/title>/);
             const sections = ['How it works', 'The links a picture gets', 'Upload from your own app', 'What a free account gets', 'Questions', 'More on OpenVibe'];
-            assert.deepStrictEqual(sections.filter((h) => !home.includes(`>${h}</h2>`)), [], 'every section is there');
+            // The showcase kit puts every section title in a span inside its heading.
+            assert.deepStrictEqual(sections.filter((h) => !home.includes(`${h}</span></h2>`)), [], 'every section is there');
             assert.ok(/<td[^>]*>20 MB<\/td>/.test(home) && /<td[^>]*>200<\/td>/.test(home) && /<td[^>]*>5 GB<\/td>/.test(home), 'the limits are the configured ones');
-            assert.ok(home.includes('/api/v1/images \\\n  -H "Authorization: Bearer $OPENVIBE_TOKEN" \\\n'), 'the curl sample keeps its line breaks');
+            assert.ok(home.includes('/api/v1/images \\\n  -H &quot;Authorization: Bearer $OPENVIBE_TOKEN&quot; \\\n'), 'the curl sample keeps its line breaks');
             const ld = [...home.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap((m) => [].concat(JSON.parse(m[1])));
             const faq = ld.find((x) => x['@type'] === 'FAQPage');
             // The questions section's own disclosures: the shared footer's "More from OpenVibe" is one too (openvibe-shared 4.15).
-            const questions = home.slice(home.indexOf('>Questions</h2>'), home.indexOf('>More on OpenVibe</h2>'));
+            const questions = home.slice(home.indexOf('Questions</span></h2>'), home.indexOf('More on OpenVibe</span></h2>'));
             const shown = [...questions.matchAll(/<summary>([^<]*)<\/summary>/g)].map((m) => m[1].replace(/&#39;/g, "'"));
             assert.deepStrictEqual(faq.mainEntity.map((q) => q.name), shown, 'every question in the FAQPage is on the page');
             const map = (await t.get('/sitemap.xml', { headers: PICS })).text;
@@ -143,7 +144,7 @@ function multipart(fields, file) {
             assert.strictEqual(page.status, 200);
             assert.ok(page.text.includes('The coast'));
             assert.ok(page.text.includes(`https://openvibe.pics${direct}`), 'the direct link is on the page');
-            assert.ok(page.text.includes('No account needed'), 'the copy panel says no account is needed');
+            assert.ok(page.text.includes('follow the audience you choose'), 'the copy panel explains access control');
             assert.ok(page.text.includes('[img]https://openvibe.pics'), 'the BBCode snippet is on the page');
             assert.ok(page.text.includes('data-ovk-copy'), 'the links have a copy button (the kit)');
             assert.ok(page.text.includes('noindex'));

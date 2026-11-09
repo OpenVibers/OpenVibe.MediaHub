@@ -72,8 +72,8 @@ const PAGES = ['/exif', '/content-policy', '/ai-training'];
                 assert.ok(page.includes(reason), `the page says: ${reason}`);
             }
             assert.ok(page.includes(`${t.config.pics.reportsToHide} reports hide a picture`), 'the number of reports is the configured one');
-            assert.ok(page.includes('No feed to scroll'), 'it says there is no feed');
-            assert.ok(page.includes('No counts to chase'), 'it says there are no counts');
+            assert.ok(page.includes('Public sharing is opt-in'), 'publication requires consent');
+            assert.ok(page.includes('Counts on public pictures only'), 'counts are limited to published pictures');
             assert.ok(page.includes('/dmca'), 'it points at the DMCA page');
         });
 
@@ -92,10 +92,10 @@ const PAGES = ['/exif', '/content-policy', '/ai-training'];
             assert.ok(home.includes('The hidden data is removed by us'), 'the home says who removes the metadata');
             assert.ok(home.includes('href="/exif"'), 'and links the page that explains it');
             for (const path of PAGES) assert.ok(home.includes(`href="${path}"`), `the home links ${path}`);
-            assert.ok(home.includes('no counts to chase'), 'the home says why there is no feed');
+            assert.ok(home.includes('keep yours unlisted'), 'the home explains that an upload stays unlisted');
             // The line sits under the upload, not above it: the page's main job comes first.
             assert.ok(home.indexOf('data-pics-upload') < home.indexOf('The hidden data is removed by us'), 'the upload comes first');
-            assert.ok(home.indexOf('The hidden data is removed by us') < home.indexOf('>How it works</h2>'), 'and the line before the rest');
+            assert.ok(home.indexOf('The hidden data is removed by us') < home.indexOf('How it works</span></h2>'), 'and the line before the rest');
         });
 
         await check('the policies are in the sitemap and in llms.txt, and not blocked for crawlers', async () => {

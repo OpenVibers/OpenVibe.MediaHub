@@ -211,3 +211,29 @@
 .ovp-tile-cover > .ovp-tile { height: 100%; border-radius: inherit; }
 .ovp-title + .ovk-labels { margin: -4px 0 12px; }
 @media (max-width: 640px) { .ovp-tile-cover { border-radius: 8px; } }
+
+/* Opt-in discovery uses the shared kit's type, colours and controls. */
+.ovp-gallery { columns: 4 220px; column-gap: 16px; }
+.ovp-gallery-card { break-inside: avoid; margin: 0 0 20px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; padding-bottom: 12px; }
+.ovp-gallery-card img { width: 100%; height: auto; display: block; }
+.ovp-gallery-card h3, .ovp-gallery-card p { margin: 10px 12px; overflow-wrap: anywhere; }
+.ovp-gallery-card h3 { font-size: 16px; }
+.ovp-gallery-card p { font-size: 13px; color: var(--muted); }
+.ovp-tag { display: inline-block; margin: 0 0 0 12px; padding: 8px 0; }
+.ovp-gallery-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+.ovp-gallery-tabs [aria-current] { border-color: var(--accent); font-weight: 700; }
+.ovp-gallery-search { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.ovp-gallery-search input { flex: 1; min-width: 140px; max-width: 100%; }
+.ovp-gallery-empty { padding: 30px 0; }
+.ovp-drop--compact .ovp-drop-icon, .ovp-drop--compact .ovp-drop-fields { display: none; }
+.ovp-drop--compact .ovp-drop-inner { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 14px; }
+.ovp-drop--compact .ovp-drop-title { margin: 0; font-size: 16px; }
+.ovp-drop--compact .ovp-drop-hint { flex-basis: 100%; font-size: 13px; }
+@media (max-width: 600px) { .ovp-gallery { columns: 2; column-gap: 10px; } .ovp-gallery-card h3 { font-size: 14px; } .ovp-gallery-card p { font-size: 12px; } .ovp-tag, .ovp-gallery-tabs a { min-height: 44px; } }
+
+.ovp-drop--compact .ovp-drop-inner { flex-direction: row; text-align: left; }
+.ovp-drop--compact .ovp-drop-inner p { margin: 0; }
+.ovp-drop--signin.ovp-drop--compact .ovp-drop-title { display: none; }
+.ovp-drop--signin.ovp-drop--compact .ovp-drop-hint { display: block; flex: 1; }
+.ovp-gallery-search input { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; min-height: 44px; padding: 8px 12px; }
+.ovp-btn { min-height: 44px; }

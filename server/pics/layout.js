@@ -104,7 +104,7 @@ ${render(o.body)}
 }
 
 // The site's own places in the navbar: upload, your pictures and your albums (those two ask you to sign in).
-const NAV_LINKS = [{ label: 'Upload', href: '/' }, { label: 'Your pictures', href: '/mine' }, { label: 'Albums', href: '/albums' }];
+const NAV_LINKS = [{ label: 'Explore', href: '/' }, { label: 'Your pictures', href: '/mine' }, { label: 'Albums', href: '/albums' }];
 
 // A signed-out copy is never reused without asking: Cloudflare drops `Vary` (it keeps only Accept-Encoding), so a
 // browser keyed the guest copy by its URL alone and, for five minutes after a quiet sign-in, showed the signed-out page

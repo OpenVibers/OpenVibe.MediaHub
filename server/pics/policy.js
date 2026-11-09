@@ -122,8 +122,7 @@ function policyPage(kind, { cfg, reasons = [], reasonText = {} } = {}) {
                 sub: 'The content policy, and what happens when a rule is broken',
                 back: { href: '/', label: 'Home' },
             }),
-            sec('The short answer', pm('OpenVibe.Pics is a link, not a gallery. A picture is reachable by anyone who has its link and by nobody else, so what you put here is what you are willing to share with the people you send it to. '
-                + 'Most of the site works without an account, and nothing you upload is listed, ranked or shown to a search engine.')),
+            sec('The short answer', pm('A picture is unlisted to begin with: anyone with the link can open it and nobody else. You choose whether to keep it that way, narrow it to specific people, or publish it to the public gallery. Only explicitly published pictures appear in discovery, search engines and public engagement counts.')),
             sec('Not allowed here', rows(contentRules(reasons, reasonText).map(([title, sub]) => kit.row({ title, sub }))), 'These are the reasons a picture can be reported for. Each one is a rule, not a suggestion.'),
             sec('How a rule is enforced', rows([
                 kit.row({ title: 'Every picture has a report form', sub: 'Whoever has the link can report it with one of the reasons above. One report per person, so a single reader cannot hide a picture on their own.' }),
@@ -133,8 +132,8 @@ function policyPage(kind, { cfg, reasons = [], reasonText = {} } = {}) {
                 kit.row({ title: 'You can delete your own, at any time', sub: 'Every picture you own has a delete button, and an album can be deleted in one action. The picture is gone from this site; copies other sites already loaded can show for up to ten minutes.' }),
             ])),
             sec('What this site does not do', rows([
-                kit.row({ title: 'No feed to scroll', sub: 'There is no list of other people\'s pictures, no ranking, and no gallery of what was uploaded today.' }),
-                kit.row({ title: 'No counts to chase', sub: 'No likes, no followers, no numbers of how a picture is doing. There is nothing to count, because nothing is ranked.' }),
+                kit.row({ title: 'Public sharing is opt-in', sub: 'Publish a picture to include it in Popular, New and Rising. Remove it from the gallery whenever you choose.' }),
+                kit.row({ title: 'Counts on public pictures only', sub: 'Published pictures show likes and daily deduplicated views. Private and link-only pictures have no public counts.' }),
                 kit.row({ title: 'No adverts, nothing sold', sub: 'No advertising trackers, and your pictures are not sold or used for anyone else\'s advertising.' }),
                 kit.row({ title: 'No app to install', sub: 'Every picture and album opens in a browser, signed in or not. There is no app and no account gate in front of the link.' }),
             ])),

@@ -29,6 +29,7 @@ const { asyncRouter } = require('../http/router');
 const { sameOrigin } = require('../http/principal');
 const store = require('./store');
 const contentLabels = require('../labels');
+const gallery = require('./gallery');
 
 function createPicsApi(ctx) {
     const { config, s, principal, limits } = ctx;
@@ -64,6 +65,8 @@ function createPicsApi(ctx) {
         if (!row) { problem(req, res, 404, 'pics.not_found', 'No such picture.'); return null; }
         if (row.state === 'removed') { problem(req, res, 410, 'pics.taken_down', 'This picture was taken down.'); return null; }
         if (!pics.canSee(row, whoOf(req))) { problem(req, res, 404, 'pics.not_found', 'No such picture.'); return null; }
+        const viewer = req.principal.kind === 'user' ? { kind: 'user', subject: req.principal.requester.slice(5) } : req.viewer;
+        if (!await ctx.sharing.canView(viewer, 'picture', row.id)) { problem(req, res, 404, 'pics.not_found', 'No such picture.'); return null; }
         return row;
     }
     async function loadOwn(req, res) {
@@ -72,6 +75,41 @@ function createPicsApi(ctx) {
         if (!pics.isOwner(row, whoOf(req))) { problem(req, res, 403, 'pics.not_yours', 'Only the person who uploaded this picture can change it.'); return null; }
         return row;
     }
+
+    r.use('/uploads', require('./resumable').resumable(ctx, { person, problem, whoOf }));
+
+    r.get('/gallery', async (req, res) => {
+        const result = await gallery.browse(s, req.query);
+        return res.json({ pictures: result.rows.map((row) => gallery.wire(pics, row)), next: result.next, sort: result.sort });
+    });
+    r.get('/pictures/:id', async (req, res) => {
+        const row = await store.imageById(s, String(req.params.id));
+        const viewer = req.principal.kind === 'user' ? { kind: 'user', subject: req.principal.requester.slice(5) } : req.viewer;
+        if (!row || !pics.canSee(row, whoOf(req)) || !await ctx.sharing.canView(viewer, 'picture', row.id)) return problem(req, res, 404, 'pics.not_found', 'No such picture.');
+        const extra = gallery.isPublic(row) ? await gallery.counts(s, row.id) : {};
+        return res.json({ ...pics.toWire(row, { owner: pics.isOwner(row, whoOf(req)) }), ...extra });
+    });
+    r.post('/images/:slug/publication', person, express.json({ limit: '8kb' }), limits.budget('pics.image.write'), async (req, res) => {
+        const row = await loadOwn(req, res);
+        if (!row) return;
+        const viewer = { kind: 'user', subject: req.principal.requester.slice(5), username: req.principal.username };
+        const result = await gallery.publish(ctx, row, viewer, req.body || {});
+        if (result.error) return problem(req, res, 422, 'pics.publication_invalid', result.error);
+        return res.json(pics.toWire(await store.imageById(s, row.id), { owner: true }));
+    });
+    r.put('/images/:slug/like', person, limits.budget('pics.image.write'), async (req, res) => {
+        const row = await load(req, res);
+        if (!row) return;
+        if (!gallery.isPublic(row)) return problem(req, res, 404, 'pics.not_found', 'No public picture.');
+        await s.db.query(`INSERT INTO pics_likes (image_id, actor) SELECT i.id, $2 FROM pics_images i WHERE i.id = $1 AND ${gallery.PUBLIC} ON CONFLICT DO NOTHING`, [row.id, whoOf(req).requester]);
+        return res.json(await gallery.counts(s, row.id));
+    });
+    r.delete('/images/:slug/like', person, limits.budget('pics.image.write'), async (req, res) => {
+        const row = await load(req, res);
+        if (!row || !gallery.isPublic(row)) return row ? problem(req, res, 404, 'pics.not_found', 'No public picture.') : undefined;
+        await s.db.query('DELETE FROM pics_likes WHERE image_id = $1 AND actor = $2', [row.id, whoOf(req).requester]);
+        return res.json(await gallery.counts(s, row.id));
+    });
 
     // ── Upload: the raw picture is the body ─────────────────
     const rawBody = express.raw({ type: () => true, limit: Math.max(cfg.maxImageBytes, cfg.anonymousMaxImageBytes) + 1 });
@@ -92,10 +130,18 @@ function createPicsApi(ctx) {
 
     r.use(express.json({ limit: '64kb' }));
 
+    r.get('/images/:slug/bytes', person, async (req, res) => {
+        const row = await load(req, res);
+        if (!row) return;
+        const got = await ctx.media.bytes(row.object_id);
+        if (!got.ok) return problem(req, res, 502, 'pics.storage', 'Picture storage is unavailable.');
+        res.set({ 'Content-Type': row.mime_type, 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox", 'Cache-Control': 'private, no-store' });
+        return res.send(Buffer.from(await got.res.arrayBuffer()));
+    });
+
     r.get('/images/:slug', async (req, res) => {
         const row = await load(req, res);
         if (!row) return undefined;
-        if (ctx.sharing && await ctx.sharing.shareOf('picture', row.id).catch(() => null) && !await ctx.sharing.canView(req.viewer, 'picture', row.id).catch(() => false)) return problem(req, res, 404, 'pics.image_not_found', 'No such picture.');
         return res.json(pics.toWire(row, { owner: pics.isOwner(row, whoOf(req)) }));
     });
 

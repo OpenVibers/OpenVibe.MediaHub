@@ -40,6 +40,8 @@ const store = require('./store');
 const { createPicsApi } = require('./api');
 const { createPicVariants } = require('./variants');
 const kit = require('openvibe-shared/kit');
+const gallery = require('./gallery');
+const showcase = require('openvibe-shared/showcase');
 const { PATHS: POLICY_PATHS, policyPage } = require('./policy');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
@@ -234,17 +236,26 @@ function createPicsRoutes(ctx) {
     const sizeText = (b) => formatBytes(b).replace(/\.0 /, ' ');
     const homeFaq = () => [
         { q: 'Is OpenVibe.Pics free?', a: `Yes. A free OpenVibe account can upload ${cfg.imagesPerDay} pictures a day, each up to ${sizeText(cfg.maxImageBytes)}, and keep up to ${sizeText(cfg.quotaBytes)}.` },
-        { q: 'Who can see my pictures?', a: 'Only people you give the link to. Pictures are never listed, ranked or shown to search engines, and you can delete one at any time.' },
+        { q: 'Who can see my pictures?', a: 'A picture is unlisted to begin with: anyone with the link can open it, and nobody else. Publish it to the gallery and it is visible to everyone, with public counts and in search engines. You can narrow a picture to specific people or to yourself, and remove it at any time.' },
         { q: 'What is removed from my pictures?', a: 'Everything hidden in the file: the GPS position, the camera and the rest of its metadata. Your picture is decoded and saved again without any of it before anyone sees it, and the file you uploaded is not kept.' },
         { q: 'Which files can I upload?', a: `${FORMAT_NAMES}, animated GIF and WebP included. SVG and other formats are refused, so nothing is ever served as it was uploaded.` },
         { q: 'Can I get a different size or format?', a: `Yes. Every picture has links at ${variants.LADDER.join(', ')} pixels wide as WebP, AVIF, JPEG or PNG, made when first asked for.` },
         { q: 'What is not allowed?', a: 'Anything illegal, sexual content shared without consent, harassment, other people\'s private information, and spam. Every picture has a Report form, a child-safety report hides it at once, and copyright owners can use the DMCA page.' },
     ];
     r.get('/', async (req, res) => {
+        const discovery = await gallery.browse(s, req.query);
         const mine = signedIn(req) ? (await store.imagesOf(s, whoOf(req).requester, { limit: 12 })).rows : [];
         const canUpload = signedIn(req) || cfg.anonymous;
-        const description = 'Upload a picture and get a link to share or embed anywhere: albums, any size or format, and location and camera details removed from every picture.';
+        const description = 'Upload a picture and get a link to share or embed anywhere: a gallery of what people chose to publish, albums, any size or format, and location and camera details removed from every picture.';
         const faq = homeFaq();
+        // The curl sample keeps its line breaks: a backslash and a newline, so it can be copied and run as it is.
+        const curl = ['curl -X POST ' + base + '/api/v1/images \\', '  -H "Authorization: Bearer $OPENVIBE_TOKEN" \\', '  -H "Content-Type: image/jpeg" \\', '  --data-binary @photo.jpg'].join('\n');
+        const limitColumns = ['Signed in', ...(cfg.anonymous ? ['Without an account'] : [])];
+        const limitRows = [
+            { label: 'Largest picture', values: [sizeText(cfg.maxImageBytes), ...(cfg.anonymous ? [sizeText(cfg.anonymousMaxImageBytes)] : [])] },
+            { label: 'Pictures a day', values: [String(cfg.imagesPerDay), ...(cfg.anonymous ? [String(cfg.anonymousPerDay)] : [])] },
+            { label: 'Storage', values: [sizeText(cfg.quotaBytes), ...(cfg.anonymous ? ['Kept ' + cfg.anonymousIdleDays + ' days after the last view'] : [])] },
+        ];
         return page(req, res, {
             index: true,
             title: `${SITE_NAME}: share and embed pictures with a link`,
@@ -252,62 +263,76 @@ function createPicsRoutes(ctx) {
             jsonLd: [
                 seo.jsonLd.website({ name: SITE_NAME, url: base, description }),
                 seo.jsonLd.organization(),
-                seo.jsonLd.softwareApp({ name: SITE_NAME, url: base, description, category: 'MultimediaApplication', keywords: 'image hosting, picture sharing, embed images, resize images, convert to WebP, alt text' }),
+                seo.jsonLd.softwareApp({ name: SITE_NAME, url: base, description, category: 'MultimediaApplication', keywords: 'image hosting, picture sharing, public picture gallery, embed images, resize images, convert to WebP, alt text' }),
                 seo.jsonLd.webPage({ name: SITE_NAME, url: `${base}/`, description, siteUrl: base }),
                 seo.jsonLd.faq(faq),
             ],
-            scripts: canUpload ? ['js/pics.js'] : [],
-            body: html`<header class="ovp-hero"><p class="ovp-eyebrow">${SITE_NAME}</p>
-<h1>Share pictures. <span class="ovp-accent">Fast, open, yours.</span></h1>
-<p class="ovp-lede">Drop a picture, get a link to share or embed anywhere: on a forum, in a chat, on your site. No feed to scroll, no counts to chase, and nothing about you hidden in the file.</p></header>
-${canUpload ? uploadForm(req) : html`<section class="ovp-drop ovp-drop--signin"><div class="ovp-drop-inner"><p class="ovp-drop-title">Sign in to upload</p><p class="ovp-drop-hint">Your OpenVibe account keeps your pictures and albums together, so you can delete them whenever you like.</p><p>${signInLink('/')}</p></div></section>`}
+            styles: ['kit.css', 'showcase.css'],
+            scripts: ['js/pics.js', 'js/pics-gallery.js'],
+            body: html`${raw(showcase.hero({
+                title: 'Share pictures.', accent: 'Discover something new.',
+                lede: 'Drop a picture, get a link to share or embed anywhere: on a forum, in a chat, on your site. Browse what people chose to publish, or keep yours unlisted. Location and camera details are removed from every file.',
+                visual: false,
+            }))}
+${canUpload ? uploadForm(req, { compact: true }) : html`<section class="ovp-drop ovp-drop--compact ovp-drop--signin"><div class="ovp-drop-inner"><p class="ovp-drop-title">Sign in to upload</p><p class="ovp-drop-hint">Your OpenVibe account keeps your pictures and albums together, so you can delete them whenever you like.</p><p>${signInLink('/')}</p></div></section>`}
+${raw(gallery.render(pics, discovery))}
 ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><div class="ovp-section-head"><h2 id="h-latest">Your latest pictures</h2><a href="/mine">All of them</a></div>${grid(mine, 'Nothing yet: your uploads show up here.')}</section>` : ''}
 <p class="ovp-note">The hidden data is removed by us: your picture arrives with its GPS position, its camera and the time it was taken, and we take all of it out before anyone sees the picture. <a href="/exif">How that works</a>.</p>
-<section class="ovp-section" aria-labelledby="h-how"><h2 id="h-how">How it works</h2><ol class="ovp-steps">
-<li><h3>Drop a picture</h3><p>Choose, drag or paste ${FORMAT_NAMES}, up to ${sizeText(cfg.maxImageBytes)}. Several at once works too.</p></li>
-<li><h3>Get your links</h3><p>A page to share, a direct link, and Markdown, BBCode and HTML ready to copy.</p></li>
-<li><h3>Use it anywhere</h3><p>Post it in a forum or a chat, embed it on your site, or put it in an album. Delete it whenever you like.</p></li>
-</ol></section>
-<section class="ovp-section ovp-features" aria-label="What you get">
-<div class="ovp-feature"><h3>Links that work everywhere</h3><p>A page to share, a direct link for <code>&lt;img&gt;</code>, and Markdown, BBCode and HTML ready to copy.</p></div>
-<div class="ovp-feature"><h3>Unlisted by default</h3><p>Only people with the link see a picture. Nothing is listed, ranked or indexed.</p></div>
-<div class="ovp-feature"><h3>Clean files</h3><p>Every picture is re-encoded, and its GPS position, camera serial and other hidden details are removed before anyone sees it.</p></div>
-<div class="ovp-feature"><h3>Albums</h3><p>Put pictures together and share the album with one link.</p></div>
-<div class="ovp-feature"><h3>Any size, any format</h3><p>Every picture also comes at ${variants.LADDER[0]} to ${variants.LADDER[variants.LADDER.length - 1]} pixels wide, as WebP, AVIF, JPEG or PNG, each with a link of its own.</p></div>
-<div class="ovp-feature"><h3>Alt text</h3><p>Say what a picture shows for people who cannot see it, or let AI draft it when you ask. It goes into every embed snippet.</p></div>
-</section>
-<section class="ovp-section" aria-labelledby="h-links"><h2 id="h-links">The links a picture gets</h2>
-<p class="ovp-section-lede">Each picture has a short name of eight letters and digits. These are the links it answers at:</p>
-<dl class="ovp-links">
-<div><dt>Its page</dt><dd><code>${base}/i/&lt;name&gt;</code></dd></div>
-<div><dt>The picture itself, in the format you uploaded</dt><dd><code>${base}/i/&lt;name&gt;.jpg</code></dd></div>
-<div><dt>Another width or format</dt><dd><code>${base}/i/&lt;name&gt;/w/640.avif</code></dd></div>
-<div><dt>Markdown, with your alt text</dt><dd><code>![alt text](${base}/i/&lt;name&gt;.jpg)</code></dd></div>
-</dl></section>
-<section class="ovp-section" aria-labelledby="h-api"><h2 id="h-api">Upload from your own app</h2>
-<p class="ovp-section-lede">The API takes the picture as the request body, with an OpenVibe sign-in token, and answers with its links.</p>
-<pre class="ovp-code" tabindex="0" aria-label="Upload with curl"><code>curl -X POST ${base}/api/v1/images \\
-  -H "Authorization: Bearer $OPENVIBE_TOKEN" \\
-  -H "Content-Type: image/jpeg" \\
-  --data-binary @photo.jpg</code></pre></section>
-<section class="ovp-section" aria-labelledby="h-limits"><h2 id="h-limits">What a free account gets</h2>
-<div class="ovp-table-wrap" tabindex="0" role="region" aria-labelledby="h-limits"><table class="ovp-size-table ovp-limits"><thead><tr><th scope="col">Limit</th><th scope="col">Signed in</th>${cfg.anonymous ? html`<th scope="col">Without an account</th>` : ''}</tr></thead><tbody>
-<tr><th scope="row">Largest picture</th><td>${sizeText(cfg.maxImageBytes)}</td>${cfg.anonymous ? html`<td>${sizeText(cfg.anonymousMaxImageBytes)}</td>` : ''}</tr>
-<tr><th scope="row">Pictures a day</th><td>${cfg.imagesPerDay}</td>${cfg.anonymous ? html`<td>${cfg.anonymousPerDay}</td>` : ''}</tr>
-<tr><th scope="row">Storage</th><td>${sizeText(cfg.quotaBytes)}</td>${cfg.anonymous ? html`<td>Kept ${cfg.anonymousIdleDays} days after the last view</td>` : ''}</tr>
-</tbody></table></div></section>
-<section class="ovp-section" aria-labelledby="h-faq"><h2 id="h-faq">Questions</h2><div class="faq">${faq.map((f) => html`<details><summary>${f.q}</summary><p>${f.a}</p></details>`)}</div></section>
-<section class="ovp-section" aria-labelledby="h-policies"><h2 id="h-policies">What we promise, in writing</h2><div class="ovp-features">
-<div class="ovp-feature"><h3><a href="/exif">What happens to your picture</a></h3><p>The metadata — the GPS position, the camera, the time it was taken — is taken out by us before anyone sees the picture, and the file you uploaded is not kept.</p></div>
-<div class="ovp-feature"><h3><a href="/content-policy">What you may put here</a></h3><p>What is not allowed, how a rule is enforced, and what this site does not do: no feed, no counts, no adverts.</p></div>
-<div class="ovp-feature"><h3><a href="/ai-training">Pictures and AI</a></h3><p>We don't train AI on your content. If that ever changes, it'll be your choice, and it starts off.</p></div>
-</div></section>
-<section class="ovp-section" aria-labelledby="h-more"><h2 id="h-more">More on OpenVibe</h2><ul class="ovp-more" role="list">
-<li><a href="https://openvibe.chat/"><strong>OpenVibe.Chat</strong><span>Send pictures in rooms and servers: they go up to OpenVibe.Pics.</span></a></li>
-<li><a href="${config.video.url}/"><strong>OpenVibe.Video</strong><span>Upload videos with AI captions and chapters.</span></a></li>
-<li><a href="${config.baseUrl}/"><strong>OpenVibe.Download</strong><span>A private drive for every other kind of file.</span></a></li>
-<li><a href="https://openvibe.community/"><strong>OpenVibe.Community</strong><span>Forums and pastes to post your pictures in.</span></a></li>
-</ul></section>`,
+${raw(showcase.steps({
+    title: 'How it works',
+    items: [
+        { title: 'Drop a picture', text: `Choose, drag or paste ${FORMAT_NAMES}, up to ${sizeText(cfg.maxImageBytes)}. Several at once works too.` },
+        { title: 'Get your links', text: 'A page to share, a direct link, and Markdown, BBCode and HTML ready to copy.' },
+        { title: 'Publish when you want', text: 'A picture stays unlisted until you publish it to the gallery. Then it is findable, countable and indexable.' },
+        { title: 'Use it anywhere', text: 'Post it in a forum or a chat, embed it on your site, or put it in an album. Delete it whenever you like.' },
+    ],
+}))}
+${raw(showcase.features({
+    title: 'What you get',
+    items: [
+        { icon: 'link', title: 'Links that work everywhere', text: 'A page to share, a direct link for an img tag, and Markdown, BBCode and HTML ready to copy.' },
+        { icon: 'shield', title: 'Unlisted by default', text: 'Only people with the link see a picture until you publish it. Nothing is listed, ranked or indexed without you.' },
+        { icon: 'spark', title: 'Clean files', text: 'Every picture is re-encoded, and its GPS position, camera serial and other hidden details are removed before anyone sees it.' },
+        { icon: 'folder', title: 'Albums', text: 'Put pictures together and share the album with one link.' },
+        { icon: 'sliders', title: 'Any size, any format', text: `Every picture also comes at ${variants.LADDER[0]} to ${variants.LADDER[variants.LADDER.length - 1]} pixels wide, as WebP, AVIF, JPEG or PNG, each with a link of its own.` },
+        { icon: 'text', title: 'Alt text', text: 'Say what a picture shows for people who cannot see it, or let AI draft it when you ask. It goes into every embed snippet.' },
+    ],
+}))}
+${raw(showcase.features({
+    title: 'The links a picture gets',
+    lede: 'Each picture has a short name of eight letters and digits. These are the links it answers at:',
+    items: [
+        { icon: 'file', title: 'Its page', text: `${base}/i/<name>` },
+        { icon: 'image', title: 'The picture itself, in the format you uploaded', text: `${base}/i/<name>.jpg` },
+        { icon: 'sliders', title: 'Another width or format', text: `${base}/i/<name>/w/640.avif` },
+        { icon: 'code', title: 'Markdown, with your alt text', text: `![alt text](${base}/i/<name>.jpg)` },
+    ],
+}))}
+${raw(showcase.code({
+    title: 'Upload from your own app',
+    lede: 'The API takes the picture as the request body, with an OpenVibe sign-in token, and answers with its links.',
+    samples: [{ label: 'curl', lang: 'bash', code: curl }],
+}))}
+${raw(showcase.limits({ title: 'What a free account gets', columns: limitColumns, rows: limitRows }))}
+${raw(showcase.faq({ title: 'Questions', items: faq.map((f) => [f.q, f.a]) }))}
+${raw(showcase.features({
+    title: 'What we promise, in writing',
+    items: [
+        { icon: 'shield', title: 'What happens to your picture', href: '/exif', text: 'The metadata — the GPS position, the camera, the time it was taken — is taken out by us before anyone sees the picture, and the file you uploaded is not kept.' },
+        { icon: 'book', title: 'What you may put here', href: '/content-policy', text: 'What is not allowed, how a rule is enforced, and what this site does not do: opt-in discovery, public counts, and no adverts.' },
+        { icon: 'brain', title: 'Pictures and AI', href: '/ai-training', text: "We don't train AI on your content. If that ever changes, it'll be your choice, and it starts off." },
+    ],
+}))}
+${raw(showcase.network({
+    service: 'pics',
+    items: [
+        { to: 'cam', href: 'https://openvibe.cam', what: 'Take a photo and save it here' },
+        { to: 'studio', href: 'https://openvibe.studio', what: 'Edit your pictures with AI' },
+        { to: 'community', href: 'https://openvibe.community', what: 'Share pictures in pastes and discussions' },
+        { to: 'meme', href: 'https://openvibe.meme', what: 'Make a meme from a picture' },
+    ],
+}))}
+<script>${raw(showcase.NETWORK_JS)}</script>`,
         });
     });
 
@@ -353,6 +378,7 @@ ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><
         const who = whoOf(req);
         const owner = pics.isOwner(row, who);
         const L = pics.links(row);
+        if (req.method === 'GET' && gallery.isPublic(row) && !owner) await s.db.query(`INSERT INTO pics_views (image_id, visitor, day) SELECT i.id, $2, $3 FROM pics_images i WHERE i.id = $1 AND ${gallery.PUBLIC} ON CONFLICT DO NOTHING`, [row.id, pics.addressId(req.ip), s.iso().slice(0, 10)]);
         const albums = owner ? await store.albumsOf(s, who.requester) : [];
         const holding = owner ? await store.albumsHolding(s, row.id) : [];
         const title = row.title || 'Untitled picture';
@@ -361,10 +387,11 @@ ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><
         const likeRow = owner && /^[A-Za-z0-9]{4,16}$/.test(String(req.query.like || '')) ? await store.imageBySlug(s, String(req.query.like)) : null;
         const likeSlug = likeRow && likeRow.id !== row.id && likeRow.owner === row.owner ? likeRow.slug : null;
         return page(req, res, {
-            title, noindex: true,
+            title, noindex: !gallery.isPublic(row), index: gallery.isPublic(row),
+            jsonLd: gallery.isPublic(row) ? { '@context': 'https://schema.org', '@type': 'ImageObject', name: title, contentUrl: L.direct, url: L.page, caption: row.description || title, author: { '@type': 'Person', name: row.author_name || 'OpenVibe member' } } : undefined,
             description: row.description || `${title}: a picture on ${SITE_NAME}.`,
             image: hidden ? undefined : L.direct, ogType: 'article',
-            scripts: ['js/pics.js'], styles: ['kit.css'], sharedScripts: ['kit-web.js'],
+            scripts: ['js/pics.js', 'js/pics-gallery.js'], styles: ['kit.css'], sharedScripts: ['kit-web.js'],
             ...(owner ? { localStyles: ['css/labels.css'] } : {}),
             private: deleteKey ? true : undefined,
             body: html`${message ? notice(message, tone) : ''}${fresh || req.query.new ? notice('Uploaded. Copy a link below to share it.', 'ok') : ''}${owner && req.query.again ? notice('You had already uploaded this picture: here it is. Nothing was stored twice.', 'info') : ''}${owner && req.query.new && likeSlug ? notice(html`It looks like a picture you uploaded before: <a href="/i/${likeSlug}">that one</a>. If you meant to keep only one, delete the other.`, 'info') : ''}
@@ -376,11 +403,14 @@ ${labelsUi.chips(labelsUi.inForce(row))}
 <figure class="ovp-figure"${labelsUi.attrs(labelsUi.inForce(row), { owner: row.owner, opened: true })}><a href="/i/${row.slug}.${row.ext}"><img src="/i/${row.slug}.${row.ext}" alt="${pics.altOf(row)}" width="${row.width}" height="${row.height}" decoding="async"></a></figure>
 <p class="ovp-meta">${Number(row.width)} × ${Number(row.height)} · ${KIND[row.ext] || row.ext}${row.animated ? ' (animated)' : ''} · ${formatBytes(row.bytes)} · uploaded ${time(row.created_at)}</p>
 ${raw(shareButton({ url: L.page, title, text: row.description || `${title}: a picture on ${SITE_NAME}.`, image: L.direct, kind: 'picture', id: row.id }))}
+${gallery.isPublic(row) ? html`<p>${row.author_name || 'OpenVibe member'} · ${(await gallery.counts(s, row.id)).views} views · <span data-like-count>${(await gallery.counts(s, row.id)).likes}</span> likes</p><button class="ovp-btn" data-like="${row.slug}">Like</button><p role="status" data-like-status></p>` : ''}
+${!hidden ? html`<p class="ovp-gallery-tabs"><a class="ovp-btn" href="https://openvibe.studio/image-tools?picture=${row.slug}">Edit with AI</a><a class="ovp-btn" href="https://openvibe.meme/make?picture=${row.slug}">Make a meme</a><a class="ovp-btn" href="https://openvibe.cam/">Take a photo</a></p>` : ''}
 ${row.description ? html`<p class="ovp-desc">${row.description}</p>` : ''}
 ${row.ai_caption && row.alt_source === 'ai' ? html`<p class="ovp-ai"><span class="ovp-ai-label">Described by AI</span> ${row.ai_caption}</p>` : ''}
 </article>
+${gallery.isPublic(row) ? html`<section class="ovp-section"><h2>Comments</h2><button class="ovp-btn" data-comments="${row.id}">Show Community discussion</button><div data-comments-list aria-live="polite"></div></section>` : ''}
 <section class="ovp-share" aria-labelledby="h-share"><h2 id="h-share">Share and embed</h2>
-<p class="ovp-share-lede">No account needed: anyone with the link can open this picture and copy these. The direct link is the picture itself, at full size — no page around it.</p>
+<p class="ovp-share-lede">These links follow the audience you choose in Share. Private pictures are visible only to you. The direct link is the picture itself, at full size — no page around it.</p>
 <div class="ovp-link-grid">
 ${linkCard('Direct link', 'The picture itself, full size.', L.direct, `snip-direct-${row.slug}`)}
 ${linkCard('Markdown', 'For a chat or a post.', L.markdown, `snip-md-${row.slug}`)}
@@ -395,6 +425,7 @@ ${!hidden && variants.widthsFor(row).length ? html`<section class="ovp-section o
 ${[['webp', 'WebP'], ['avif', 'AVIF'], ['jpg', 'JPEG'], ['png', 'PNG']].map(([fmt, label]) => html`<tr><th scope="row">${label}</th>${variants.widthsFor(row).map((w) => html`<td><a href="/i/${row.slug}/w/${w}.${fmt}" rel="nofollow">${w}</a></td>`)}</tr>`)}
 </tbody></table></section>` : ''}
 ${owner ? html`<section class="ovp-section ovp-owner" aria-labelledby="h-yours"><h2 id="h-yours">Yours</h2>
+<form class="ovp-form" method="post" action="/i/${row.slug}/publication"><label for="p-tags">Tags (comma separated)</label><input id="p-tags" name="tags" maxlength="330" value="${gallery.tags(row).join(', ')}"><p>Publishing makes this picture visible to everyone, lists it in the gallery, enables public counts, and lets search engines index it.</p><button class="ovp-btn" name="listed" value="${!row.listed}">${row.listed ? 'Remove from gallery' : 'Publish to gallery'}</button><p>Removing from the gallery keeps your sharing setting. Use Share to make it private again.</p></form>
 <form class="ovp-form" method="post" action="/i/${row.slug}/edit">
 <label for="e-title">Title</label><input id="e-title" name="title" type="text" maxlength="120" value="${row.title}">
 <label for="e-desc">Description</label><textarea id="e-desc" name="description" rows="3" maxlength="2000">${row.description}</textarea>
@@ -455,6 +486,15 @@ ${pics.REASONS.map((r) => html`<label class="ovp-radio"><input type="radio" name
         const labels = labelsUi.fromForm(req.body);
         if (labels === null) return picturePage(req, res, row, { message: 'Choose the labels from the list.', tone: 'warn' }, 422);
         await pics.edit(row, { title: req.body.title, description: req.body.description, alt: req.body.alt, ...(labels !== undefined ? { labels } : {}) });
+        return res.redirect(303, `/i/${row.slug}`);
+    });
+
+    r.post('/i/:slug/publication', mustSignIn('Sign in to publish your picture.'), budgeted('pics.image.write'), async (req, res) => {
+        if (!sameSite(req, res, `/i/${req.params.slug}`)) return;
+        const row = await ownPicture(req, res);
+        if (!row) return;
+        const out = await gallery.publish(ctx, row, req.viewer, { listed: req.body.listed === 'true', tags: String(req.body.tags || '').split(',').map((v) => v.trim()).filter(Boolean) });
+        if (out.error) return picturePage(req, res, row, { message: out.error, tone: 'warn' }, 422);
         return res.redirect(303, `/i/${row.slug}`);
     });
 
@@ -659,10 +699,10 @@ ${row.state === 'hidden' ? html`<button class="ovp-btn" name="action" value="res
 
     // ── Discovery, legal, update log ────────────────────────
     r.get('/robots.txt', (_req, res) => res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 }))
-        .send(`# openvibe.pics: pictures are unlisted; only the home page is for search engines.\n${seo.robotsTxt({ sitemaps: [`${base}/sitemap.xml`], disallow: ['/i/', '/a/', '/mine', '/albums', '/staff', '/api/', '/auth/', '/upload'] })}`));
+        .send(`# openvibe.pics: only explicitly published pictures are indexed.\n${seo.robotsTxt({ sitemaps: [`${base}/sitemap.xml`], disallow: ['/a/', '/mine', '/albums', '/staff', '/api/', '/auth/', '/upload'] })}`));
     // The indexable pages: the home, the update log, the rules and the policy pages. No picture or album is ever listed.
-    r.get('/sitemap.xml', (_req, res) => res.type('application/xml').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 }))
-        .send(seo.sitemapXml(['/', '/updates', ...legal.PATHS, ...POLICY_PATHS].map((p) => ({ loc: `${base}${p}` })))));
+    r.get('/sitemap.xml', async (_req, res) => res.type('application/xml').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 }))
+        .send(seo.sitemapXml(['/', '/updates', ...legal.PATHS, ...POLICY_PATHS].map((p) => ({ loc: `${base}${p}` })).concat((await s.db.many(`SELECT i.slug FROM pics_images i WHERE ${gallery.PUBLIC} ORDER BY i.published_at DESC LIMIT 50000`)).map((r) => ({ loc: `${base}/i/${r.slug}` }))))));
     // RFC 9116, canonical to this host (openvibe.pics).
     r.get('/.well-known/security.txt', securityTxt.handler(base));
     // The site as llms.txt describes it, shared by /llms.txt and /llms-full.txt (SEO-33). AGT-5: its own pages are
@@ -672,7 +712,7 @@ ${row.state === 'hidden' ? html`<button class="ovp-btn" name="action" value="res
         markdown: true,
         base,
         summary: 'Picture hosting on the OpenVibe network: upload a picture, get a link to share or embed, albums, any size or format.',
-        details: 'Pictures are unlisted (reachable only by their link). Each one is re-encoded with its metadata removed, and can be had resized and converted at /i/<slug>/w/<320|640|1280|1920|2560>.<webp|avif|jpg|png>. Alt text: the uploader writes it or asks OpenVibe.AI for a draft (POST /api/v1/images/<slug>/describe). API: POST /api/v1/images with the picture as the body (an OpenVibe sign-in token as a Bearer).',
+        details: 'Uploads start unlisted: anyone with the link can open a picture. Only explicitly published pictures appear in the public gallery. Each one is re-encoded with its metadata removed, and can be had resized and converted at /i/<slug>/w/<320|640|1280|1920|2560>.<webp|avif|jpg|png>. Alt text: the uploader writes it or asks OpenVibe.AI for a draft (POST /api/v1/images/<slug>/describe). API: POST /api/v1/images with the picture as the body (an OpenVibe sign-in token as a Bearer).',
         sections: [
             { title: 'Start here', links: [{ title: SITE_NAME, url: `${base}/` }] },
         ],
@@ -683,7 +723,7 @@ ${row.state === 'hidden' ? html`<button class="ovp-btn" name="action" value="res
             { title: 'Pictures and AI', url: `${base}/ai-training` },
             { title: 'Terms', url: `${base}/terms` },
             { title: 'DMCA', url: `${base}/dmca` },
-            { title: 'Sitemap', url: `${base}/sitemap.xml`, note: 'only the home, the update log and the policy pages: no picture or album is ever listed' },
+            { title: 'Sitemap', url: `${base}/sitemap.xml`, note: 'home, policies and explicitly published pictures' },
             { title: 'Full text for language models', url: `${base}/llms-full.txt` },
         ],
     });

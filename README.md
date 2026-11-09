@@ -532,3 +532,27 @@ Part of the [OpenVibe network](https://openvibe.network). Built in the open by [
 - openvibe-sdk: v0.97.1
 - openvibe-shared: v4.163.0
 <!-- versions:end -->
+
+### Public Pics gallery
+
+`GET /api/v1/gallery?sort=popular|new|rising&q=&tag=&cursor=&limit=30` lists only active,
+explicitly published pictures whose sharing audience is Everyone. A new upload is unlisted: anyone with
+the link can open it and nobody else, and no picture is opted in by migration 0027. The owner publishes using
+`POST /api/v1/images/:slug/publication` with `{ "listed": true, "tags": ["landscape"] }`.
+Setting `listed` false removes discovery without changing access; narrowing Share also clears publication.
+`GET /api/v1/pictures/:id` respects the current audience, and authenticated readers can retrieve raster
+bytes at `GET /api/v1/images/:slug/bytes`. Public likes are idempotent PUT/DELETE `/images/:slug/like`.
+Views count one keyed address per day on public picture pages; private pictures expose no counts.
+
+Resumable uploads: POST `/api/v1/uploads` with `{size, content_type, name, title}`, PATCH `/uploads/:id`
+with raw chunks up to 1 MiB and `Upload-Offset`, GET the same resource to resume, POST
+`/uploads/:id/complete` to re-encode and save privately, or DELETE to cancel. Sessions expire after a day;
+four unfinished uploads per person, bounded by the ordinary image size, quota and daily limits. Complete
+is idempotent. Expired chunks are reclaimed when new sessions are created. All writes require a person;
+session-cookie writes must be same-origin. `pics.picture@1` and `pics.gallery@1` describe the responses.
+
+Cross-site rollout: deploy the Community Pics discussion policy before enabling discussions; it checks
+current public visibility on every read. Studio's image-tool adapter requires `STUDIO_IMAGE_WORKER_URL`
+and returns an explicit unavailable state until a worker is configured. No image worker was invoked in
+this change. Cam already posts captured pictures to the existing upload endpoint. Shared `ov-upload`
+is not in the pinned Shared release yet; Pics retains its existing drop/paste/choose uploader.
