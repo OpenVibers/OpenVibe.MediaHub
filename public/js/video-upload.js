@@ -8,7 +8,8 @@
     var button = form.querySelector('button[type=submit]');
     var sheet = document.querySelector('[data-upload-rules-sheet]');
     var state = { file: null, upload: null, sent: 0, sending: false, saved: false, complete: null, cancelled: false };
-    var meter = kit.progress(form.querySelector('[data-ov-upload-progress]'), { onRetry: function () { if (state.file) send(); } });
+    var meterEl = form.querySelector('[data-ov-upload-progress]');
+    var meter = kit.progress(meterEl, { onRetry: function () { if (state.file) send(); } });
     var picker = kit.picker(form.querySelector('[data-ov-upload-picker]'), {
         label: 'Choose a video', accept: 'video/mp4,video/quicktime,video/x-m4v,video/webm,video/x-matroska,.mp4,.mov,.m4v,.webm,.mkv',
         onFile: choose, onRemove: remove
@@ -60,6 +61,7 @@
     function choose(file) {
         if (state.file) { say('Remove this video before choosing another.'); return; }
         state.file = file; state.cancelled = false; state.saved = false; state.complete = null;
+        meterEl.hidden = false;
         form.elements.title.value = titleOf(file);
         button.disabled = false;
         meter.update({ state: 'waiting', done: 0, total: file.size, message: '' });
@@ -70,6 +72,7 @@
         state.cancelled = true;
         var id = state.upload && state.upload.id;
         state.file = null; state.upload = null; state.sent = 0; state.sending = false; state.complete = null;
+        meterEl.hidden = true;
         button.disabled = true; meter.update({ state: 'waiting', done: 0, total: 0, message: '' }); say('Video removed.');
         stored(null);
         if (id) request('/api/v1/videos/' + encodeURIComponent(id), { method: 'DELETE' }).catch(function () {});

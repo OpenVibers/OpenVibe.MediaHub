@@ -232,8 +232,9 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
         scripts: ['js/video-upload.js'],
         body: html`<h1>Upload a video</h1>
 <form class="ovv-upload ovv-panel" data-video-upload method="post" action="/upload">
-<div data-ov-upload-picker></div>
-<ov-progress data-ov-upload-progress></ov-progress>
+<div class="ovv-upload-pick"><div data-ov-upload-picker></div>
+<ov-progress data-ov-upload-progress hidden></ov-progress></div>
+<div class="ovv-upload-details">
 <label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="120" required></label>
 <label class="ovv-field"><span>Description</span><textarea name="description" rows="4" maxlength="5000"></textarea></label>
 <fieldset class="ovv-visibility"><legend>Who can see it?</legend>
@@ -243,6 +244,7 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
 <p class="ovv-fine">Upload only what you may share. <button type="button" class="ovv-link-button" data-upload-rules>Rules and limits</button></p>
 <p class="ovv-upload-status" role="status" aria-live="polite"></p>
 <button class="ovv-btn ovv-btn--primary" type="submit" disabled>Save details</button>
+</div>
 <noscript><p class="ovv-fine">Uploading needs JavaScript: a video goes up in parts so a big file and a dropped connection both work.</p></noscript>
 </form>
 <dialog class="ovv-rules" data-upload-rules-sheet aria-label="Upload rules"><h2>Before you upload</h2><p>MP4, MOV, WebM or MKV, up to ${Math.round(cfg.maxBytes / GB)} GB each and ${Math.round(cfg.quotaBytes / GB)} GB total. You may upload ${cfg.perDay} videos a day. Upload only what you made or have permission to share. Reported videos are hidden while staff review them.</p><form method="dialog"><button class="ovv-btn ovv-btn--primary">Got it</button></form></dialog>

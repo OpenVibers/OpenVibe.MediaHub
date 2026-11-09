@@ -480,7 +480,15 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 .ovv-cutting p { margin: 0; max-width: 40ch; }
 .ovv-cutting i { color: var(--accent-light, var(--ovv-accent)); margin-right: 6px; }
 /* Uploads (/upload, /u/:id, /me/videos) */
-.ovv-upload { display: grid; gap: 12px; max-width: 640px; }
+/* Upload (Opus's design pass, 11-09): the video on the left and its details on the right from 900 px; one column on a
+   phone. The meter shows only once a video is chosen. */
+.ovv-upload { display: grid; gap: 18px; max-width: 1040px; }
+.ovv-upload-pick, .ovv-upload-details { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.ovv-upload ov-progress[hidden] { display: none; }
+@media (min-width: 900px) {
+  .ovv-upload { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+  .ovv-upload-pick { position: sticky; top: calc(var(--ovnav-h, 56px) + 16px); }
+}
 .ovv-visibility { display: grid; gap: 8px; padding: 0; border: 0; }
 .ovv-visibility legend { margin-bottom: 8px; font-weight: 700; }
 .ovv-visibility label { display: block; cursor: pointer; }
