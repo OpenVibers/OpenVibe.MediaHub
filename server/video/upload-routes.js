@@ -436,7 +436,7 @@ ${row.state === 'hidden' ? notice('Hidden after reports: only you and OpenVibe s
 ${row.visibility === 'private' && ready ? notice('Private: only you (and OpenVibe staff) can see this video.', 'info') : ''}
 ${original && original.state !== 'removed' ? html`<p class="ovv-fine ovv-edited-from">An edited copy of <a href="${original.watch_id ? `/watch?v=${original.watch_id}` : `/u/${original.id}`}">${original.title}</a>, made by the AI cut.</p>` : ''}
 ${ready && vod ? html`<div class="ovv-player-wrap"><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${thumb ? html` poster="${`${thumb}?w=1280&fmt=webp`}" data-ov-thumb="${`${thumb}?w=32&fmt=webp`}" data-ov-ambient` : ''} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${hlsAttrs(vod)}>${tracks}</video></div>`
-        : html`<div class="ovv-player-wrap ovv-processing" role="status">${row.status === 'processing' ? html`<p><i class="fa-solid fa-gear fa-spin" aria-hidden="true"></i> Processing: OpenVibe.Media is making it playable. This page reloads by itself.</p>`
+        : html`<div class="ovv-player-wrap ovv-processing" role="status">${row.status === 'processing' ? html`<p><span class="ov-mark" data-state="busy" data-size="18" data-tone="ink" aria-hidden="true"></span> Processing: OpenVibe.Media is making it playable. This page reloads by itself.</p>`
             : row.status === 'failed' ? html`<p>This upload could not be processed. ${row.error || ''}</p>`
                 : html`<p>The upload stopped before the end (${row.parts_received} of ${row.parts_expected} parts). Upload the file again from <a href="/upload">Upload</a>.</p>`}</div>`}
 <h1 class="ovv-title">${row.title}</h1>
