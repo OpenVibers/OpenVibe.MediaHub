@@ -310,11 +310,6 @@ function createCuts({ s, media, uploads, videoAi = null, config, log = console, 
     /** A chosen frame becomes the copy's cover through Media's own custom-thumbnail route, after finalize. */
     async function applyCover(cut, copy, url) {
         if (cut.cover_seconds == null) return;
-        const ready = await waitReady(copy.id);
-        if (!ready || ready.status !== 'ready') {
-            log.warn(`[OpenVibe.Video] cut ${cut.id}: copy was not ready for its cover`);
-            return;
-        }
         const frame = await extractCover(url, cut.cover_seconds);
         const out = await media.vodThumbnail(copy.media_vod_id, frame);
         if (!out.ok || !out.data || !out.data.url) throw new Error(`Media refused the cover (${out.code || out.status})`);
@@ -348,8 +343,13 @@ function createCuts({ s, media, uploads, videoAi = null, config, log = console, 
             await save(cut.id, { result_upload_id: copy.id });
             copy = await render(cut, url, plan.ranges, plan.kept_seconds, info, copy);
             await uploads.complete(copy);
-            try { await applyCover(cut, copy, url); }
-            catch (err) { log.warn(`[OpenVibe.Video] cut ${cut.id}: cover not set:`, err.message); }
+            if (cut.mode === 'trim' && cut.cover_seconds != null) {
+                // The cover is written after Media's finalize, which makes its own thumbnail: wait for it.
+                const finished = await waitReady(copy.id);
+                if (!finished || finished.status !== 'ready') throw new UploadError(502, 'cut.copy', 'The copy could not be finished.');
+                try { await applyCover(cut, copy, url); }
+                catch (err) { log.warn(`[OpenVibe.Video] cut ${cut.id}: cover not set:`, err.message); }
+            }
             return save(cut.id, { status: 'done', progress: 1, finished_at: s.iso() });
         } catch (err) {
             const known = err instanceof UploadError;
