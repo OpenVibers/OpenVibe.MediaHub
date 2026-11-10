@@ -145,7 +145,7 @@ function hreq(base, host, path, { method = 'GET', cookie, form, body, type, same
             const v = await video('/v/301');
             const more = (v.text.split('<section class="ovv-panel ovv-also"')[1] || '').split('</section>')[0];
             // The video may come along (the small player): it carries its title, who made it and its own page.
-            assert.match(v.text, /<video class="ovv-player" data-ov-player data-ov-mini data-ov-mini-title="[^"]+" data-ov-mini-by="[^"]*" data-ov-mini-page="\/(?:watch\?v=[^"]+|v\/301)"/, 'a recording says it may come along');
+            assert.match(v.text, /<video class="ovv-player" data-ov-player data-ov-mini data-ov-mini-title="[^"]+" data-ov-mini-by="[^"]*" data-ov-mini-page="\/(?:watch\?v=[^"]+|v\/301)"(?: data-ov-mini-src="[^"]+")?/, 'a recording says it may come along');
             assert.match(v.text, /<script src="[^"]*mini[^"]*\.js[^"]*" defer><\/script>/, 'every Video page loads the small player');
             assert.ok(!/Kim labelled/.test(more), 'never the recording playing');
             assert.ok(!/Kim clip/.test(more), 'its own clips are in Clips from this stream, not again here');
