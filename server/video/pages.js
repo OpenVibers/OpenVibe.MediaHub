@@ -110,6 +110,14 @@ function posterAttr(url) {
  * broadcast with no camera, plan R4) shows it in place of a black box. Network's /avatar/:username answers the image
  * (or a neutral placeholder), so no lookup is needed here.
  */
+/**
+ * A watch page's video may come along (openvibe-shared 4.192 mini.js): the player's picture-in-picture button takes the
+ * person to the front page and the video goes on in the small player, on every page, from the same second.
+ */
+function miniAttr(title, by, page) {
+    return html` data-ov-mini data-ov-mini-title="${String(title || 'Video')}" data-ov-mini-by="${String(by || '')}" data-ov-mini-page="${String(page || '')}"`;
+}
+
 function avatarAttr(username, networkUrl) {
     const name = String(username || '');
     return /^[A-Za-z0-9_]{1,32}$/.test(name) && /^https?:\/\//.test(String(networkUrl || '')) ? html` data-ov-avatar="${String(networkUrl).replace(/\/+$/, '')}/avatar/${name}"` : '';
@@ -1494,7 +1502,7 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
 <div class="ovv-col ovv-col--main">
 <div class="ovv-stage">
 ${savedNotice(req)}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this recording.', 'info') : ''}
-<div class="ovv-player-wrap"${labelsUi.attrs(labelsUi.inForce(vod), { owner: vod.username, opened: true })}><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${posterAttr(httpsUrl(vod.thumbnail_url))}${avatarAttr(vod.username, config.networkUrl)}${shapeAttr} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video>${pipsTag(pips)}</div>
+<div class="ovv-player-wrap"${labelsUi.attrs(labelsUi.inForce(vod), { owner: vod.username, opened: true })}><video class="ovv-player" data-ov-player${miniAttr(vod.title || 'Stream recording', channelName || vod.username, watchPath)} controls preload="metadata" playsinline${posterAttr(httpsUrl(vod.thumbnail_url))}${avatarAttr(vod.username, config.networkUrl)}${shapeAttr} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video>${pipsTag(pips)}</div>
 <div class="ovv-head">
 ${titleLine('Stream recording', vod.title || 'Stream recording')}
 ${labelsUi.chips(labelsUi.inForce(vod))}
@@ -1620,7 +1628,7 @@ ${more || ''}
 <div class="ovv-stage">
 ${savedNotice(req)}${req.query.made === '1' ? notice('Your clip was made. It is credited to you on OpenVibe.Live and here.', 'ok') : ''}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this clip.', 'info') : ''}
 ${cutting ? html`<div class="ovv-player-wrap ovv-cutting" role="status" data-ovv-reload="8"><p><i class="fa-solid fa-scissors" aria-hidden="true"></i> This clip is being cut. It plays here in a moment; the page checks again by itself.</p></div>`
-        : html`<div class="ovv-player-wrap"${labelsUi.attrs(labelsUi.inForce(clip), { owner: clip.username, opened: true })}><video class="ovv-player" data-ov-player controls preload="metadata" playsinline${avatarAttr(clip.username, config.networkUrl)}${posterAttr(httpsUrl(clip.thumbnail_url))} src="${fileOf(clip) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>`}
+        : html`<div class="ovv-player-wrap"${labelsUi.attrs(labelsUi.inForce(clip), { owner: clip.username, opened: true })}><video class="ovv-player" data-ov-player${miniAttr(clip.title || 'Clip', clip.source_streamer_display_name || clip.display_name || clip.username, watchPath)} controls preload="metadata" playsinline${avatarAttr(clip.username, config.networkUrl)}${posterAttr(httpsUrl(clip.thumbnail_url))} src="${fileOf(clip) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>`}
 <div class="ovv-head">
 ${titleLine(aiClip ? 'AI clip' : 'Clip', clip.title || 'Clip')}
 ${labelsUi.chips(labelsUi.inForce(clip))}
