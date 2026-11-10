@@ -152,6 +152,12 @@
             if (state.saved) stored(null); else snapshot();
             meter.update({ state: 'done', done: file.size, total: file.size, message: 'Your video is processing.' });
             say(state.saved ? 'Opening your video…' : 'Upload complete. Save details to continue.');
+            if (!state.saved && status && state.complete.video && state.complete.video.edit_url) {
+                var edit = document.createElement('a');
+                edit.href = state.complete.video.edit_url;
+                edit.textContent = ' Edit in Studio';
+                status.appendChild(edit);
+            }
             if (state.saved) window.location.assign(state.complete.video.url);
         }).catch(function (err) { state.sending = false; fail(err); });
     }

@@ -113,6 +113,7 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         const done1 = await vreq(t.base, `/api/v1/videos/${id}/complete`, { method: 'POST', cookie: kimCookie });
         assert.strictEqual(done1.status, 202);
         assert.strictEqual(done1.json().video.url, `/watch?v=${[...t.media.vods.values()][0].watch_id}`);
+        assert.strictEqual(done1.json().video.edit_url, `https://openvibe.studio/edit?media=${id}&from=video`, 'the finished recording names Studio');
     });
 
     await check('the watch page plays it from Media, and it is on the channel, the home page and the sitemap', async () => {

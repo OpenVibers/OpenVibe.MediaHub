@@ -87,11 +87,12 @@ async function createApp(opts = {}) {
     if (media.enabled) videoUploads.backfillWatchIds({ limit: 200, log }).catch((err) => log.warn('[MediaHub] watch id backfill:', err.message));
     const videoAi = opts.videoAi || require('./video/ai-edit').createAiEdit({ s, media, config, fetchImpl, log });
     const videoCuts = require('./video/cut').createCuts({ s, media, uploads: videoUploads, videoAi, config, log, spawnImpl: opts.spawnImpl });
+    const videoStudio = require('./video/studio').createStudio({ s, media, uploads: videoUploads, config, log, fetchImpl });
     const syncKeys = createSyncKeys({ s, config });
     const drops = createDrops({ s, media, config, uploads, log });
     const videoSearch = require('./video/search-index').createVideoSearchIndex({ s, config, videoAi, fetchImpl, log });
     if (sharing.onChanged) sharing.onChanged((ref) => { if (ref.kind === 'video' && videoSearch) videoSearch.kick(); });
-    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, pics, picsDescribe, eventsOutbox, videoUploads, videoAi, videoCuts, syncKeys, drops, videoSearch, fetchImpl, log, sharing };
+    const ctx = { config, s, store, keys, sso, principal, media, identity, drive, uploads, account, playlists, pics, picsDescribe, eventsOutbox, videoUploads, videoAi, videoCuts, videoStudio, syncKeys, drops, videoSearch, fetchImpl, log, sharing };
     // IndexNow for openvibe.video: off without a key; a malformed key warns and stays off rather than stopping the site.
     ctx.indexnow = opts.indexnow || (() => {
         const warn = (...a) => (log.warn || console.warn)(...a);
