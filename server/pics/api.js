@@ -78,6 +78,14 @@ function createPicsApi(ctx) {
 
     r.use('/uploads', require('./resumable').resumable(ctx, { person, problem, whoOf }));
 
+    r.get('/images/duplicate', person, async (req, res) => {
+        const hash = String(req.query.sha256 || '').toLowerCase();
+        if (!/^[a-f0-9]{64}$/.test(hash)) return problem(req, res, 400, 'pics.hash_invalid', 'Send a SHA-256 digest.');
+        const row = await store.ownedByHash(s, whoOf(req).requester, hash);
+        return res.json(row ? { duplicate: true, object: { id: row.id, name: row.title || row.slug, date: row.created_at,
+            address: `${cfg.url}/i/${row.slug}`, url: `${cfg.url}/i/${row.slug}` }, image: pics.toWire(row, { owner: true }) } : { duplicate: false });
+    });
+
     r.get('/gallery', async (req, res) => {
         const result = await gallery.browse(s, req.query);
         return res.json({ pictures: result.rows.map((row) => gallery.wire(pics, row)), next: result.next, sort: result.sort });
@@ -119,7 +127,7 @@ function createPicsApi(ctx) {
     }), async (req, res) => {
         if (req.principal.kind === 'anonymous' && !cfg.anonymous) return problem(req, res, 401, 'pics.sign_in_required', 'Sign in with OpenVibe to upload pictures.');
         if (!/^image\//i.test(String(req.get('content-type') || ''))) return problem(req, res, 415, 'pics.not_an_image', 'Send the picture as the body, with its image/* Content-Type.');
-        const out = await pics.upload(whoOf(req), { buffer: Buffer.isBuffer(req.body) ? req.body : null, name: header(req, 'x-filename', 200) }, { title: header(req, 'x-title', 200) });
+        const out = await pics.upload(whoOf(req), { buffer: Buffer.isBuffer(req.body) ? req.body : null, name: header(req, 'x-filename', 200) }, { title: header(req, 'x-title', 200), keepBoth: req.get('x-keep-both') === '1' });
         if (!out.ok) return problem(req, res, out.status, out.code, out.detail);
         res.set('Location', `/api/v1/images/${out.image.slug}`);
         // The same picture again: 200 with the one the person already has (duplicate: true), nothing stored twice.
