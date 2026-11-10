@@ -2,6 +2,9 @@
 
 > Your files, shared on your terms.
 
+**Live site:** https://openvibe.download · **API docs:** https://openvibe.services · **For AI:** https://openvibe.download/llms.txt
+**Run it:** `npm ci && npm run dev` (Node 22 or newer) · **Tests:** `npm test`
+
 **Status:** alpha. One process serves **openvibe.download** (a private drive with share links and folder backup through
 sync keys), **openvibe.video** (uploads and browser recordings with AI captions, chapters and the AI cut, watch pages and
 playlists, and OpenVibe.Live's stream recordings and clips) and **openvibe.pics** (picture hosting with resize, convert
@@ -240,7 +243,7 @@ pages read Live's public JSON API server-side, signed out (Live already applies 
     private by default. The older `/api/v1/videos/recordings` chunk API remains available to its existing callers.
 - **Edit in Studio** (`server/video/studio.js`): the finished-recording watch page and each ready row on
   `/me/videos` link to `https://openvibe.studio/edit?media=<vup id>&from=video` (`MEDIAHUB_STUDIO_URL`), and the
-  record completion response carries the same `edit_url`. `MEDIAHUB_STUDIO_VIDEO_EDIT=off` hides those three
+  record completion response carries the same `edit_url`. `MEDIAHUB_STUDIO_VIDEO_EDIT=off` (the switch is **on** by default) hides those three
   actions while leaving the hand-off API below available.
   - Studio is another origin and has no Video cookie, so it calls these routes server-to-server with the person's
     own Network token as a Bearer: `GET /api/v1/video/studio/media/:id` (metadata and where it came from),
@@ -548,7 +551,7 @@ Reporting a vulnerability: [SECURITY.md](SECURITY.md).
 Part of the [OpenVibe network](https://openvibe.network). Built in the open by [OpenVibers](https://github.com/OpenVibers).
 
 <!-- versions:start -->
-- openvibe-contracts: v0.373.0
+- openvibe-contracts: v0.384.0
 - openvibe-sdk: v0.125.0
 - openvibe-shared: v4.179.0
 <!-- versions:end -->
