@@ -186,7 +186,8 @@ function hlsAttrs(item) {
     const file = fileOf(item);
     const hls = item.is_recording ? dvrPlaylist(item, file) : httpsUrl(item.hls_url);
     if (!hls || !file || new URL(hls).origin !== new URL(file).origin) return '';
-    return html` data-ovv-hls="${hls}" data-ovv-hls-lib="${asset('vendor/hls.light.min.js')}"`;
+    // data-ov-mini-hls: the small player (openvibe-shared mini.js) plays what this page plays, with the file as its fallback.
+    return html` data-ovv-hls="${hls}" data-ovv-hls-lib="${asset('vendor/hls.light.min.js')}" data-ov-mini-hls="${hls}"`;
 }
 
 /**
