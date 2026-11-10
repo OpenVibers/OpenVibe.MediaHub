@@ -39,6 +39,8 @@ function problem(res, err) {
 /** The JSON part API (mounted before the site's urlencoded parser: parts are raw bytes). */
 function createUploadApi({ ctx, config }) {
     const up = ctx.videoUploads;
+    const studioUrl = String((config.video && config.video.studioUrl) || 'https://openvibe.studio').replace(/\/+$/, '');
+    const studioEditUrl = (row) => `${studioUrl}/edit?media=${encodeURIComponent(row.id)}&from=video`;
     const r = express.Router();
     r.use((req, res, next) => { res.set('Cache-Control', cache.htmlHeaders({ private: true })); next(); });
     const who = (req) => (req.viewer && req.viewer.kind === 'user' && req.viewer.subject
@@ -124,7 +126,7 @@ function createUploadApi({ ctx, config }) {
         if (!row) return undefined;
         try {
             const out = await up.complete(row);
-            return res.status(202).json({ video: { id: out.id, status: out.status, url: out.watch_id ? `/watch?v=${out.watch_id}` : `/u/${out.id}` } });
+            return res.status(202).json({ video: { id: out.id, status: out.status, url: out.watch_id ? `/watch?v=${out.watch_id}` : `/u/${out.id}`, edit_url: studioEditUrl(out) } });
         } catch (err) { return problem(res, err); }
     });
 
@@ -171,6 +173,10 @@ function mountUploadPages(r, h) {
     // and the shared progress meter when the upload stopped part-way (Resume opens /upload, which reads IndexedDB).
     const uploadState = (row) => (row.state === 'hidden' ? 'hidden'
         : row.status === 'uploading' ? 'uploading' : row.status === 'processing' ? 'processing' : row.status === 'failed' ? 'failed' : 'ready');
+    /** Where "Edit in Studio" goes (the hand-off; see server/video/studio.js). */
+    const studioUrl = String((ctx.config.video && ctx.config.video.studioUrl) || 'https://openvibe.studio').replace(/\/+$/, '');
+    const studioEditUrl = (row) => `${studioUrl}/edit?media=${encodeURIComponent(row.id)}&from=video`;
+
     function myVideoRow(row) {
         const state = uploadState(row);
         const watch = row.watch_id ? `/watch?v=${row.watch_id}` : `/u/${row.id}`;
@@ -189,7 +195,7 @@ ${state === 'uploading' ? html`<div class="ovv-myprogress" data-ov-upload-progre
 ${state === 'processing' ? html`<p class="ovv-myprocess"><span class="ovv-pulse" aria-hidden="true"></span> Making it playable. You can close this page.</p>` : ''}
 <div class="ovv-myactions">
 ${state === 'uploading' ? html`<a class="ovv-btn ovv-btn--small ovv-btn--primary" href="/upload">Resume upload</a>` : ''}
-${state === 'ready' ? html`<a class="ovv-btn ovv-btn--small" href="${watch}">Watch</a> <a class="ovv-btn ovv-btn--small" href="${watch}#h-owner">Edit</a>` : ''}
+${state === 'ready' ? html`<a class="ovv-btn ovv-btn--small" href="${watch}">Watch</a> <a class="ovv-btn ovv-btn--small" href="${watch}#h-owner">Edit</a> <a class="ovv-btn ovv-btn--small" href="${studioEditUrl(row)}">Edit in Studio</a>` : ''}
 ${state === 'processing' || state === 'hidden' || state === 'failed' ? html`<a class="ovv-btn ovv-btn--small" href="${watch}">Open</a>` : ''}
 <button class="ovv-btn ovv-btn--small ovv-btn--danger" type="button" data-delete-video="${row.id}" data-delete-title="${row.title}">Delete</button>
 </div>
@@ -436,7 +442,7 @@ ${what}
 ${channel ? html`<a class="ovv-avatar" href="/@${channel}" aria-hidden="true" tabindex="-1">${channel.slice(0, 1).toUpperCase()}${/^[A-Za-z0-9_]{1,32}$/.test(channel) ? html`<img src="${ctx.config.networkUrl}/avatar/${channel}" alt="" loading="lazy">` : ''}</a>` : ''}
 <div class="ovv-byline-text">${channel ? html`<a class="ovv-channel-name" href="/@${channel}">@${channel}</a>` : ''}
 </div>
-<div class="ovv-byline-actions">${saveForm}${ready && vod && fileOf(vod) ? html`<a class="ovv-btn" href="https://openvibe.party/new?media=${encodeURIComponent(fileOf(vod))}&source_url=${encodeURIComponent(`${String(ctx.config.video.url).replace(/\/+$/, '')}${watchPath}`)}&title=${encodeURIComponent(String(row.title || 'Watch party'))}"><i class="fa-solid fa-users" aria-hidden="true"></i> Watch together</a>` : ''}${raw(shareButton({ cls: 'ovv-btn', url: `${ctx.config.video.url}${watchPath}`, title: row.title, text: about, image: thumb || '', timeFrom: ready && vod ? '.ovv-player' : null }))}${raw(askAgent({ text: `About the video “${row.title}” on OpenVibe.Video (${ctx.config.video.url}${watchPath}): ` }))}</div>
+<div class="ovv-byline-actions">${saveForm}${ready && vod && fileOf(vod) ? html`<a class="ovv-btn" href="https://openvibe.party/new?media=${encodeURIComponent(fileOf(vod))}&source_url=${encodeURIComponent(`${String(ctx.config.video.url).replace(/\/+$/, '')}${watchPath}`)}&title=${encodeURIComponent(String(row.title || 'Watch party'))}"><i class="fa-solid fa-users" aria-hidden="true"></i> Watch together</a>` : ''}${own && ready && row.state === 'active' ? html`<a class="ovk-btn ovk-btn--quiet" href="${studioUrl}/edit?media=${encodeURIComponent(row.id)}&from=video">Edit in Studio</a>` : ''}${raw(shareButton({ cls: 'ovv-btn', url: `${ctx.config.video.url}${watchPath}`, title: row.title, text: about, image: thumb || '', timeFrom: ready && vod ? '.ovv-player' : null }))}${raw(askAgent({ text: `About the video “${row.title}” on OpenVibe.Video (${ctx.config.video.url}${watchPath}): ` }))}</div>
 </div>
 ${row.description ? html`<section class="ovv-panel ovv-description"><p>${row.description}</p></section>` : ''}
 ${aiDone && ai.overview ? html`<section class="ovv-panel" aria-labelledby="h-ai"><h2 id="h-ai">About this video</h2><p>${ai.overview}</p><p class="ovv-fine">Written by AI from the video's sound and pictures (OpenVibe.AI, run on OpenVibe's own servers).</p>

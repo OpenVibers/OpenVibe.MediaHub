@@ -54,6 +54,8 @@ const BUDGETS = {
     'media-hub.share.create': { minute: 20, hour: 200 },
     'media-hub.playlist.create': { minute: 30, hour: 300 },
     'media-hub.playlist.write': { minute: 120, hour: 1_200 },
+    // Studio's "Publish on Video": each one copies a finished video into a new upload, so it is a slow, heavy write.
+    'media-hub.studio.publish': { minute: 6, hour: 30 },
     // OpenVibe.Pics (server/pics): a burst of pictures dropped at once, but not a script emptying a disk into it.
     'pics.image.upload': { minute: 30, hour: 300 },
     // Resize and convert (server/pics/variants.js): each new variant is decoded and encoded here.

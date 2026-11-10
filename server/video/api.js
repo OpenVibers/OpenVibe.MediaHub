@@ -45,6 +45,58 @@ function createVideoApiRoutes(ctx) {
         return (p && (p.kind === 'user' || p.kind === 'app') && p.requester) ? p.requester : null;
     };
 
+    // ── Studio's hand-off (server/video/studio.js) ─────────
+    // The person's own Network token, sent by openvibe.studio server-to-server. Not a session cookie:
+    // these routes exist for another origin, so a browser's cookie must never make them act here.
+    const studioProblem = (req, res, err) => problem(req, res, Number(err && err.status) || 502, (err && err.code) || 'studio.upstream_error', (err && (err.detail || err.message)) || 'The Studio hand-off failed.');
+    const person = (req, res) => {
+        if (req.principal && req.principal.kind === 'user') return req.principal;
+        studioProblem(req, res, { status: 401, code: 'studio.auth_required', detail: 'Sign in with OpenVibe to open this video in Studio.' });
+        return null;
+    };
+    const studio = (req, res) => {
+        if (!ctx.videoStudio) { studioProblem(req, res, { status: 503, code: 'studio.off', detail: 'The Studio hand-off is not available here.' }); return null; }
+        const p = person(req, res);
+        if (!p) return null;
+        if (p.viaSession) { studioProblem(req, res, { status: 403, code: 'studio.bearer_required', detail: 'Studio calls this route with the person\'s Network token.' }); return null; }
+        return p;
+    };
+
+    r.get('/studio/media/:id', limits.reads('media-hub.studio.read'), async (req, res) => {
+        const p = studio(req, res);
+        if (!p) return undefined;
+        const found = await ctx.videoStudio.resolve(String(req.params.id || ''), p);
+        if (!found) return studioProblem(req, res, ctx.videoStudio.notFound());
+        return res.json(ctx.videoStudio.wire(found.row, { canEdit: found.canEdit }));
+    });
+
+    r.get('/studio/media/:id/bytes', async (req, res) => {
+        const p = studio(req, res);
+        if (!p) return undefined;
+        const found = await ctx.videoStudio.resolve(String(req.params.id || ''), p);
+        if (!found) return studioProblem(req, res, ctx.videoStudio.notFound());
+        try {
+            const out = await ctx.videoStudio.bytes(found.row, req.get('range'));
+            res.status(out.status);
+            res.set('Cache-Control', 'private, no-store');
+            for (const [k, v] of Object.entries(out.headers)) res.set(k, v);
+            ctx.videoStudio.sendBody(out.body).pipe(res);
+        } catch (err) { return studioProblem(req, res, err); }
+        return undefined;
+    });
+
+    r.post('/studio/publish', limits.budget('media-hub.studio.publish'), async (req, res) => {
+        const p = studio(req, res);
+        if (!p) return undefined;
+        const found = await ctx.videoStudio.resolve(String((req.body || {}).media || ''), p);
+        if (!found || found.row.owner !== p.requester) return studioProblem(req, res, ctx.videoStudio.notFound());
+        try {
+            const b = req.body || {};
+            const out = await ctx.videoStudio.publish(found.row, p, { title: b.title, visibility: b.visibility });
+            return res.status(202).json(out);
+        } catch (err) { return studioProblem(req, res, err); }
+    });
+
     function refused(code) {
         if (code === 'playlist.not_found' || code === 'playlist.item_not_found') return 404;
         if (code === 'playlist.item_duplicate') return 409;

@@ -238,6 +238,17 @@ pages read Live's public JSON API server-side, signed out (Live already applies 
     reviews, trims and chooses Use this. Nothing uploads until that choice.
   - The returned `File` goes through the ordinary multipart upload form, with progress and retries. A recording is
     private by default. The older `/api/v1/videos/recordings` chunk API remains available to its existing callers.
+- **Edit in Studio** (`server/video/studio.js`): the finished-recording watch page and each ready row on
+  `/me/videos` link to `https://openvibe.studio/edit?media=<vup id>&from=video` (`MEDIAHUB_STUDIO_URL`).
+  - Studio is another origin and has no Video cookie, so it calls these routes server-to-server with the person's
+    own Network token as a Bearer: `GET /api/v1/video/studio/media/:id` (metadata and where it came from),
+    `GET …/media/:id/bytes` (Range reads for the editor preview) and `POST …/studio/publish`.
+  - `:id` may be the upload id (`vup_…`), the `/watch?v=` id or Media's VOD id. The read rule is the watch page's
+    (owner, staff, or a ready public/unlisted item); a private item of someone else answers 404 exactly like a
+    missing id. Only the owner may publish, and a cookie from this site cannot call these routes.
+  - Publishing makes a **new private copy** through the upload path (title and visibility from Studio), so Media
+    probes it and gives it its own AI captions and chapters; the original is unchanged and the copy names it in
+    `video_uploads.edited_from`. `MEDIAHUB_STUDIO_URL` points the links at a drill or another Studio.
 - **AI edit** (`server/video/ai-edit.js`, migration `0009_video_ai.sql`):
   - Every few minutes, OpenVibe.AI's `media.analyze` runs on each finished upload or recording. It reads the video
     through Media's signed URL (private ones too), runs locally (whisper.cpp, the local model) and never uses a paid
