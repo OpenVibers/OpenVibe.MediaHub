@@ -17,6 +17,7 @@ function areq(base, path, { method = 'GET', bearer, json, range, cookie } = {}) 
     return new Promise((resolve, reject) => {
         const u = new URL(base + path);
         const headers = { Host: new URL(VIDEO).host };
+        if (method !== 'GET') headers['sec-fetch-site'] = 'same-origin';
         if (bearer) headers.authorization = `Bearer ${bearer}`;
         if (cookie) headers.cookie = cookie;
         if (range) headers.range = range;
@@ -37,7 +38,7 @@ function areq(base, path, { method = 'GET', bearer, json, range, cookie } = {}) 
 }
 
 (async () => {
-    const t = await boot({ env: { MEDIAHUB_VIDEO_URL: VIDEO, MEDIAHUB_LIVE_URL: 'http://127.0.0.1:1', MEDIAHUB_LIVE_PUBLIC_URL: 'https://openvibe.live', MEDIAHUB_CHAT_URL: 'http://127.0.0.1:1', MEDIAHUB_STUDIO_URL: 'https://openvibe.studio' } });
+    const t = await boot({ env: { MEDIAHUB_VIDEO_URL: VIDEO, MEDIAHUB_LIVE_URL: 'http://127.0.0.1:1', MEDIAHUB_LIVE_PUBLIC_URL: 'https://openvibe.live', MEDIAHUB_CHAT_URL: 'http://127.0.0.1:1', MEDIAHUB_STUDIO_URL: 'https://openvibe.studio', MEDIAHUB_STUDIO_VIDEO_EDIT: '1' } });
     const kim = t.network.addUser('kim');
     const sam = t.network.addUser('sam');
     const kimToken = t.network.userToken(kim);
@@ -123,11 +124,33 @@ function areq(base, path, { method = 'GET', bearer, json, range, cookie } = {}) 
         const watch = await areq(t.base, `/watch?v=${priv.watch_id}`, { cookie: t.signIn(kim) });
         assert.strictEqual(watch.status, 200);
         assert.ok(watch.text.includes(`https://openvibe.studio/edit?media=${priv.id}&amp;from=video`) || watch.text.includes(`https://openvibe.studio/edit?media=${priv.id}&from=video`), 'the finished recording links to Studio');
+        const complete = await areq(t.base, `/api/v1/videos/${priv.id}/complete`, { method: 'POST', cookie: t.signIn(kim) });
+        assert.strictEqual(complete.status, 202, complete.text);
+        assert.strictEqual(complete.json().video.edit_url, `https://openvibe.studio/edit?media=${priv.id}&from=video`, 'the record completion names Studio when the editor is on');
         const other = await areq(t.base, `/watch?v=${pub.watch_id}`, { cookie: t.signIn(sam) });
         assert.strictEqual(other.status, 200);
         assert.ok(!other.text.includes('Edit in Studio'), 'only the owner gets the action');
     });
 
     await t.close();
+
+    // The default: the hand-off API stays, but no page offers an Edit action until the editor is real.
+    const off = await boot({ env: { MEDIAHUB_VIDEO_URL: VIDEO, MEDIAHUB_LIVE_URL: 'http://127.0.0.1:1', MEDIAHUB_LIVE_PUBLIC_URL: 'https://openvibe.live', MEDIAHUB_CHAT_URL: 'http://127.0.0.1:1', MEDIAHUB_STUDIO_URL: 'https://openvibe.studio' } });
+    try {
+        const kim2 = off.network.addUser('kim');
+        const row = await off.ctx.videoUploads.startRecording({ requester: `user:${kim2.subject}`, username: 'kim' }, { title: 'Default off', contentType: 'video/webm', visibility: 'public' });
+        await off.ctx.s.db.query("UPDATE video_uploads SET status = 'ready', duration_seconds = 2 WHERE id = $1", [row.id]);
+        const page = await areq(off.base, `/watch?v=${row.watch_id}`, { cookie: off.signIn(kim2) });
+        assert.strictEqual(page.status, 200);
+        assert.ok(!page.text.includes('Edit in Studio'), 'no Edit action by default');
+        const mine = await areq(off.base, '/me/videos', { cookie: off.signIn(kim2) });
+        assert.ok(!mine.text.includes('Edit in Studio'), 'no link on Your videos by default');
+        const complete = await areq(off.base, `/api/v1/videos/${row.id}/complete`, { method: 'POST', cookie: off.signIn(kim2) });
+        assert.strictEqual(complete.status, 202);
+        assert.ok(!('edit_url' in complete.json().video), 'the record completion omits the link by default');
+        const api = await areq(off.base, `/api/v1/video/studio/media/${row.id}`, { bearer: off.network.userToken(kim2) });
+        assert.strictEqual(api.status, 200, 'the hand-off API stays available');
+    } finally { await off.close(); }
+
     done();
 })().catch((err) => { console.error(err); process.exit(1); });

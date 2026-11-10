@@ -63,8 +63,11 @@ function load(env = process.env) {
             liveUrl: trim(env.MEDIAHUB_LIVE_URL || 'https://openvibe.live'),
             livePublicUrl: trim(env.MEDIAHUB_LIVE_PUBLIC_URL || 'https://openvibe.live'),
             chatUrl: trim(env.MEDIAHUB_CHAT_URL || 'https://openvibe.live'),
-            // Where "Edit in Studio" goes (the hand-off route; see server/video/studio.js).
+            // Where "Edit in Studio" goes (the hand-off route; see server/video/studio.js). The link is
+            // shown only when MEDIAHUB_STUDIO_VIDEO_EDIT=1: until Studio has real video tools, an
+            // "Edit" action that only previews a video is a promise the page does not keep.
             studioUrl: trim(env.MEDIAHUB_STUDIO_URL || 'https://openvibe.studio'),
+            studioVideoEdit: env.MEDIAHUB_STUDIO_VIDEO_EDIT === '1',
             // Playlists (step C): the per-person caps the pages and the API enforce together.
             playlistsMax: size(env.MEDIAHUB_VIDEO_PLAYLISTS_MAX, 100),
             playlistItemsMax: size(env.MEDIAHUB_VIDEO_PLAYLIST_ITEMS_MAX, 500),

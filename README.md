@@ -241,8 +241,11 @@ pages read Live's public JSON API server-side, signed out (Live already applies 
     reviews, trims and chooses Use this. Nothing uploads until that choice.
   - The returned `File` goes through the ordinary multipart upload form, with progress and retries. A recording is
     private by default. The older `/api/v1/videos/recordings` chunk API remains available to its existing callers.
-- **Edit in Studio** (`server/video/studio.js`): the finished-recording watch page and each ready row on
-  `/me/videos` link to `https://openvibe.studio/edit?media=<vup id>&from=video` (`MEDIAHUB_STUDIO_URL`).
+- **Edit in Studio** (`server/video/studio.js`): with `MEDIAHUB_STUDIO_VIDEO_EDIT=1` (**off** by default), the
+  finished-recording watch page and each ready row on `/me/videos` link to
+  `https://openvibe.studio/edit?media=<vup id>&from=video` (`MEDIAHUB_STUDIO_URL`); the record completion response
+  carries the same `edit_url`. With the flag off, no page or response offers the action, but the hand-off API below
+  stays available.
   - Studio is another origin and has no Video cookie, so it calls these routes server-to-server with the person's
     own Network token as a Bearer: `GET /api/v1/video/studio/media/:id` (metadata and where it came from),
     `GET …/media/:id/bytes` (Range reads for the editor preview) and `POST …/studio/publish`.
