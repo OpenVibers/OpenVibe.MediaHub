@@ -78,6 +78,9 @@ function vreq(base, p, { method = 'GET', bearer, json } = {}) {
             const outside = await vreq(t.base, '/api/v1/video/studio/publish', { method: 'POST', bearer: token, json: { media: 'vup_01J0000000000000000000000A', start: 2, end: 99 } });
             assert.strictEqual(outside.status, 422, outside.text);
             assert.match(outside.json().detail, /inside the video/i);
+            const cover = await vreq(t.base, '/api/v1/video/studio/publish', { method: 'POST', bearer: token, json: { media: 'vup_01J0000000000000000000000A', start: 1, end: 4, cover: 99 } });
+            assert.strictEqual(cover.status, 422, cover.text);
+            assert.match(cover.json().detail, /cover frame/i);
             assert.strictEqual(Number(await t.ctx.s.db.value("SELECT count(*) FROM video_cuts WHERE upload_id = 'vup_01J0000000000000000000000A'")), 0);
         });
 

@@ -206,7 +206,7 @@ ${state === 'processing' || state === 'hidden' || state === 'failed' ? html`<a c
     }
 
     const CUT_STATUS = { queued: 'Waiting to start', measuring: 'Finding the pauses', rendering: 'Making the copy' };
-    const CUT_LABEL = { pauses: 'Pauses cut', tight: 'Tight cut', highlights: 'Highlights reel' };
+    const CUT_LABEL = { pauses: 'Pauses cut', tight: 'Tight cut', highlights: 'Highlights reel', trim: 'Trimmed' };
     function cutLine(c) {
         const what = html`<b>${CUT_LABEL[c.mode] || c.mode}</b>`;
         if (c.status === 'done') {
