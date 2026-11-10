@@ -103,7 +103,9 @@ ${render(o.body)}
         navbar: {
             service: 'media-hub',
             apiBase: NETWORK_URL,
-            links: NAV_LINKS.filter((l) => !l.noscriptOnly).map(({ noscriptOnly, ...l }) => ({ ...l, active: l.href === '/' ? o.path === '/' : String(o.path || '').startsWith(l.href) })),
+            // openvibe-shared 4.184.0 puts these links in the first HTML (frame.serverNav) from this list; a
+            // noscript-only link is now a hidden one, so the no-JavaScript bar keeps it and the scripted bar does not.
+            links: NAV_LINKS.map(({ noscriptOnly, ...l }) => ({ ...l, ...(noscriptOnly ? { hidden: true } : {}), active: l.href === '/' ? o.path === '/' : String(o.path || '').startsWith(l.href) })),
             appBar: true,   // phones: the places with icons as the bottom tab bar (Shared 4.20)
             search: { page: '/search', label: 'OpenVibe.Video' },
             history: { type: 'page', title },
