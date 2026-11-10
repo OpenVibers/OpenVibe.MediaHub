@@ -2,6 +2,9 @@
 
 > Your files, shared on your terms.
 
+**Live site:** https://openvibe.download · **API docs:** https://openvibe.services · **For AI:** https://openvibe.download/llms.txt
+**Run it:** `npm ci && npm run dev` (Node 22 or newer) · **Tests:** `npm test`
+
 **Status:** alpha. One process serves **openvibe.download** (a private drive with share links and folder backup through
 sync keys), **openvibe.video** (uploads and browser recordings with AI captions, chapters and the AI cut, watch pages and
 playlists, and OpenVibe.Live's stream recordings and clips) and **openvibe.pics** (picture hosting with resize, convert
