@@ -1027,6 +1027,7 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
     /**
      * More from the channel, beside the player (11-09: the watch page's right side stood empty on a computer): its other
      * public recordings and clips, newest first, never the one playing. Live not answering leaves the section out.
+     * Its class is .ovv-also: .ovv-more is the home page's link list, whose boxes went round every thumbnail here.
      */
     async function moreFromChannel(username, name, kind, id) {
         if (!username) return '';
@@ -1039,7 +1040,7 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
         // On a recording, its own clips are in "Clips from this stream" already: only the channel's other clips here.
         const clipsOf = (Array.isArray(c && c.clips) ? c.clips : []).filter(pub).filter((x) => !(kind === 'clip' && Number(x.id) === Number(id)) && !(kind === 'vod' && Number(x.vod_id) === Number(id))).slice(0, 4);
         if (!vods.length && !clipsOf.length) return '';
-        return html`<section class="ovv-panel ovv-more" aria-labelledby="h-more"><h2 id="h-more">More from ${name || username}</h2><div class="ovv-grid ovv-grid--side">${vods.map(vodCard)}${clipsOf.map(clipCard)}</div></section>`;
+        return html`<section class="ovv-panel ovv-also" aria-labelledby="h-more"><header class="ovv-panel-head"><h2 id="h-more">More from ${name || username}</h2><a class="ovv-panel-link" href="/@${username}">All videos</a></header><div class="ovv-grid ovv-grid--side">${vods.map(vodCard)}${clipsOf.map(clipCard)}</div></section>`;
     }
 
     async function upNext(req, kind, id) {
