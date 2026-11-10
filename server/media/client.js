@@ -24,6 +24,7 @@
  *   vodChunk(vodId, buffer, contentType)                        POST  …/vods/:id/chunks   (appended in order)
  *   vodComplete(vodId)                                          POST  …/vods/:id/complete (probe, thumbnail; minutes for a big file)
  *   vodGet(vodId) / vodUpdate(vodId, { title, visibility }) / vodDelete(vodId)
+ *   vodThumbnail(vodId, jpegBytes)                             POST …/thumbnails/vod/:id (custom cover)
  *
  * Two details worth knowing. Media answers a private object's download with a signed URL on its *public* origin;
  * this client rewrites that URL onto the configured Media host before fetching it, so the bytes are read from the
@@ -90,6 +91,7 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
 
     const vods = () => `${media.url}/api/v1/${encodeURIComponent(media.app)}/vods`;
     const watch = () => `${media.url}/api/v1/${encodeURIComponent(media.app)}/watch`;
+    const thumbnails = () => `${media.url}/api/v1/${encodeURIComponent(media.app)}/thumbnails`;
     const VOD_EXT = { 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/x-matroska': 'mkv' };
 
     return {
@@ -123,6 +125,12 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
         vodSignedUrl: (vodId, ttlS = 3600) => call(`/${Number(vodId)}/signed-url?ttl=${Number(ttlS)}`, { root: vods() }),
         vodUpdate: (vodId, patch) => call(`/${Number(vodId)}`, { root: vods(), method: 'PUT', json: patch }),
         vodDelete: (vodId) => call(`/${Number(vodId)}`, { root: vods(), method: 'DELETE' }),
+        /** A custom JPEG cover for a VOD, through Media's own thumbnail route (the app credential, owner checked here). */
+        vodThumbnail(vodId, jpeg) {
+            const form = new FormData();
+            form.append('thumbnail', new Blob([jpeg], { type: 'image/jpeg' }), 'cover.jpg');
+            return call(`/vod/${Number(vodId)}`, { root: thumbnails(), method: 'POST', body: form, timeoutMs: 60_000 });
+        },
 
         /** Start an object. Media gives it back `uploading` until its bytes arrive and it is completed. */
         async init({ size, contentType, name, ownerSubject, multipart = false, partSize = null, visibility = 'private', ownerless = false }) {

@@ -49,6 +49,7 @@ function load(env = process.env) {
         // host-internal address (127.0.0.1:4100 in production), never the public origin.
         media: {
             url: trim(env.MEDIAHUB_MEDIA_URL || 'http://127.0.0.1:4100'),
+            publicUrl: trim(env.MEDIAHUB_MEDIA_PUBLIC_URL || 'https://openvibe.media'),
             app: env.MEDIAHUB_MEDIA_APP || 'media-hub',
             timeoutMs: int(env.MEDIAHUB_MEDIA_TIMEOUT_MS, 30_000),
         },
@@ -67,7 +68,7 @@ function load(env = process.env) {
             // shown only when MEDIAHUB_STUDIO_VIDEO_EDIT=1: until Studio has real video tools, an
             // "Edit" action that only previews a video is a promise the page does not keep.
             studioUrl: trim(env.MEDIAHUB_STUDIO_URL || 'https://openvibe.studio'),
-            studioVideoEdit: env.MEDIAHUB_STUDIO_VIDEO_EDIT === '1',
+            studioVideoEdit: env.MEDIAHUB_STUDIO_VIDEO_EDIT !== 'off',
             // Playlists (step C): the per-person caps the pages and the API enforce together.
             playlistsMax: size(env.MEDIAHUB_VIDEO_PLAYLISTS_MAX, 100),
             playlistItemsMax: size(env.MEDIAHUB_VIDEO_PLAYLIST_ITEMS_MAX, 500),

@@ -52,7 +52,7 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
 
 (async () => {
     const live = await startLive();
-    const t = await boot({ env: { MEDIAHUB_VIDEO_URL: 'https://openvibe.video', MEDIAHUB_LIVE_URL: live.url, MEDIAHUB_LIVE_PUBLIC_URL: 'https://openvibe.live', MEDIAHUB_CHAT_URL: live.url, VIDEO_UPLOADS_PER_DAY: '4' } });
+    const t = await boot({ env: { MEDIAHUB_VIDEO_URL: 'https://openvibe.video', MEDIAHUB_LIVE_URL: live.url, MEDIAHUB_LIVE_PUBLIC_URL: 'https://openvibe.live', MEDIAHUB_CHAT_URL: live.url, VIDEO_UPLOADS_PER_DAY: '4', MEDIAHUB_STUDIO_VIDEO_EDIT: 'off' } });
     const kim = t.network.addUser('kim');
     const sam = t.network.addUser('sam');
     const kimCookie = t.signIn(kim);

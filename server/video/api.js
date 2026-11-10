@@ -92,8 +92,18 @@ function createVideoApiRoutes(ctx) {
         if (!found || found.row.owner !== p.requester) return studioProblem(req, res, ctx.videoStudio.notFound());
         try {
             const b = req.body || {};
-            const out = await ctx.videoStudio.publish(found.row, p, { title: b.title, visibility: b.visibility });
+            const out = await ctx.videoStudio.publish(found.row, p, {
+                start: b.start, end: b.end, cover: b.cover, title: b.title, visibility: b.visibility,
+            });
             return res.status(202).json(out);
+        } catch (err) { return studioProblem(req, res, err); }
+    });
+
+    r.get('/studio/cuts/:id', limits.reads('media-hub.studio.read'), async (req, res) => {
+        const p = studio(req, res);
+        if (!p) return undefined;
+        try {
+            return res.json(await ctx.videoStudio.cutStatus(String(req.params.id || ''), p));
         } catch (err) { return studioProblem(req, res, err); }
     });
 

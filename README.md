@@ -241,20 +241,26 @@ pages read Live's public JSON API server-side, signed out (Live already applies 
     reviews, trims and chooses Use this. Nothing uploads until that choice.
   - The returned `File` goes through the ordinary multipart upload form, with progress and retries. A recording is
     private by default. The older `/api/v1/videos/recordings` chunk API remains available to its existing callers.
-- **Edit in Studio** (`server/video/studio.js`): with `MEDIAHUB_STUDIO_VIDEO_EDIT=1` (**off** by default), the
-  finished-recording watch page and each ready row on `/me/videos` link to
-  `https://openvibe.studio/edit?media=<vup id>&from=video` (`MEDIAHUB_STUDIO_URL`); the record completion response
-  carries the same `edit_url`. With the flag off, no page or response offers the action, but the hand-off API below
-  stays available.
+- **Edit in Studio** (`server/video/studio.js`): the finished-recording watch page and each ready row on
+  `/me/videos` link to `https://openvibe.studio/edit?media=<vup id>&from=video` (`MEDIAHUB_STUDIO_URL`), and the
+  record completion response carries the same `edit_url`. `MEDIAHUB_STUDIO_VIDEO_EDIT=off` (the switch is **on** by default) hides those three
+  actions while leaving the hand-off API below available.
   - Studio is another origin and has no Video cookie, so it calls these routes server-to-server with the person's
     own Network token as a Bearer: `GET /api/v1/video/studio/media/:id` (metadata and where it came from),
-    `GET …/media/:id/bytes` (Range reads for the editor preview) and `POST …/studio/publish`.
+    `GET …/media/:id/bytes` (Range reads for the editor preview), `POST …/studio/publish` and
+    `GET …/studio/cuts/:id` (how the trim is going).
   - `:id` may be the upload id (`vup_…`), the `/watch?v=` id or Media's VOD id. The read rule is the watch page's
     (owner, staff, or a ready public/unlisted item); a private item of someone else answers 404 exactly like a
     missing id. Only the owner may publish, and a cookie from this site cannot call these routes.
-  - Publishing makes a **new private copy** through the upload path (title and visibility from Studio), so Media
-    probes it and gives it its own AI captions and chapters; the original is unchanged and the copy names it in
-    `video_uploads.edited_from`. `MEDIAHUB_STUDIO_URL` points the links at a drill or another Studio.
+  - Publishing sends a `start`/`end` range, an optional `cover` second, title and visibility. `videoCuts.request`
+    queues a **trim** through the existing cuts worker (`server/video/cut.js`, migration `0029_video_trim.sql`):
+    ffmpeg reads the original through Media's signed URL and re-encodes exactly that range as a new upload of the
+    owner's. The copy names its original in `video_uploads.edited_from`; the original is unchanged. After Media
+    finishes the copy, MediaHub takes the chosen frame with ffmpeg and stores it through Media's own custom-thumbnail
+    route, then records the cover URL on the copy. A range under one second or outside the video is refused with a
+    plain sentence.
+  - The worker is one cut at a time; the Studio page polls the cut until it is done. A copy that fails loses its
+    partial upload and reports the plain reason.
 - **AI edit** (`server/video/ai-edit.js`, migration `0009_video_ai.sql`):
   - Every few minutes, OpenVibe.AI's `media.analyze` runs on each finished upload or recording. It reads the video
     through Media's signed URL (private ones too), runs locally (whisper.cpp, the local model) and never uses a paid
