@@ -62,7 +62,7 @@ function multipart(fields, file) {
         const lee = t.network.addUser('lee');
         const ana = t.network.addUser('ana');
         const boss = t.network.addUser('boss', { role: 'admin' });
-        const up = (as, buf, { type = 'image/jpeg', title = '' } = {}) => t.get('/api/v1/images', { as, method: 'POST', body: buf, headers: { ...SAME, 'content-type': type, ...(title ? { 'x-title': encodeURIComponent(title) } : {}) } });
+        const up = (as, buf, { type = 'image/jpeg', title = '', keepBoth = false } = {}) => t.get('/api/v1/images', { as, method: 'POST', body: buf, headers: { ...SAME, 'content-type': type, ...(title ? { 'x-title': encodeURIComponent(title) } : {}), ...(keepBoth ? { 'x-keep-both': '1' } : {}) } });
         let slug;
         let direct;
 
@@ -194,13 +194,20 @@ function multipart(fields, file) {
             assert.strictEqual(again.status, 200, again.text);
             assert.deepStrictEqual([again.json().slug, again.json().duplicate, again.json().title], [slug, true, 'The coast'], 'the picture kim already has, unchanged');
             assert.strictEqual(t.media.objects.size, objects, 'nothing stored twice');
+            const hash = require('crypto').createHash('sha256').update(jpegWithSecrets).digest('hex');
+            const lookup = await t.get(`/api/v1/images/duplicate?sha256=${hash}`, { as: kim, headers: PICS });
+            assert.deepStrictEqual([lookup.status, lookup.json().duplicate, lookup.json().image.slug], [200, true, slug]);
+            const strangerLookup = await t.get(`/api/v1/images/duplicate?sha256=${hash}`, { as: lee, headers: PICS });
+            assert.deepStrictEqual([strangerLookup.status, strangerLookup.json().duplicate], [200, false], 'another person cannot learn of the upload');
+            const keepBoth = await up(kim, jpegWithSecrets, { keepBoth: true, title: 'A second copy' });
+            assert.strictEqual(keepBoth.status, 201, 'the owner can explicitly keep a second copy');
             const smaller = await sharp(jpegWithSecrets).rotate().resize(600).jpeg({ quality: 70 }).toBuffer();
             const near = await up(kim, smaller, { title: 'Smaller' });
             assert.strictEqual(near.status, 201, near.text);
-            assert.strictEqual(near.json().similar_to, `https://openvibe.pics/i/${slug}`, 'named after the one it looks like');
-            const page = await t.get(`/i/${near.json().slug}?new=1&like=${slug}`, { as: kim, headers: PICS });
-            assert.ok(page.text.includes(`It looks like a picture you uploaded before: <a href="/i/${slug}">`), 'the page says so');
-            const stranger = await t.get(`/i/${near.json().slug}?new=1&like=${slug}`, { headers: PICS });
+            assert.strictEqual(near.json().similar_to, `https://openvibe.pics/i/${keepBoth.json().slug}`, 'named after the most recent copy it looks like');
+            const page = await t.get(`/i/${near.json().slug}?new=1&like=${keepBoth.json().slug}`, { as: kim, headers: PICS });
+            assert.ok(page.text.includes(`It looks like a picture you uploaded before: <a href="/i/${keepBoth.json().slug}">`), 'the page says so');
+            const stranger = await t.get(`/i/${near.json().slug}?new=1&like=${keepBoth.json().slug}`, { headers: PICS });
             assert.ok(!stranger.text.includes('It looks like a picture you uploaded before'), 'only to its owner');
             const theirs = await up(lee, jpegWithSecrets, { title: 'Lee too' });
             assert.strictEqual(theirs.status, 201, 'another person\'s copy is theirs');

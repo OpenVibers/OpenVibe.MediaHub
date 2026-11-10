@@ -79,32 +79,62 @@
         r.main.appendChild(el('div', { className: 'ovp-result-error', text: text }));
     }
 
-    function send(file, r) {
+    function duplicateChoice(file, r, duplicate) {
+        var object = duplicate.object || duplicate;
+        r.main.appendChild(el('p', { className: 'ovp-result-note', text: 'You already uploaded this on ' + (object.date || 'an earlier date') + '.' }));
+        var actions = el('div', { className: 'ovp-result-links' });
+        actions.appendChild(el('a', { className: 'ovp-btn', href: object.address || object.url, text: 'Open it' }));
+        var use = el('button', { className: 'ovp-btn', type: 'button', text: 'Use that one' });
+        use.addEventListener('click', function () {
+            actions.remove(); r.main.querySelectorAll('.ovp-result-note').forEach(function (n) { n.remove(); });
+            if (duplicate.image && duplicate.image.links) showUploaded(r, duplicate.image); else location.href = object.address || object.url;
+        });
+        actions.appendChild(use);
+        var again = el('button', { className: 'ovp-btn', type: 'button', text: 'Upload again' });
+        again.addEventListener('click', function () { actions.remove(); r.main.querySelectorAll('.ovp-result-note').forEach(function (n) { n.remove(); }); queue.push({ file: file, r: r, keepBoth: true }); pump(); });
+        actions.appendChild(again); r.main.appendChild(actions);
+    }
+
+    async function checkDuplicate(file, r) {
+        if (!window.OVUpload || !window.OVUpload.sha256 || !window.crypto || !window.crypto.subtle) return null;
+        var digest = await window.OVUpload.sha256(file, max || undefined);
+        if (!digest) return null;
+        var response = await fetch('/api/v1/images/duplicate?sha256=' + encodeURIComponent(digest), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        if (!response.ok) return null; // Anonymous uploads have no private owner lookup.
+        var body = await response.json();
+        return body && body.duplicate ? body : null;
+    }
+
+    function showUploaded(r, body) {
+        var p = r.main.querySelector('.ovp-progress');
+        if (p) p.remove();
+        var name = r.main.querySelector('.ovp-result-name');
+        name.textContent = '';
+        name.appendChild(el('a', { href: body.links.page, text: body.title || 'Your picture' }));
+        var links = body.links;
+        var box = el('div', { className: 'ovp-result-links' });
+        box.appendChild(copyRow('Direct link (the picture itself)', links.direct || ''));
+        if (links.markdown) box.appendChild(copyRow('Markdown', links.markdown));
+        if (links.bbcode) box.appendChild(copyRow('BBCode (forums)', links.bbcode));
+        if (links.html) box.appendChild(copyRow('HTML', links.html));
+        r.main.appendChild(box);
+        r.main.appendChild(el('p', { className: 'ovp-result-note', text: 'Anyone with the link can open it — no account needed.' }));
+        if (body.delete_url) r.main.appendChild(el('div', { className: 'ovp-result-error', text: 'Keep this delete link, shown only now: ' + body.delete_url }));
+    }
+
+    function send(file, r, keepBoth) {
         return new Promise(function (resolve) {
             var xhr = new XMLHttpRequest();
             xhr.open('POST', '/api/v1/images');
             xhr.setRequestHeader('Content-Type', file.type);
             xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name || 'pasted'));
+            if (keepBoth) xhr.setRequestHeader('X-Keep-Both', '1');
             xhr.upload.onprogress = function (e) { if (e.lengthComputable) r.bar.style.width = Math.round(e.loaded / e.total * 100) + '%'; };
             xhr.onload = function () {
                 var body = null;
                 try { body = JSON.parse(xhr.responseText); } catch (e) { body = null; }
-                if (xhr.status === 201 && body && body.links) {
-                    var p = r.main.querySelector('.ovp-progress');
-                    if (p) p.remove();
-                    var name = r.main.querySelector('.ovp-result-name');
-                    name.textContent = '';
-                    name.appendChild(el('a', { href: body.links.page, text: body.title || 'Your picture' }));
-                    // The links of the new picture, side by side: the file itself, and the snippets to embed it.
-                    var links = body.links;
-                    var box = el('div', { className: 'ovp-result-links' });
-                    box.appendChild(copyRow('Direct link (the picture itself)', links.direct || ''));
-                    if (links.markdown) box.appendChild(copyRow('Markdown', links.markdown));
-                    if (links.bbcode) box.appendChild(copyRow('BBCode (forums)', links.bbcode));
-                    if (links.html) box.appendChild(copyRow('HTML', links.html));
-                    r.main.appendChild(box);
-                    r.main.appendChild(el('p', { className: 'ovp-result-note', text: 'Anyone with the link can open it — no account needed.' }));
-                    if (body.delete_url) r.main.appendChild(el('div', { className: 'ovp-result-error', text: 'Keep this delete link, shown only now: ' + body.delete_url }));
+                if ((xhr.status === 201 || xhr.status === 200) && body && body.links) {
+                    showUploaded(r, body);
                 } else if (xhr.status === 401) {
                     fail(r, 'Sign in with OpenVibe to upload.');
                 } else {
@@ -121,7 +151,11 @@
         if (busy || !queue.length) return;
         busy = true;
         var job = queue.shift();
-        send(job.file, job.r).then(function () { busy = false; pump(); });
+        if (job.keepBoth) { send(job.file, job.r, true).then(function () { busy = false; pump(); }); return; }
+        checkDuplicate(job.file, job.r).then(function (duplicate) {
+            if (duplicate) { duplicateChoice(job.file, job.r, duplicate); return; }
+            return send(job.file, job.r, false);
+        }).catch(function () { return send(job.file, job.r, false); }).then(function () { busy = false; pump(); });
     }
 
     function add(files) {

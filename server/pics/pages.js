@@ -271,7 +271,7 @@ function createPicsRoutes(ctx) {
                 seo.jsonLd.faq(faq),
             ],
             styles: ['kit.css', 'showcase.css'],
-            scripts: ['js/pics.js', 'js/pics-gallery.js'],
+            scripts: ['js/pics.js', 'js/pics-gallery.js', 'ov-upload.js'],
             body: html`${raw(showcase.hero({
                 title: 'Share pictures.', accent: 'Discover something new.',
                 lede: 'Drop a picture, get a link to share or embed anywhere: on a forum, in a chat, on your site. Browse what people chose to publish, or keep yours unlisted. Location and camera details are removed from every file.',

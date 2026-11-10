@@ -88,7 +88,7 @@ function createPics({ s, media, config, log = console, events = null, sharing = 
      * Upload one picture. who: { requester } (a person) or { anonymous: true, ip }. file: { buffer, name }.
      * → { ok, image, deleteKey? } or { ok: false, status, code, detail }.
      */
-    async function upload(who, file, { title = '', description = '' } = {}) {
+    async function upload(who, file, { title = '', description = '', keepBoth = false } = {}) {
         const anonymous = !who || !who.requester;
         if (anonymous && !cfg.anonymous) return { ok: false, status: 401, code: 'pics.sign_in_required', detail: 'Sign in with OpenVibe to upload pictures.' };
         const buf = file && file.buffer;
@@ -112,9 +112,10 @@ function createPics({ s, media, config, log = console, events = null, sharing = 
         }
         // The same picture again, signed in (its exact bytes, or the copy served): the one the person already has, not a
         // second copy of it (VIS-6). A near-duplicate is stored as asked and named after (`similar`), since an edit may be meant.
+        const same = anonymous ? null : await store.ownedByHash(s, who.requester, prepared.sourceSha256)
+            || await store.ownedByHash(s, who.requester, prepared.sha256);
+        if (same && !keepBoth) return { ok: true, image: await store.imageById(s, same.id), duplicate: true };
         const own = anonymous ? [] : await store.ownHashes(s, who.requester);
-        const same = own.find((r) => r.source_sha256 === prepared.sourceSha256 || r.sha256 === prepared.sha256);
-        if (same) return { ok: true, image: await store.imageById(s, same.id), duplicate: true };
         const similar = distinctive(prepared.dhash) ? own.find((r) => images.distance(r.dhash, prepared.dhash) <= OWN_SIMILAR_DISTANCE) : null;
         await store.countUpload(s, uploader, day());
 
