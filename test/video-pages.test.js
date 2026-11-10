@@ -348,7 +348,7 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('playsinline'));
         assert.ok(r.text.includes('data-ovv-video'));
         // The network's player (openvibe-shared player.js/css): marked, and both files load on the page.
-        assert.ok(/<video class="ovv-player" data-ov-player controls /.test(r.text), 'the video takes the network player');
+        assert.ok(/<video class="ovv-player" data-ov-player data-ov-mini data-ov-mini-title="[^"]+" data-ov-mini-by="[^"]*" data-ov-mini-page="[^"]+" controls /.test(r.text), 'the video takes the network player, and may come along in the small player');
         // The streamer's face for an audio-only recording (openvibe-shared 4.90 player.js, plan R4): Network's avatar URL.
         assert.match(r.text, /<video class="ovv-player"[^>]* data-ov-avatar="[^"]+\/avatar\/streamer"/, 'the player knows the streamer\'s face');
         assert.ok(/<link rel="stylesheet" href="\/shared\/player\.css\?v=[0-9a-f]+">/.test(r.text) && /<script src="\/shared\/player\.js\?v=[0-9a-f]+" defer><\/script>/.test(r.text), 'player.css and player.js load');
