@@ -24,4 +24,3 @@
 .ovl-opt--adult input:checked + .ovl-card::before { border-color: var(--warning-text, #fbbf24); background-color: var(--warning-text, #fbbf24); }
 .ovl-opt input:focus-visible + .ovl-card { outline: 3px solid var(--accent, #3b82f6); outline-offset: 2px; }
 .ovl-opt:hover .ovl-card { border-color: color-mix(in srgb, var(--accent, #3b82f6) 60%, var(--border-light, #2c3d5c)); }
-@media (prefers-reduced-motion: reduce) { .ovl-card { transition: none; } }

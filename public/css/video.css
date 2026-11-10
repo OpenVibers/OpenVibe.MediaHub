@@ -114,7 +114,6 @@ body:has(> main.ovv-page) .openvibe-navbar.ovnav-top { background-color: var(--b
 /* The picture's shape once it plays (video.js followShape: --ovv-ar), eased when a recording turns mid-stream; 16:9
    before that. The height is capped so the title under the player stays on screen. */
 .ovv-player { display: block; width: 100%; aspect-ratio: var(--ovv-ar, 16 / 9); max-height: calc(100vh - 150px); max-height: calc(100dvh - 150px); background: #000; object-fit: contain; transition: aspect-ratio .45s cubic-bezier(.22, 1, .36, 1); }
-@media (prefers-reduced-motion: reduce) { .ovv-player { transition: none; } }
 /* An upright recording on a phone or tablet held upright: at most 70% of the screen, so its title and buttons show under
    it without scrolling. */
 @media (max-width: 1000px) and (orientation: portrait) { .ovv-player { max-height: 70vh; max-height: 70svh; } }
@@ -548,8 +547,6 @@ a.ovv-channel-name:hover { text-decoration: underline; }
   .ovv-mytitleline { display: grid; gap: 3px; }
   .ovv-mystate { justify-self: start; }
 }
-@media (prefers-reduced-motion: reduce) { .ovv-pulse { animation: none; } }
-html[data-ov-motion=reduced] .ovv-pulse { animation: none; }
 
 /* Recording (/record) */
 .ovv-record { display: grid; gap: 12px; max-width: 760px; }
@@ -629,7 +626,6 @@ html[data-ov-motion=reduced] .ovv-pulse { animation: none; }
   .ovv-vis-card { grid-template-columns: 28px minmax(0, 1fr); justify-items: start; align-items: center; column-gap: 10px; text-align: left; padding: 10px 12px; }
   .ovv-vis-card i { grid-row: span 2; justify-self: center; }
 }
-@media (prefers-reduced-motion: reduce) { .ovv-owner[open] { animation: none; } }
 
 /* Home, 10-28: the stats are links laid out as an even grid (the live tile first, with its pulse), the hero's actions
    stack cleanly on a phone, and anchored sections stop clear of the sticky bar. */
@@ -654,7 +650,7 @@ html.ov-motion .ovv-stat.is-live .ovv-dot { animation: ovv-pulse 1.6s ease-out i
     .ovv-stat { padding: 10px 12px; }
     .ovv-stat b { font-size: 1.2rem; }
 }
-@media (prefers-reduced-motion: reduce) { .ovv-stat { transition: none; } .ovv-stat:hover { transform: none; } }
+html[data-ov-motion=off] .ovv-stat:hover{transform: none}
 
 /* The home on phones (2026-10-29): a taste and a door. Each video list is one row that scrolls sideways (every video is
    still there), eight channels show, the figures are one strip, and how it works folds under its heading. */
@@ -828,4 +824,3 @@ html.ov-motion .ovv-stat.is-live .ovv-dot { animation: ovv-pulse 1.6s ease-out i
   .ovv-watch .ovv-actions .ovv-btn, .ovv-watch .ovv-actions details > summary.ovv-btn { min-height: 44px; padding: 0 16px; font-size: .84rem; }
   .ovv-watch .ovv-actions .ovv-btn--icon { width: 44px; padding: 0; }
 }
-@media (prefers-reduced-motion: reduce) { .ovv-watch .ovv-actions .ovv-btn, .ovv-watch .ovv-actions details > summary.ovv-btn, .ovv-watch .ovv-about::details-content { transition: none; animation: none; } .ovv-watch .ovv-like.ovv-like--pop i { animation: none; } }

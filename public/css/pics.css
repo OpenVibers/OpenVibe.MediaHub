@@ -155,7 +155,7 @@
   .ovp-staff img, .ovp-staff .ovp-album-empty { width: 72px; }
   .ovp-drop-inner { padding: 28px 14px 24px; }
 }
-@media (prefers-reduced-motion: reduce) { .ovp-tile img, .ovp-drop { transition: none; } .ovp-tile:hover img { transform: none; } }
+html[data-ov-motion=off] .ovp-tile:hover img{transform: none}
 
 /* Resize and convert: formats by width, each cell a link. Scrolls on its own on a narrow screen. */
 .ovp-sizes { overflow-x: auto; }
@@ -233,7 +233,7 @@
 .ovp-gc-pic { display: block; overflow: hidden; border-radius: 14px; background: var(--ovp-card); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ovp-line) 70%, transparent); }
 .ovp-gc-pic img { display: block; width: 100%; height: auto; transition: transform .35s ease, filter .35s ease; }
 .ovp-gallery-card:hover .ovp-gc-pic img { transform: scale(1.03); filter: brightness(1.06); }
-@media (prefers-reduced-motion: reduce) { .ovp-gc-pic img { transition: none; } .ovp-gallery-card:hover .ovp-gc-pic img { transform: none; } }
+html[data-ov-motion=off] .ovp-gallery-card:hover .ovp-gc-pic img{transform: none}
 .ovp-gc-body { padding: 9px 4px 0; }
 .ovp-gc-title { margin: 0; font-size: 15px; line-height: 1.3; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ovp-gc-title a { color: var(--text-primary, #e6edf7); text-decoration: none; }

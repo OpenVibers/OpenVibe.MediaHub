@@ -325,7 +325,4 @@
   .fv-tile .dr-i { width: 72px; height: 72px; }
   .fv-actions .dr-btn { flex: 1; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .dr-new-panel, .dr-menu, .dr-tray, .dr-drop, .dr-drop-box { animation: none; }
-  .dr-file:hover { transform: none; }
-}
+html[data-ov-motion=off] .dr-file:hover{transform: none}
