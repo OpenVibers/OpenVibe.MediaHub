@@ -308,7 +308,7 @@ function createCuts({ s, media, uploads, videoAi = null, config, log = console, 
     }
 
     /** A chosen frame becomes the copy's cover through Media's own custom-thumbnail route, after finalize. */
-    async function applyCover(cut, original, copy, url) {
+    async function applyCover(cut, copy, url) {
         if (cut.cover_seconds == null) return;
         const ready = await waitReady(copy.id);
         if (!ready || ready.status !== 'ready') {
@@ -348,7 +348,7 @@ function createCuts({ s, media, uploads, videoAi = null, config, log = console, 
             await save(cut.id, { result_upload_id: copy.id });
             copy = await render(cut, url, plan.ranges, plan.kept_seconds, info, copy);
             await uploads.complete(copy);
-            try { await applyCover(cut, original, copy, url); }
+            try { await applyCover(cut, copy, url); }
             catch (err) { log.warn(`[OpenVibe.Video] cut ${cut.id}: cover not set:`, err.message); }
             return save(cut.id, { status: 'done', progress: 1, finished_at: s.iso() });
         } catch (err) {
