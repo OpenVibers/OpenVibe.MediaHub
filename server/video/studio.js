@@ -11,19 +11,20 @@
  *
  *   GET  /api/v1/video/studio/media/:id         the video (metadata, and where it came from)
  *   GET  /api/v1/video/studio/media/:id/bytes   its bytes, Range reads included (the preview)
- *   POST /api/v1/video/studio/publish           a private copy published back on Video
+ *   POST /api/v1/video/studio/publish           trim [start,end], cover and title → a cut on Video
+ *   GET  /api/v1/video/studio/cuts/:id          how that cut is going, and the copy's address
  *
  * :id is one of the ids the person already has for the video: the upload id (vup_…), the
  * /watch?v= id, or Media's VOD id (media_vod_id). A private video of someone else answers
  * exactly like a missing id, so an id cannot be used to learn that it exists. Reading needs
  * what the watch page needs; PUBLISHING needs the owner. The copies are made by the same
  * upload path as a browser recording, so Media probes them, makes the thumbnail and HLS,
- * and the AI edit gets captions and chapters.
+ * and the AI edit gets captions and chapters. The trim itself is made by the existing cuts worker
+ * (server/video/cut.js); Studio never re-encodes a video in the browser.
  */
 const { Readable } = require('node:stream');
 const { UploadError } = require('./uploads');
 
-const PIECE = 8 * 1024 * 1024;
 const VUP_RE = /^vup_[0-9A-HJKMNP-TV-Z]{26}$/;
 const WATCH_RE = /^[A-Za-z0-9_-]{11}$/;
 const VOD_RE = /^[1-9]\d{0,15}$/;
@@ -73,7 +74,7 @@ function wire(row, { canEdit = false, baseUrl = 'https://openvibe.video' } = {})
     };
 }
 
-function createStudio({ s, media, uploads, config, log = console, fetchImpl = globalThis.fetch }) {
+function createStudio({ s, media, uploads, videoCuts, config, log = console, fetchImpl = globalThis.fetch }) {
     const mediaBase = String((config.media && config.media.url) || '').replace(/\/+$/, '');
     const videoBase = String((config.video && config.video.url) || 'https://openvibe.video').replace(/\/+$/, '');
 
@@ -128,60 +129,45 @@ function createStudio({ s, media, uploads, config, log = console, fetchImpl = gl
         };
     }
 
+    /** How a cut is told to Studio: no internals, and the result's own address once there is one. */
+    function cutWire(cut, result) {
+        const path = result ? watchPath(result) : null;
+        return {
+            id: cut.id,
+            status: cut.status,
+            mode: cut.mode,
+            progress: Number(cut.progress) || 0,
+            error: cut.error || null,
+            source_seconds: cut.source_seconds == null ? null : Number(cut.source_seconds),
+            kept_seconds: cut.kept_seconds == null ? null : Number(cut.kept_seconds),
+            cover_seconds: cut.cover_seconds == null ? null : Number(cut.cover_seconds),
+            result: result ? {
+                id: result.id, status: result.status, title: result.title,
+                url: path, watch_url: `${videoBase}${path}`,
+            } : null,
+        };
+    }
+
     /**
-     * Publish a private copy of the owner's video back on Video, with the title and visibility
-     * Studio asked for. The bytes go from Media to Media through this service, never through the
-     * browser; the copy takes the same path as a browser recording, so it is probed and made
-     * playable like any other upload. The original is never changed.
+     * Publish Studio's trim as a new copy on Video, through the cuts service the site already
+     * has. It queues one cut and answers at once; Studio polls /studio/cuts/:id for the copy.
      */
-    async function publish(row, principal, { title, visibility } = {}) {
+    async function publish(row, principal, { start, end, cover, title, visibility } = {}) {
         if (!row || row.owner !== principal.requester) throw notFound();
-        if (row.status !== 'ready' || row.state !== 'active') throw new UploadError(409, 'studio.media_not_ready', 'The video has to be ready (and not hidden) before it can be published from Studio.');
-        const total = Number(row.size_bytes);
-        if (!Number.isSafeInteger(total) || total < 1) throw new UploadError(409, 'studio.media_size', 'OpenVibe.Media has not reported this video\'s size yet.');
-        const wantedTitle = String(title == null ? '' : title).replace(/\s+/g, ' ').trim().slice(0, 120) || `${row.title.slice(0, 100)} (Studio)`;
-        const wantedVisibility = ['private', 'unlisted', 'public'].includes(visibility) ? visibility : 'private';
-        const source = await sourceUrl(row);
-        let res;
-        try {
-            res = await fetchImpl(source, { redirect: 'error', signal: AbortSignal.timeout(6 * 3600_000) });
-        } catch (err) {
-            log.warn('[MediaHub] Studio publish could not read the video:', (err && err.message) || '');
-            throw new UploadError(502, 'studio.media_unavailable', 'OpenVibe.Media did not answer.');
+        const cut = await videoCuts.request(row, { requester: principal.requester, username: principal.username || null }, 'trim', {
+            start, end, cover, title, visibility,
+        });
+        return { cut: cutWire(cut, null) };
+    }
+
+    /** The cut's progress and, once made, the copy on Video. Only its owner may ask. */
+    async function cutStatus(id, principal) {
+        const cut = await videoCuts.byId(String(id || ''));
+        if (!cut || cut.owner !== principal.requester) {
+            throw new UploadError(404, 'studio.cut_not_found', 'No such edit, or it is not yours.');
         }
-        if (!res.ok) {
-            if (res.body) res.body.cancel().catch(() => {});
-            throw new UploadError(502, 'studio.media_unavailable', 'OpenVibe.Media could not serve this video.');
-        }
-        let copy = null;
-        try {
-            copy = await uploads.start({ requester: row.owner, username: row.owner_username }, {
-                title: wantedTitle, description: row.description || '', visibility: wantedVisibility,
-                size: total, contentType: row.content_type, name: row.title,
-            });
-            let pending = Buffer.alloc(0);
-            let n = 0;
-            let read = 0;
-            for await (const chunk of res.body) {
-                const part = Buffer.from(chunk);
-                read += part.length;
-                pending = pending.length ? Buffer.concat([pending, part]) : part;
-                while (pending.length >= PIECE) {
-                    await uploads.part(copy, ++n, pending.subarray(0, PIECE));
-                    pending = pending.subarray(PIECE);
-                }
-            }
-            if (pending.length) await uploads.part(copy, ++n, pending);
-            if (read !== total || n !== Number(copy.parts_expected)) throw new UploadError(502, 'studio.media_size', 'OpenVibe.Media gave a different number of bytes than it reported.');
-            const done = await uploads.complete(await uploads.byId(copy.id));
-            // The copy names its original, as an AI-cut copy does, so its page says where it came from.
-            await s.db.query('UPDATE video_uploads SET edited_from = $2 WHERE id = $1', [copy.id, row.id]);
-            const path = watchPath(done);
-            return { video: { id: done.id, status: done.status, title: done.title, url: path, watch_url: `${videoBase}${path}` } };
-        } catch (err) {
-            if (copy) await uploads.remove(copy).catch(() => {});
-            throw err;
-        }
+        const result = cut.result_upload_id ? await uploads.byId(cut.result_upload_id) : null;
+        return { cut: cutWire(cut, result) };
     }
 
     return {
@@ -189,6 +175,7 @@ function createStudio({ s, media, uploads, config, log = console, fetchImpl = gl
         wire: (row, options = {}) => wire(row, { ...options, baseUrl: videoBase }),
         bytes,
         publish,
+        cutStatus,
         notFound,
         findRow: (id) => findRow(uploads, id),
         /** A stream as an Express response can take it (kept here so the route needs no node:stream import). */

@@ -124,13 +124,26 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
                 const vod = [...vods.values()].find((v) => !v.deleted && v.watch_id === wanted);
                 return vod ? json(res, 200, { kind: 'vod', id: vod.id }) : problem(res, 404, 'media.watch.not_found', 'No such watch id');
             }
+            if (parts[3] === 'thumbnails') {
+                // POST /api/v1/:app/thumbnails/vod/:id: the custom cover route (multipart 'thumbnail').
+                const v = vods.get(Number(parts[5]));
+                if (!v || v.deleted) return problem(res, 404, 'vod.not_found', 'VOD not found');
+                if (parts[4] !== 'vod' || req.method !== 'POST') return problem(res, 404, 'route.not_found', 'no such route');
+                const boundary = /boundary=([^;]+)/.exec(String(req.headers['content-type'] || ''));
+                const piece = boundary ? raw.toString('latin1').split(`--${boundary[1]}`).find((x) => /name="thumbnail"/.test(x)) : null;
+                if (!piece) return problem(res, 400, 'thumbnail.invalid', 'No image data provided');
+                const at = piece.indexOf('\r\n\r\n');
+                v.coverBytes = Buffer.from(piece.slice(at + 4, piece.length - 2), 'latin1');
+                v.thumbnail_url = `/t/vod-${v.id}-cover.jpg`;
+                return json(res, 200, { url: v.thumbnail_url });
+            }
             if (parts[3] !== 'vods') return problem(res, 404, 'route.not_found', 'no such route');
             const vodPublicOf = (v) => ({
                 id: v.id, watch_id: v.watch_id, title: v.title, visibility: v.visibility, user_id: v.user_id, is_recording: v.status !== 'ready',
                 duration_seconds: v.status === 'ready' ? vodState.duration : 0, file_size: v.bytes.length,
                 file_url: v.status === 'ready' ? `https://openvibe.media/v/vod-${v.id}.mp4` : null,
                 hls_url: v.status === 'ready' ? `https://openvibe.media/o/med_vod${v.id}/master.m3u8` : null,
-                thumbnail_url: v.status === 'ready' ? `https://openvibe.media/t/vod-${v.id}.jpg` : null,
+                thumbnail_url: v.status === 'ready' ? (v.thumbnail_url ? `https://openvibe.media${v.thumbnail_url}` : `https://openvibe.media/t/vod-${v.id}.jpg`) : null,
                 meta: v.meta || {},
             });
             if (parts.length === 4 && req.method === 'POST') {

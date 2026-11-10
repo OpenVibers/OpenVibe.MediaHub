@@ -94,21 +94,23 @@ function areq(base, path, { method = 'GET', bearer, json, range, cookie } = {}) 
         assert.strictEqual((await areq(t.base, `/api/v1/video/studio/media/${priv.id}/bytes`)).status, 401);
     });
 
-    await check('publishing makes a new private copy on Video; the original is unchanged', async () => {
-        const before = await t.ctx.s.db.value('SELECT count(*)::int FROM video_uploads');
-        const r = await areq(t.base, '/api/v1/video/studio/publish', { method: 'POST', bearer: kimToken, json: { media: priv.id, title: 'Rehearsal, from Studio', visibility: 'private' } });
+    await check('publishing queues a trim cut through the existing cuts service', async () => {
+        const r = await areq(t.base, '/api/v1/video/studio/publish', { method: 'POST', bearer: kimToken, json: { media: priv.id, start: 1, end: 3, cover: 2, title: 'Rehearsal, from Studio', visibility: 'private' } });
         assert.strictEqual(r.status, 202, r.text.slice(0, 400));
         const out = r.json();
-        assert.match(out.video.id, /^vup_[0-9A-Z]{26}$/);
-        assert.strictEqual(out.video.title, 'Rehearsal, from Studio');
-        assert.ok(out.video.watch_url.startsWith(`${VIDEO}/watch?v=`) || out.video.watch_url.startsWith(`${VIDEO}/u/`), out.video.watch_url);
-        const after = await t.ctx.s.db.many('SELECT * FROM video_uploads ORDER BY created_at');
-        assert.strictEqual(after.length, before + 1);
-        const copy = after.find((x) => x.id === out.video.id);
-        assert.strictEqual(copy.owner, `user:${kim.subject}`);
-        assert.strictEqual(copy.visibility, 'private');
-        assert.strictEqual(copy.edited_from, priv.id);
+        assert.match(out.cut.id, /^vcut_[0-9A-Z]{26}$/);
+        assert.strictEqual(out.cut.status, 'queued');
+        assert.strictEqual(out.cut.mode, 'trim');
+        const row = await t.ctx.s.db.maybe('SELECT * FROM video_cuts WHERE id = $1', [out.cut.id]);
+        assert.deepStrictEqual([row.upload_id, row.owner, row.mode, row.cover_seconds, row.result_title, row.result_visibility], [priv.id, `user:${kim.subject}`, 'trim', 2, 'Rehearsal, from Studio', 'private']);
+        assert.deepStrictEqual(row.ranges, [[1, 3]]);
+        assert.strictEqual(row.kept_seconds, 2);
+        const status = await areq(t.base, `/api/v1/video/studio/cuts/${out.cut.id}`, { bearer: kimToken });
+        assert.strictEqual(status.status, 200, status.text.slice(0, 300));
+        assert.strictEqual(status.json().cut.status, 'queued');
+        assert.strictEqual((await areq(t.base, `/api/v1/video/studio/cuts/${out.cut.id}`, { bearer: samToken })).status, 404, 'not sam\'s edit');
         assert.strictEqual((await t.ctx.videoUploads.byId(priv.id)).title, 'Private rehearsal', 'the original is unchanged');
+        await t.ctx.s.db.query("UPDATE video_cuts SET status = 'failed' WHERE id = $1", [out.cut.id]);
     });
 
     await check('a cookie from this site cannot call the Studio hand-off; it is Bearer only', async () => {

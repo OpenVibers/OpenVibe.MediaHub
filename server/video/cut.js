@@ -6,6 +6,7 @@
  *   pauses       every pause of 1.5 seconds or more becomes half a second (lead-in and tail silence go)
  *   tight        every pause of 0.7 seconds or more becomes 0.3 seconds
  *   highlights   a reel of the best moments the AI edit found (server/video/ai-edit.js), in time order, at most 3 minutes
+ *   trim         an exact [start, end] range from Studio's editor, with an optional cover frame
  *
  * The copy is a new private upload of the same person (video_uploads.edited_from), made through the same path as a
  * browser recording (uploads.startRecording → chunk → complete), so Media gives it a probe, thumbnail and HLS, the AI
@@ -19,7 +20,7 @@
  * A copy is re-encoded rather than cut on keyframes because a browser recording (WebM) may have one keyframe in minutes.
  *
  *   plan…(…)          the pure parts: pauses → kept ranges, highlights → reel
- *   request(row, who, mode)   queue a cut (one waiting or running per person, VIDEO_CUTS_PER_DAY a day)
+ *   request(row, who, mode, opts)  queue a cut (one waiting or running per person, VIDEO_CUTS_PER_DAY a day)
  *   forUpload(row)    the cuts of an upload, newest first
  *   sweep()           the worker: one queued cut at a time; a cut left mid-way by a restart is retried once
  */
@@ -30,6 +31,7 @@ const MODES = Object.freeze({
     pauses: { label: 'pauses cut', minPause: 1.5, keep: 0.25 },
     tight: { label: 'tight cut', minPause: 0.7, keep: 0.15 },
     highlights: { label: 'highlights', reelMax: 180, picks: 6 },
+    trim: { label: 'trimmed' },
 });
 const PIECE = 8 * 1024 * 1024;
 const MAX_RANGES = 400;
@@ -174,15 +176,37 @@ function createCuts({ s, media, uploads, videoAi = null, config, log = console, 
         return mediaBase ? `${mediaBase}${u.pathname}${u.search}` : signed.data.url;
     }
 
-    async function request(row, who, mode) {
-        if (!enabled) throw new UploadError(503, 'cut.off', 'The AI cut is not available here.');
-        if (!MODES[mode]) throw new UploadError(422, 'cut.mode', 'Choose pauses, tight or highlights.');
+    async function request(row, who, mode, opts = {}) {
+        if (!enabled) throw new UploadError(503, 'cut.off', 'The video editor is not available here.');
+        if (!MODES[mode]) throw new UploadError(422, 'cut.mode', 'Choose a trim, pauses, tight or highlights.');
         if (!who || who.requester !== row.owner) throw new UploadError(403, 'cut.not_yours', 'Only the person who uploaded a video can cut it.');
         if (row.status !== 'ready' || row.state !== 'active') throw new UploadError(409, 'cut.not_ready', 'The video has to be ready (and not hidden) first.');
         if (row.edited_from) throw new UploadError(409, 'cut.is_copy', 'This is already an edited copy: cut the original instead.');
-        if (Number(row.duration_seconds) > cfg.maxSourceSeconds) throw new UploadError(413, 'cut.too_long', `The AI cut takes videos up to ${Math.round(cfg.maxSourceSeconds / 3600)} hours.`);
+        if (Number(row.duration_seconds) > cfg.maxSourceSeconds) throw new UploadError(413, 'cut.too_long', `The cut takes videos up to ${Math.round(cfg.maxSourceSeconds / 3600)} hours.`);
         let plan = null;
-        if (mode === 'highlights') {
+        let cover = null;
+        let resultTitle = null;
+        let resultVisibility = null;
+        if (mode === 'trim') {
+            const duration = Number(row.duration_seconds) || 0;
+            const start = Number(opts.start);
+            const end = Number(opts.end);
+            if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end > duration + 0.05 || end <= start) {
+                throw new UploadError(422, 'cut.range', 'Choose a start and an end inside the video; the end has to be after the start.');
+            }
+            if (end - start < 1) throw new UploadError(422, 'cut.range', 'Keep at least one second of the video.');
+            plan = { ranges: [[r2(start), r2(end)]], kept_seconds: r2(end - start), removed_count: null };
+            if (opts.cover !== undefined && opts.cover !== null && opts.cover !== '') {
+                cover = Number(opts.cover);
+                if (!Number.isFinite(cover) || cover < 0 || cover > duration) throw new UploadError(422, 'cut.cover', 'Choose a cover frame inside the video.');
+                cover = r2(cover);
+            }
+            resultTitle = String(opts.title == null ? '' : opts.title).replace(/\s+/g, ' ').trim().slice(0, 120) || null;
+            if (opts.visibility !== undefined && opts.visibility !== null && opts.visibility !== '') {
+                if (!['private', 'unlisted', 'public'].includes(opts.visibility)) throw new UploadError(422, 'cut.visibility', 'Choose private, unlisted or public.');
+                resultVisibility = opts.visibility;
+            }
+        } else if (mode === 'highlights') {
             plan = planHighlights(videoAi ? await videoAi.forUpload(row) : null, Number(row.duration_seconds));
             if (!plan) throw new UploadError(409, 'cut.no_highlights', 'The AI edit found no highlights to make a reel from.');
         }
@@ -192,9 +216,9 @@ function createCuts({ s, media, uploads, videoAi = null, config, log = console, 
         if (today >= cfg.perDay) throw new UploadError(429, 'cut.daily_limit', `That is ${cfg.perDay} cuts today. Try again tomorrow.`);
         const id = s.newId('vcut');
         const now = s.iso();
-        await s.db.query(`INSERT INTO video_cuts (id, upload_id, owner, mode, ranges, source_seconds, kept_seconds, created_at, updated_at)
-                          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)`,
-        [id, row.id, row.owner, mode, plan ? JSON.stringify(plan.ranges) : null, Number(row.duration_seconds) || null, plan ? plan.kept_seconds : null, now]);
+        await s.db.query(`INSERT INTO video_cuts (id, upload_id, owner, mode, ranges, source_seconds, kept_seconds, cover_seconds, result_title, result_visibility, created_at, updated_at)
+                          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)`,
+        [id, row.id, row.owner, mode, plan ? JSON.stringify(plan.ranges) : null, Number(row.duration_seconds) || null, plan ? plan.kept_seconds : null, cover, resultTitle, resultVisibility, now]);
         kick();
         return await byId(id);
     }
@@ -259,6 +283,45 @@ function createCuts({ s, media, uploads, videoAi = null, config, log = console, 
         return copy;
     }
 
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    /** The copy's Media VOD is ready after the background completion; a cover upload must wait for it. */
+    async function waitReady(uploadId, timeoutMs = 15 * 60 * 1000) {
+        const until = Date.now() + timeoutMs;
+        while (Date.now() < until) {
+            const row = await uploads.byId(uploadId);
+            if (!row || row.status === 'ready' || row.status === 'failed') return row;
+            await sleep(2000);
+        }
+        return await uploads.byId(uploadId);
+    }
+
+    /** One JPEG at `seconds` from the original, as Media's custom-thumbnail route takes it. */
+    async function extractCover(url, seconds) {
+        const chunks = [];
+        const r = await run(cfg.ffmpeg, ['-hide_banner', '-nostdin', '-loglevel', 'error', '-ss', String(Math.max(0, Number(seconds) || 0)),
+            '-i', url, '-vframes', '1', '-vf', 'scale=1280:-2', '-f', 'image2pipe', '-vcodec', 'mjpeg', 'pipe:1'], {
+            onStdout: (stdout) => stdout.on('data', (d) => chunks.push(d)), timeoutMs: 120_000,
+        });
+        if (r.code !== 0 || !chunks.length) throw new Error('ffmpeg could not take that frame');
+        return Buffer.concat(chunks);
+    }
+
+    /** A chosen frame becomes the copy's cover through Media's own custom-thumbnail route, after finalize. */
+    async function applyCover(cut, original, copy, url) {
+        if (cut.cover_seconds == null) return;
+        const ready = await waitReady(copy.id);
+        if (!ready || ready.status !== 'ready') {
+            log.warn(`[OpenVibe.Video] cut ${cut.id}: copy was not ready for its cover`);
+            return;
+        }
+        const frame = await extractCover(url, cut.cover_seconds);
+        const out = await media.vodThumbnail(copy.media_vod_id, frame);
+        if (!out.ok || !out.data || !out.data.url) throw new Error(`Media refused the cover (${out.code || out.status})`);
+        const absolute = /^https?:/i.test(out.data.url) ? out.data.url : `${String(config.media.publicUrl || 'https://openvibe.media').replace(/\/+$/, '')}${out.data.url}`;
+        await s.db.query('UPDATE video_uploads SET thumbnail_url = $2 WHERE id = $1', [copy.id, absolute]);
+    }
+
     async function work(cut) {
         const original = await uploads.byId(cut.upload_id);
         if (!original || original.state !== 'active' || original.status !== 'ready') return save(cut.id, { status: 'failed', error: 'The original is no longer available.', finished_at: s.iso() });
@@ -278,12 +341,15 @@ function createCuts({ s, media, uploads, videoAi = null, config, log = console, 
             await save(cut.id, { status: 'rendering', ranges: plan.ranges, kept_seconds: plan.kept_seconds, removed_count: plan.removed_count, source_seconds: duration });
             const label = MODES[cut.mode].label;
             copy = await uploads.startRecording({ requester: original.owner, username: original.owner_username }, {
-                title: `${original.title.slice(0, 100)} (${label})`, description: original.description, visibility: 'private', contentType: 'video/mp4',
+                title: cut.result_title || `${original.title.slice(0, 100)} (${label})`, description: original.description,
+                visibility: cut.result_visibility || 'private', contentType: 'video/mp4',
             });
             await s.db.query('UPDATE video_uploads SET edited_from = $2 WHERE id = $1', [copy.id, original.id]);
             await save(cut.id, { result_upload_id: copy.id });
             copy = await render(cut, url, plan.ranges, plan.kept_seconds, info, copy);
             await uploads.complete(copy);
+            try { await applyCover(cut, original, copy, url); }
+            catch (err) { log.warn(`[OpenVibe.Video] cut ${cut.id}: cover not set:`, err.message); }
             return save(cut.id, { status: 'done', progress: 1, finished_at: s.iso() });
         } catch (err) {
             const known = err instanceof UploadError;

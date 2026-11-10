@@ -49,6 +49,7 @@ function load(env = process.env) {
         // host-internal address (127.0.0.1:4100 in production), never the public origin.
         media: {
             url: trim(env.MEDIAHUB_MEDIA_URL || 'http://127.0.0.1:4100'),
+            publicUrl: trim(env.MEDIAHUB_MEDIA_PUBLIC_URL || 'https://openvibe.media'),
             app: env.MEDIAHUB_MEDIA_APP || 'media-hub',
             timeoutMs: int(env.MEDIAHUB_MEDIA_TIMEOUT_MS, 30_000),
         },
