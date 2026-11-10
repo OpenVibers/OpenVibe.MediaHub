@@ -367,6 +367,7 @@ function countOccurrences(haystack, needle) {
         assert.ok(Array.isArray(ld.hasPart) && ld.hasPart.length >= 1 && ld.hasPart.every((c) => c['@type'] === 'Clip' && Number.isInteger(c.startOffset) && c.url.startsWith('https://openvibe.video/v/101?t=')), 'chapters as key moments');
         assert.match(r.text, /<meta property="og:image" content="https:\/\/openvibe\.media\/t\/101\.jpg"/, 'the thumbnail is the share image');
         assert.ok(r.text.includes('data-ovv-hls="https://openvibe.media/o/med_101/master.m3u8"'), 'the timeline playlist');
+        assert.ok(r.text.includes('data-ov-mini-hls="https://openvibe.media/o/med_101/master.m3u8"'), 'and the small player is given the same playlist');
         assert.ok(/data-ovv-hls-lib="\/vendor\/hls\.light\.min\.js\?v=[0-9a-f]{10}"/.test(r.text), 'hls.js, self-hosted and content-hashed');
         assert.ok(/media-src[^;]*blob:/.test(String(r.headers['content-security-policy'])), 'MSE plays from blob:');
         assert.ok(/connect-src[^;]*https:\/\/openvibe\.live/.test(String(r.headers['content-security-policy'])), 'the beacon may reach Live');
