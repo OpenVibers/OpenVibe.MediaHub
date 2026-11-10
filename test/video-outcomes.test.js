@@ -119,7 +119,7 @@ function startLive() {
             assert.ok(line.includes('1,204 views'), 'its views: ' + line);
             assert.ok(r.text.includes('Oct 12, 2026'), 'the stream date remains on the page');
             // The channel is in the byline under it, and the category in About: nothing is said twice.
-            assert.ok(r.text.includes('class="ovv-channel-name"') && r.text.includes('>Streamer</a>'), 'the channel');
+            assert.ok(r.text.includes('class="ovv-channel-name"') && r.text.includes('>@streamer</a>'), 'the channel is named by its @handle');
             assert.ok(r.text.includes("Streamed live on") && r.text.includes('in Gaming'), 'the category is in About');
         });
 
