@@ -43,6 +43,10 @@
         // The page may already know it (pages.js startAspect, from Live's stream history): then nothing moves on play.
         let current = Number(video.getAttribute('data-ovv-ar')) || 0;
         let on = false;
+        // An upright picture is marked on its frame: a phone pins a wide player under the bar, never an upright one.
+        const frame = video.closest ? video.closest('.ovv-player-wrap') : null;
+        const mark = function () { if (frame) frame.classList.toggle('is-upright', current > 0 && current < 1); };
+        mark();
         const update = function () {
             const w = video.videoWidth;
             const h = video.videoHeight;
@@ -54,6 +58,7 @@
             if (current && Math.abs(Math.log(r / current)) < 0.03) return;
             current = r;
             video.style.setProperty('--ovv-ar', r.toFixed(4));
+            mark();
         };
         video.addEventListener('playing', function () { on = true; update(); });
         video.addEventListener('resize', update);

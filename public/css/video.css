@@ -824,3 +824,48 @@ html[data-ov-motion=off] .ovv-stat:hover{transform: none}
   .ovv-watch .ovv-actions .ovv-btn, .ovv-watch .ovv-actions details > summary.ovv-btn { min-height: 44px; padding: 0 16px; font-size: .84rem; }
   .ovv-watch .ovv-actions .ovv-btn--icon { width: 44px; padding: 0; }
 }
+
+/* ── The watch page, the video first (2026-11-10) ───────────────────────────────────────────────────────────────────
+   The owner, with a recording open on a phone: "why is the video not at the top … more device aware and viewport
+   aware and better on mobile versus desktop". "More from <channel>" (11-09) had no place in the one-column order, so it
+   stood above the player; and its class was an older link list's, whose boxes went round every thumbnail and title. It
+   is .ovv-also now, and it comes last.
+   - A phone: the player from edge to edge under the bar, and it stays there while the page moves under it (a wide
+     picture only: an upright one would take the screen). Then the title and its actions, the owner's tools, the tabs,
+     up next, About, the stream's clips, comments, and more from the channel.
+   - A tablet held upright: one column, the same order, the lists as cards.
+   - A computer: the lists beside the player are rows: a thumbnail, then the title and its date. */
+.ovv-also > .ovv-panel-head { margin-bottom: 12px; }
+@media (max-width: 600px), (min-width: 1001px) {
+  .ovv-grid--side { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .ovv-grid--side > .ovv-card { flex-direction: row; align-items: flex-start; gap: 12px; }
+  .ovv-grid--side > .ovv-card > :is(.ovv-card-media, .ovv-card-cover) { flex: 0 0 44%; max-width: 172px; border-radius: 10px; }
+  .ovv-grid--side > .ovv-card > .ovv-card-cover > .ovv-card-media { border-radius: inherit; }
+  .ovv-grid--side > .ovv-card > .ovv-card-body { flex: 1 1 0; padding-top: 1px; }
+  .ovv-grid--side .ovv-card-title { font-size: .9rem; line-height: 1.3; -webkit-line-clamp: 3; }
+  /* In a row the thumbnail is the large thing to press, so the title's link is its three lines and no taller. */
+  .ovv-grid--side .ovv-card-title a { min-height: 0; -webkit-line-clamp: 3; }
+  .ovv-grid--side .ovv-card-meta { margin-top: .3rem; font-size: .78rem; }
+  .ovv-grid--side :is(.ovv-dur, .ovv-tag) { bottom: 5px; padding: 0 5px; font-size: .68rem; border-radius: 5px; }
+  .ovv-grid--side .ovv-dur { right: 5px; }
+  .ovv-grid--side .ovv-tag { left: 5px; }
+}
+@media (max-width: 1000px) {
+  .ovv-also { order: 7; }
+}
+@media (max-width: 600px) {
+  .ovv-page:has(.ovv-watch) { padding-top: 0; }
+  .ovv-watch .ovv-stage { display: contents; }
+  .ovv-watch .ovv-stage > * { order: 1; }
+  .ovv-watch .ovv-player-wrap { margin: 0 -16px; max-width: none; border: 0; border-radius: 0; }
+  /* Pinned under the bar; the bar steps away on the way down the page (navbar.js: .ovnav-hide), and the player
+     takes its place at the same pace. */
+  .ovv-watch .ovv-player-wrap:not(.is-upright) { position: sticky; top: var(--ovnav-real-h, 52px); z-index: 30; box-shadow: 0 10px 18px -14px rgba(0, 0, 0, .7); transition: top .32s cubic-bezier(.2, .7, .2, 1); }
+  html:has(.openvibe-navbar.ovnav-hide) .ovv-watch .ovv-player-wrap:not(.is-upright) { top: 0; }
+  .ovv-watch .ovv-head { margin-top: 0; }
+  .ovv-watch .ovv-title-line { margin-bottom: 10px; }
+  /* The tabs (chat replay, chapters, transcript) take what is left of the screen under the pinned player. */
+  .ovv-watch:has(.ovv-player-wrap:not(.is-upright)) :is(.ovv-companion--tabs, .ovv-companion--one) { height: max(320px, calc(100dvh - var(--ovnav-real-h, 52px) - 56.25vw - var(--ovnav-appbar-h, 0px) - 20px)); }
+  /* The lists are the page's own here, not boxes in it. */
+  .ovv-watch :is(.ovv-also, .ovv-clips) { padding: 6px 0 0; border: 0; border-radius: 0; background: none; }
+}
