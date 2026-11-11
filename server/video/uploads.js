@@ -287,12 +287,16 @@ function createUploads({ s, media, config, log = console, events = null, sharing
         const audience = input.audience || (input.visibility !== undefined ? audienceOf(input.visibility) : null);
         if (!Object.keys(patch).length && !audience) return row;
         if (patch.title) await media.vodUpdate(row.media_vod_id, { title: patch.title });
-        if (audience && sharing) await sharing.setAudience({ subject: row.owner.slice(5) }, 'video', row.id, audience);
+        const registered = audience && sharing ? await sharing.shareOf('video', row.id) : null;
+        if (audience && registered) await sharing.setAudience({ subject: row.owner.slice(5) }, 'video', row.id, audience);
         else if (audience) {
+            // Imports and older rows can predate share.v1. Keep their visibility change working,
+            // then give them a share row for future edits and reads.
             patch.visibility = visibilityOf(audience);
             await media.vodUpdate(row.media_vod_id, { visibility: patch.visibility });
+            if (sharing) await sharing.register(row.owner, 'video', row.id, audience);
         }
-        return await maybePublished(await patchRow(row.id, patch));
+        return await maybePublished(Object.keys(patch).length ? await patchRow(row.id, patch) : await byId(row.id));
     }
 
     async function remove(row) {

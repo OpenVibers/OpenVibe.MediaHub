@@ -106,7 +106,7 @@ function createSharing({ db, config, outbox, media, now = Date.now, fetchImpl = 
                 const row = await tx.maybe('SELECT media_vod_id FROM video_uploads WHERE id = $1', [ref.id]);
                 if (row && media) {
                     const result = await media.vodUpdate(row.media_vod_id, { visibility: vis });
-                    if (result && result.ok === false) throw new ShareError(502, 'share.media_unavailable', 'Video storage could not change the visibility');
+                    if (result && result.ok === false && result.status !== 404) throw new ShareError(502, 'share.media_unavailable', 'Video storage could not change the visibility');
                 }
                 await tx.exec('UPDATE video_uploads SET visibility = $1 WHERE id = $2', [vis, ref.id]);
             } else if (ref.kind === 'download') {
