@@ -250,7 +250,9 @@ function createPics({ s, media, config, log = console, events = null, sharing = 
         if (await store.albumImageCount(s, album.id) >= cfg.albumImagesMax) return { ok: false, status: 409, code: 'pics.album_full', detail: `An album holds ${cfg.albumImagesMax} pictures.` };
         await s.tx(async () => {
             await store.addToAlbum(s, album.id, image.id);
-            if (sharing && album.audience && image.audience !== album.audience) {
+            const reach = { public: 3, link: 2, people: 1, private: 0 };
+            // Filing a picture in an album may narrow it, never expose it to more people.
+            if (sharing && album.audience && reach[album.audience] < reach[image.audience || 'public']) {
                 await sharing.setAudience({ subject: album.owner.slice(5) }, 'picture', image.id, album.audience);
             }
         });

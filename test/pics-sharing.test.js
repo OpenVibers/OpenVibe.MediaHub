@@ -150,6 +150,17 @@ function hostClient(t) {
         assert.strictEqual((await get(`/i/${img.slug}.png`, { as: sam })).status, 404);
     });
 
+    await check('filing a private picture in a public album does not expose it', async () => {
+        const img = await upload();
+        assert.strictEqual((await putShare('picture', img.id, { audience: 'private' })).status, 200);
+        const made = await t.ctx.pics.createAlbum(`user:${kate.subject}`, { title: 'Open album', audience: 'public' });
+        assert.strictEqual(made.ok, true);
+        await t.ctx.pics.addToAlbum(made.album, await picsStore.imageBySlug(t.ctx.s, img.slug));
+        assert.strictEqual((await row(img.id)).audience, 'private');
+        assert.strictEqual((await get(`/api/v1/albums/${made.album.slug}`)).json().images.length, 0);
+        assert.strictEqual((await get(`/api/v1/albums/${made.album.slug}`, { as: kate })).json().images.length, 1);
+    });
+
     await done();
     await t.close();
 })();
