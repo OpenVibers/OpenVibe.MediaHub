@@ -108,6 +108,30 @@ route('post', '/files/{id}/restore', {
     responses: { 200: json('The restored file', { type: 'object', properties: { file: ref('File') } }), ...errors([401, 403, 404, 429]) },
 });
 
+// ── Agent file grants ─────────────────────────────────────────────────────────────────────────
+route('get', '/agent-grants', {
+    operationId: 'listAgentGrants', summary: 'List your file grants', tags: ['agent grants'], security: PERSON,
+    parameters: [query('file_id', str(), 'Limit the list to one of your files')],
+    responses: { 200: json('Your grants', { type: 'object', properties: { grants: arrayOf({ type: 'object' }) } }), ...errors([401, 429]) },
+});
+route('post', '/agent-grants', {
+    operationId: 'createAgentGrant', summary: 'Give one agent read access to one file', tags: ['agent grants'], security: PERSON,
+    description: 'The grant is bound to one agent subject and expires after 1 to 720 hours. The agent also needs the download.file.read capability.',
+    requestBody: body({ type: 'object', required: ['file_id', 'agent_subject'], properties: { file_id: str(), agent_subject: str(), hours: integer({ minimum: 1, maximum: 720, default: 24 }) } }),
+    responses: { 201: json('The grant', { type: 'object', properties: { grant: { type: 'object' } } }), ...errors([401, 404, 422, 429]) },
+});
+route('delete', '/agent-grants/{id}', {
+    operationId: 'revokeAgentGrant', summary: 'Revoke an agent file grant', tags: ['agent grants'], security: PERSON,
+    parameters: [path('id', str())],
+    responses: { 204: { description: 'Revoked' }, ...errors([401, 404, 429]) },
+});
+route('get', '/agent/files/{id}/content', {
+    operationId: 'readGrantedAgentFile', summary: 'Read a file granted to this agent', tags: ['agent grants'], security: [{ bearer: [] }],
+    description: 'Requires the download.file.read capability and an active grant from the file owner. Supports Range requests; the response streams bytes without exposing a provider URL.',
+    parameters: [path('id', str()), { name: 'Range', in: 'header', required: false, schema: str() }],
+    responses: { 200: { description: 'File bytes' }, 206: { description: 'Requested byte range' }, ...errors([401, 403, 404, 416, 429, 502]) },
+});
+
 // ── Folders ────────────────────────────────────────────────────────────────────────────────────
 route('get', '/folders', {
     operationId: 'listFolders', summary: 'Your folders', tags: ['folders'], security: PERSON,
