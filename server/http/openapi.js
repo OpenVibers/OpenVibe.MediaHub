@@ -66,6 +66,25 @@ route('get', '/ping', {
     responses: { 200: json('The service answers', { type: 'object', properties: { ok: { const: true }, service: str() } }), ...errors([429]) },
 });
 
+// ── Download audience default ─────────────────────────────────────────────────────────────────
+route('get', '/share-defaults/{kind}', {
+    operationId: 'getShareDefault', summary: 'Audience for new Download uploads', tags: ['shares'], security: PERSON,
+    parameters: [path('kind', str({ enum: ['download'] }))],
+    responses: { 200: json('The saved default, or Everyone when none is saved', { type: 'object', properties: {
+        kind: str(), audience: str({ enum: ['public', 'link', 'people', 'private'] }),
+    } }), ...errors([401, 404, 429]) },
+});
+route('put', '/share-defaults/{kind}', {
+    operationId: 'setShareDefault', summary: 'Save a Download audience default and optionally apply it to existing files', tags: ['shares'], security: PERSON,
+    parameters: [path('kind', str({ enum: ['download'] }))],
+    requestBody: body({ type: 'object', required: ['audience'], properties: {
+        audience: str({ enum: ['public', 'link', 'people', 'private'] }), apply: { type: 'boolean' },
+    } }),
+    responses: { 200: json('The default and number of existing files changed', { type: 'object', properties: {
+        kind: str(), audience: str(), changed: integer(),
+    } }), ...errors([401, 403, 422, 429]) },
+});
+
 // ── Files ──────────────────────────────────────────────────────────────────────────────────────
 route('get', '/files', {
     operationId: 'listFiles', summary: 'One folder of your drive (or the root), or a search of every folder', tags: ['files'], security: PERSON,
@@ -80,6 +99,7 @@ route('post', '/files', {
     description: 'A signed-in session write must come from openvibe.download itself. 201 carries Location: /api/v1/uploads/{id}.',
     requestBody: body({ type: 'object', required: ['name', 'size'], properties: {
         name: str(), size: integer({ minimum: 0 }), content_type: str(), folder_id: str(),
+        audience: str({ enum: ['public', 'link', 'people', 'private'], description: 'Overrides the saved default for this upload. A sync key can use Only me only.' }),
     } }),
     responses: { 201: json('The upload session and what is still missing', { type: 'object', properties: { upload: { type: 'object' }, note: str() } }), ...errors() },
 });

@@ -28,6 +28,7 @@ const TABLES = [
     { table: 'mh_reports', subject: 'reporter', value: AS_REQUESTER, file: 'reports.json' },
     { table: 'mh_shares', subject: 'owner', value: AS_REQUESTER, file: 'shares.json' },
     { table: 'mh_usage', subject: 'owner', value: AS_REQUESTER, file: 'usage.json' },
+    { table: 'mh_share_defaults', subject: 'owner', value: AS_REQUESTER, file: 'share-defaults.json' },
     // Radio publications refer to drive files. Export and erase them before the file rows cascade.
     { table: 'mh_radio_tracks', subject: 'owner', value: AS_REQUESTER, file: 'radio_tracks.json' },
     { table: 'mh_agent_grants', subject: 'owner', value: AS_REQUESTER, file: 'agent_grants.json' },
@@ -66,7 +67,7 @@ async function shareExport(db, subject) {
     const owned = await db.many("SELECT * FROM shares WHERE service = $1 AND owner_subject->>'id' = $2", ['mediahub', subject]);
     const member = await db.many("SELECT * FROM share_members WHERE service = $1 AND subject->>'id' = $2", ['mediahub', subject]);
     const asked = await db.many("SELECT * FROM share_access_requests WHERE service = $1 AND subject->>'id' = $2", ['mediahub', subject]);
-    return owned.length || member.length || asked.length ? [{ name: 'shares.json', content: { owned, member_of: member, requests: asked } }] : [];
+    return owned.length || member.length || asked.length ? [{ name: 'uniform-sharing.json', content: { owned, member_of: member, requests: asked } }] : [];
 }
 async function shareErase(t, subjects) {
     for (const subject of subjects) {

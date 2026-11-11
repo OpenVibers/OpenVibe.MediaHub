@@ -207,10 +207,10 @@ const usageFor = (s, owner) => s.db.many(`SELECT * FROM ${USAGE} WHERE owner = $
 
 async function insertUpload(s, row) {
     await s.db.query(
-        `INSERT INTO ${UPLOADS} (id, owner, object_id, upload_id, name, size, content_type, folder_id, part_size, parts_expected, created_at, expires_at, drop_uploader)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        `INSERT INTO ${UPLOADS} (id, owner, object_id, upload_id, name, size, content_type, folder_id, part_size, parts_expected, created_at, expires_at, drop_uploader, audience)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
         [row.id, row.owner, row.object_id, row.upload_id, row.name, row.size, row.content_type, row.folder_id,
-            row.part_size, row.parts_expected, row.created_at, row.expires_at, row.drop_uploader || null]);
+            row.part_size, row.parts_expected, row.created_at, row.expires_at, row.drop_uploader || null, row.audience || 'private']);
     return getUpload(s, row.id);
 }
 
