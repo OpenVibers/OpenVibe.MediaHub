@@ -23,10 +23,11 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const contracts = require('openvibe-contracts');
 const { asyncRouter } = require('../http/router');
-const { USERNAME_RE } = require('./live-client');
+const { sameOrigin } = require('../http/principal');
+const { USERNAME_RE, isId, LiveRefusedError } = require('./live-client');
 
 function createVideoApiRoutes(ctx) {
-    const { config, playlists, principal, limits, identity } = ctx;
+    const { config, playlists, principal, limits, identity, live } = ctx;
     const r = asyncRouter();
     const problem = (req, res, status, code, detail) => contracts.http.sendProblem(res, status, code, { detail, ctx: req.ov });
     const videoSite = 'openvibe.video';
@@ -38,6 +39,53 @@ function createVideoApiRoutes(ctx) {
 
     const read = principal.requireCapability('video.playlist.read', { origin: config.video.url, site: videoSite });
     const manage = principal.requireCapability('video.playlist.manage', { origin: config.video.url, site: videoSite });
+
+    const commentTarget = (req, res) => {
+        const kind = String(req.params.kind || '');
+        const id = String(req.params.id || '');
+        if (!['vod', 'clip'].includes(kind) || !isId(id)) { problem(req, res, 400, 'video.comment.invalid_item', 'Choose a VOD or clip'); return null; }
+        return { kind, id };
+    };
+    const commentPerson = (req, res) => {
+        if (req.viewer.kind !== 'user' || !req.viewer.token) { problem(req, res, 401, 'video.comment.sign_in', 'Sign in to comment'); return null; }
+        if (!sameOrigin(req, config.video.url)) { problem(req, res, 403, 'request.cross_site', 'Post from openvibe.video'); return null; }
+        return req.viewer.token;
+    };
+    const commentError = (req, res, err) => problem(req, res, err instanceof LiveRefusedError ? err.status : 502,
+        'video.comment.unavailable', err instanceof LiveRefusedError ? err.message : 'Comments are unavailable right now');
+
+    r.get('/comments/:kind/:id', async (req, res) => {
+        const target = commentTarget(req, res);
+        if (!target) return;
+        try {
+            const query = { sort: req.query.sort, offset: req.query.offset, limit: req.query.limit };
+            const out = req.viewer.kind === 'user' && req.viewer.token
+                ? await live.commentsPageAs(req.viewer.token, target.kind, target.id, query)
+                : await live.commentsPage(target.kind, target.id, query);
+            if (!out) return problem(req, res, 404, 'video.comment.not_found', 'Video not found');
+            return res.json(out);
+        } catch (err) { return commentError(req, res, err); }
+    });
+    r.post('/comments/:kind/:id', async (req, res) => {
+        const target = commentTarget(req, res);
+        const token = target && commentPerson(req, res);
+        if (!token) return;
+        const b = req.body || {};
+        if (!Array.isArray(b.attachments || []) || (b.attachments || []).length > 4) return problem(req, res, 400, 'video.comment.attachments', 'Attach up to four files');
+        try { return res.status(201).json(await live.postCommentAs(token, target.kind, target.id,
+            { message: b.message, parent_id: b.parent_id || null, attachments: b.attachments || [] })); }
+        catch (err) { return commentError(req, res, err); }
+    });
+    const fileBody = express.raw({ type: 'application/octet-stream', limit: '16mb' });
+    r.post('/comments/:kind/:id/attachments', fileBody, async (req, res) => {
+        const target = commentTarget(req, res);
+        const token = target && commentPerson(req, res);
+        if (!token) return;
+        if (!Buffer.isBuffer(req.body) || !req.body.length) return problem(req, res, 400, 'video.comment.file', 'Choose a file');
+        try { return res.status(201).json(await live.uploadCommentAttachmentAs(token, target.kind, target.id, req.body,
+            String(req.get('x-file-name') || 'file').slice(0, 255), String(req.get('x-file-mime') || 'application/octet-stream').slice(0, 100))); }
+        catch (err) { return commentError(req, res, err); }
+    });
 
     /** The owner string this principal acts as, or null for a signed-out caller. */
     const requesterOf = (req) => {

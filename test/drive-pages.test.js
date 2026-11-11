@@ -14,14 +14,15 @@ const { SAME, bytes, upload, share } = require('./helpers/drive');
     const kim = t.network.addUser('kim');
     const sam = t.network.addUser('sam');
 
-    await check('a guest gets a sign-in page for every file page, never a file', async () => {
-        for (const p of ['/files', '/files/bin', '/files/fil_01JABCDEFGHJKMNPQRSTVWXYZ0', '/staff', '/s/abcdefghijklmnopqrstuvwx']) {
+    await check('private drive pages ask a guest to sign in; a missing file reveals nothing', async () => {
+        for (const p of ['/files', '/files/bin', '/staff', '/s/abcdefghijklmnopqrstuvwx']) {
             const r = await t.get(p);
             assert.strictEqual(r.status, 401, p);
             assert.ok(r.text.includes('Sign in'), `${p}: a sign-in page`);
             assert.ok(r.text.includes('/auth/login?next='), `${p}: with a way to sign in`);
             assert.ok(!r.text.includes('<progress'), `${p}: and nothing of the drive`);
         }
+        assert.strictEqual((await t.get('/files/fil_01JABCDEFGHJKMNPQRSTVWXYZ0')).status, 404);
         // The home page and the safety rules are public: they are how somebody decides to sign up at all.
         assert.strictEqual((await t.get('/')).status, 200);
         assert.strictEqual((await t.get('/safety')).status, 200);

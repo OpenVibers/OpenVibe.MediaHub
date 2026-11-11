@@ -216,7 +216,9 @@ function createPicsRoutes(ctx) {
     };
     const grid = (rows, empty) => (rows.length ? html`<div class="ovp-grid">${rows.map(thumb)}</div>` : html`<p class="muted">${empty}</p>`);
 
-    function uploadForm(req, { compact = false } = {}) {
+    const audienceOptions = (current) => [['public', 'Everyone'], ['link', 'Anyone with the link'], ['people', 'Specific people'], ['private', 'Only me']]
+        .map(([value, label]) => html`<option value="${value}"${value === current ? raw(' selected') : ''}>${label}</option>`);
+    function uploadForm(req, { compact = false, defaultAudience = 'public' } = {}) {
         const max = signedIn(req) ? cfg.maxImageBytes : cfg.anonymousMaxImageBytes;
         return html`<form class="ovp-drop${compact ? ' ovp-drop--compact' : ''}" method="post" action="/upload" enctype="multipart/form-data" data-pics-upload data-max="${max}">
 <div class="ovp-drop-inner">
@@ -225,6 +227,7 @@ function createPicsRoutes(ctx) {
 <p class="ovp-drop-hint">JPEG, PNG, GIF, WebP or AVIF, up to ${formatBytes(max)} each. Location and camera details are removed.</p>
 <label class="ovp-btn ovp-btn--primary ovp-file" data-ov-guide="pics.upload"><input type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif" required data-pics-input> Choose a picture</label>
 <div class="ovp-drop-fields"><label for="up-title">Title (optional)</label><input id="up-title" name="title" type="text" maxlength="120" placeholder="What is it?"></div>
+${signedIn(req) ? html`<label>Who can open it <select name="audience">${audienceOptions(defaultAudience)}</select></label>` : ''}
 <button class="ovp-btn ovp-btn--primary ovp-nojs-submit" type="submit">Upload</button>
 </div>
 <ol class="ovp-results" data-pics-results aria-live="polite"></ol>
@@ -239,7 +242,7 @@ function createPicsRoutes(ctx) {
     const sizeText = (b) => formatBytes(b).replace(/\.0 /, ' ');
     const homeFaq = () => [
         { q: 'Is OpenVibe.Pics free?', a: `Yes. A free OpenVibe account can upload ${cfg.imagesPerDay} pictures a day, each up to ${sizeText(cfg.maxImageBytes)}, and keep up to ${sizeText(cfg.quotaBytes)}.` },
-        { q: 'Who can see my pictures?', a: 'A picture is unlisted to begin with: anyone with the link can open it, and nobody else. Publish it to the gallery and it is visible to everyone, with public counts and in search engines. You can narrow a picture to specific people or to yourself, and remove it at any time.' },
+        { q: 'Who can see my pictures?', a: 'You choose who can open a picture when you upload it. Everyone is the default; you can choose anyone with the link, specific people, or only you. The public gallery is a separate opt-in on the picture page.' },
         { q: 'What is removed from my pictures?', a: 'Everything hidden in the file: the GPS position, the camera and the rest of its metadata. Your picture is decoded and saved again without any of it before anyone sees it, and the file you uploaded is not kept.' },
         { q: 'Which files can I upload?', a: `${FORMAT_NAMES}, animated GIF and WebP included. SVG and other formats are refused, so nothing is ever served as it was uploaded.` },
         { q: 'Can I get a different size or format?', a: `Yes. Every picture has links at ${variants.LADDER.join(', ')} pixels wide as WebP, AVIF, JPEG or PNG, made when first asked for.` },
@@ -249,6 +252,7 @@ function createPicsRoutes(ctx) {
         const discovery = await gallery.browse(s, req.query);
         const mine = signedIn(req) ? (await store.imagesOf(s, whoOf(req).requester, { limit: 12 })).rows : [];
         const canUpload = signedIn(req) || cfg.anonymous;
+        const pictureDefault = signedIn(req) ? await sharing.defaultAudience(whoOf(req).requester, 'picture') : 'link';
         const description = 'Upload a picture and get a link to share or embed anywhere: a gallery of what people chose to publish, albums, any size or format, and location and camera details removed from every picture.';
         const faq = homeFaq();
         // The curl sample keeps its line breaks: a backslash and a newline, so it can be copied and run as it is.
@@ -277,7 +281,7 @@ function createPicsRoutes(ctx) {
                 lede: 'Drop a picture, get a link to share or embed anywhere: on a forum, in a chat, on your site. Browse what people chose to publish, or keep yours unlisted. Location and camera details are removed from every file.',
                 visual: false,
             }))}
-${canUpload ? uploadForm(req, { compact: true }) : html`<section class="ovp-drop ovp-drop--compact ovp-drop--signin"><div class="ovp-drop-inner"><p class="ovp-drop-title">Sign in to upload</p><p class="ovp-drop-hint">Your OpenVibe account keeps your pictures and albums together, so you can delete them whenever you like.</p><p>${signInLink('/')}</p></div></section>`}
+${canUpload ? uploadForm(req, { compact: true, defaultAudience: pictureDefault }) : html`<section class="ovp-drop ovp-drop--compact ovp-drop--signin"><div class="ovp-drop-inner"><p class="ovp-drop-title">Sign in to upload</p><p class="ovp-drop-hint">Your OpenVibe account keeps your pictures and albums together, so you can delete them whenever you like.</p><p>${signInLink('/')}</p></div></section>`}
 ${raw(gallery.render(pics, discovery))}
 ${signedIn(req) ? html`<section class="ovp-section" aria-labelledby="h-latest"><div class="ovp-section-head"><h2 id="h-latest">Your latest pictures</h2><a href="/mine">All of them</a></div>${grid(mine, 'Nothing yet: your uploads show up here.')}</section>` : ''}
 <p class="ovp-note">The hidden data is removed by us: your picture arrives with its GPS position, its camera and the time it was taken, and we take all of it out before anyone sees the picture. <a href="/exif">How that works</a>.</p>
@@ -286,7 +290,7 @@ ${raw(showcase.steps({
     items: [
         { title: 'Drop a picture', text: `Choose, drag or paste ${FORMAT_NAMES}, up to ${sizeText(cfg.maxImageBytes)}. Several at once works too.` },
         { title: 'Get your links', text: 'A page to share, a direct link, and Markdown, BBCode and HTML ready to copy.' },
-        { title: 'Publish when you want', text: 'A picture stays unlisted until you publish it to the gallery. Then it is findable, countable and indexable.' },
+        { title: 'Publish when you want', text: 'A picture stays out of the gallery until you publish it there. Then it is findable, countable and indexable.' },
         { title: 'Use it anywhere', text: 'Post it in a forum or a chat, embed it on your site, or put it in an album. Delete it whenever you like.' },
     ],
 }))}
@@ -294,7 +298,7 @@ ${raw(showcase.features({
     title: 'What you get',
     items: [
         { icon: 'link', title: 'Links that work everywhere', text: 'A page to share, a direct link for an img tag, and Markdown, BBCode and HTML ready to copy.' },
-        { icon: 'shield', title: 'Unlisted by default', text: 'Only people with the link see a picture until you publish it. Nothing is listed, ranked or indexed without you.' },
+        { icon: 'shield', title: 'Your audience choice', text: 'Choose Everyone, anyone with the link, specific people, or only you. Nothing is listed, ranked or indexed without you.' },
         { icon: 'spark', title: 'Clean files', text: 'Every picture is re-encoded, and its GPS position, camera serial and other hidden details are removed before anyone sees it.' },
         { icon: 'folder', title: 'Albums', text: 'Put pictures together and share the album with one link.' },
         { icon: 'sliders', title: 'Any size, any format', text: `Every picture also comes at ${variants.LADDER[0]} to ${variants.LADDER[variants.LADDER.length - 1]} pixels wide, as WebP, AVIF, JPEG or PNG, each with a link of its own.` },
@@ -341,9 +345,9 @@ ${raw(showcase.network({
 
     // ── Upload (the no-JavaScript form; the script uses the API) ──
     const spoolDir = () => config.tmpDir || path.join(os.tmpdir(), 'mediahub-uploads');
-    const uploadFailed = (req, res, detail, status = 422) => page(req, res, {
+    const uploadFailed = async (req, res, detail, status = 422) => page(req, res, {
         title: 'Upload failed', scripts: ['js/pics.js'],
-        body: html`<h1>That upload did not work</h1>${notice(detail, 'warn')}${uploadForm(req, { compact: true })}`,
+        body: html`<h1>That upload did not work</h1>${notice(detail, 'warn')}${uploadForm(req, { compact: true, defaultAudience: signedIn(req) ? await sharing.defaultAudience(whoOf(req).requester, 'picture') : 'link' })}`,
     }, status);
 
     r.post('/upload', budgeted('pics.image.upload'), async (req, res) => {
@@ -359,7 +363,7 @@ ${raw(showcase.network({
         try {
             if (got.error === 'too_large') return uploadFailed(req, res, `A picture can be up to ${formatBytes(max - 64 * 1024)}.`, 413);
             if (got.error || !got.file || !got.file.size) return uploadFailed(req, res, 'No picture arrived. Choose one and send the form again.');
-            const out = await pics.upload(whoOf(req), { buffer: fs.readFileSync(got.file.path), name: got.file.filename }, { title: got.fields.title || '' });
+            const out = await pics.upload(whoOf(req), { buffer: fs.readFileSync(got.file.path), name: got.file.filename }, { title: got.fields.title || '', audience: got.fields.audience || undefined });
             if (!out.ok) return uploadFailed(req, res, out.detail, out.status);
             if (out.deleteKey) return picturePage(req, res, out.image, { deleteKey: out.deleteKey, fresh: true });
             if (out.duplicate) return res.redirect(303, `/i/${out.image.slug}?again=1`);
@@ -386,6 +390,7 @@ ${raw(showcase.network({
         const holding = owner ? await store.albumsHolding(s, row.id) : [];
         const title = row.title || 'Untitled picture';
         const hidden = row.state !== 'active';
+        const commentsAvailable = !hidden && !!(sharing && await sharing.canView({ kind: 'anonymous' }, 'picture', row.id).catch(() => false));
         // ?like=<slug> after an upload: a near-duplicate of one of the person's own pictures (VIS-6). Only a slug of theirs is linked.
         const likeRow = owner && /^[A-Za-z0-9]{4,16}$/.test(String(req.query.like || '')) ? await store.imageBySlug(s, String(req.query.like)) : null;
         const likeSlug = likeRow && likeRow.id !== row.id && likeRow.owner === row.owner ? likeRow.slug : null;
@@ -418,7 +423,7 @@ ${!hidden ? html`<nav class="ovp-pic-make" aria-label="Make something with this 
 ${row.description ? html`<p class="ovp-desc">${row.description}</p>` : ''}
 ${row.ai_caption && row.alt_source === 'ai' ? html`<p class="ovp-ai"><span class="ovp-ai-label">Described by AI</span> ${row.ai_caption}</p>` : ''}
 </article>
-${gallery.isPublic(row) ? html`<section class="ovp-section ovp-comments" aria-labelledby="h-comments"><div class="ovp-comments-head"><h2 id="h-comments">Comments</h2><button type="button" class="ovk-btn ovk-btn--quiet" data-comments="${row.id}">${glyph('chat', 17)}<span>Show the discussion</span></button></div><div class="ovp-comments-list" data-comments-list aria-live="polite"></div></section>` : ''}
+${commentsAvailable ? html`<section class="ovp-section ovp-comments" aria-labelledby="h-comments"><div class="ovp-comments-head"><h2 id="h-comments">Comments</h2><button type="button" class="ovk-btn ovk-btn--quiet" data-comments="${row.slug}">${glyph('chat', 17)}<span>Show the discussion</span></button></div><div class="ovp-comments-list" data-comments-list aria-live="polite"></div></section>` : ''}
 <section class="ovp-share" aria-labelledby="h-share"><h2 id="h-share">Share and embed</h2>
 <p class="ovp-share-lede">These links follow the audience you choose in Share. Private pictures are visible only to you. The direct link is the picture itself, at full size — no page around it.</p>
 <div class="ovp-link-grid">
@@ -574,21 +579,36 @@ ${pics.REASONS.map((r) => html`<label class="ovp-radio"><input type="radio" name
         const owner = whoOf(req).requester;
         const out = await store.imagesOf(s, owner, { limit: 48, before });
         const use = await store.usageOf(s, owner);
+        const pictureDefault = await sharing.defaultAudience(owner, 'picture');
         return page(req, res, {
             title: 'Your pictures', scripts: ['js/pics.js'],
             body: html`<div class="ovp-section-head"><h1>Your pictures</h1><span class="muted">${use.images} picture${use.images === 1 ? '' : 's'} · ${formatBytes(use.bytes)} of ${formatBytes(cfg.quotaBytes)}</span></div>
-${uploadForm(req, { compact: true })}
+${uploadForm(req, { compact: true, defaultAudience: pictureDefault })}
+<form class="ovp-form" method="post" action="/mine/share-default"><label>New pictures <select name="audience">${audienceOptions(pictureDefault)}</select></label><label><input type="checkbox" name="apply" value="1"> Apply to all my existing pictures</label><button class="ovp-btn" type="submit">Save default</button></form>
 ${grid(out.rows, 'Nothing yet. Upload a picture above.')}
 ${out.next ? html`<p><a class="ovp-btn" href="/mine?before=${out.next}">Older pictures</a></p>` : ''}`,
         });
     });
 
+    r.post('/mine/share-default', mustSignIn('Sign in to change picture sharing.'), async (req, res) => {
+        if (!sameSite(req, res, '/mine')) return;
+        const audience = String(req.body.audience || '');
+        if (!sharing.AUDIENCES.includes(audience)) return page(req, res, { title: 'Invalid audience', body: html`<h1>Choose a sharing audience</h1><p><a href="/mine">Back to your pictures</a></p>` }, 422);
+        const owner = whoOf(req).requester;
+        await sharing.setDefaultAudience(owner, 'picture', audience);
+        if (req.body.apply === '1') await sharing.applyDefault(owner, 'picture', audience);
+        return res.redirect(303, '/mine');
+    });
+
     r.get('/albums', mustSignIn('Albums belong to your OpenVibe account.'), async (req, res) => {
-        const albums = await store.albumsOf(s, whoOf(req).requester);
+        const owner = whoOf(req).requester;
+        const albums = await store.albumsOf(s, owner);
+        const albumDefault = await sharing.defaultAudience(owner, 'album');
         return page(req, res, {
             title: 'Your albums',
             body: html`<h1>Your albums</h1>
-<form class="ovp-form ovp-inline" method="post" action="/albums"><label for="a-title">New album</label><input id="a-title" name="title" type="text" maxlength="120" required placeholder="Trip to the coast"><button class="ovp-btn ovp-btn--primary" type="submit">Create</button></form>
+<form class="ovp-form ovp-inline" method="post" action="/albums"><label for="a-title">New album</label><input id="a-title" name="title" type="text" maxlength="120" required placeholder="Trip to the coast"><label>Who can open it <select name="audience">${audienceOptions(albumDefault)}</select></label><button class="ovp-btn ovp-btn--primary" type="submit">Create</button></form>
+<form class="ovp-form" method="post" action="/albums/share-default"><label>New albums <select name="audience">${audienceOptions(albumDefault)}</select></label><label><input type="checkbox" name="apply" value="1"> Apply to all my existing albums</label><button class="ovp-btn" type="submit">Save default</button></form>
 ${albums.length ? html`<div class="ovp-albums">${albums.map((a) => html`<a class="ovp-album" href="/a/${a.slug}">${a.cover_slug ? html`<img src="/i/${a.cover_slug}/thumb.webp" alt="" loading="lazy">` : html`<span class="ovp-album-empty" aria-hidden="true"></span>`}<span class="ovp-album-title">${a.title}</span><span class="muted">${a.image_count} picture${Number(a.image_count) === 1 ? '' : 's'}</span></a>`)}</div>`
         : html`<p class="muted">No albums yet. Create one here, or add a picture to a new album from its page.</p>`}`,
         });
@@ -596,9 +616,19 @@ ${albums.length ? html`<div class="ovp-albums">${albums.map((a) => html`<a class
 
     r.post('/albums', mustSignIn('Sign in to use albums.'), budgeted('pics.album.create'), async (req, res) => {
         if (!sameSite(req, res, '/albums')) return undefined;
-        const made = await pics.createAlbum(whoOf(req).requester, { title: req.body.title });
+        const made = await pics.createAlbum(whoOf(req).requester, { title: req.body.title, audience: req.body.audience || undefined });
         if (!made.ok) return page(req, res, { title: 'Album', body: html`<h1>Your albums</h1>${notice(made.detail, 'warn')}<p><a href="/albums">Back</a></p>` }, made.status);
         return res.redirect(303, `/a/${made.album.slug}`);
+    });
+
+    r.post('/albums/share-default', mustSignIn('Sign in to change album sharing.'), async (req, res) => {
+        if (!sameSite(req, res, '/albums')) return;
+        const audience = String(req.body.audience || '');
+        if (!sharing.AUDIENCES.includes(audience)) return page(req, res, { title: 'Invalid audience', body: html`<h1>Choose a sharing audience</h1><p><a href="/albums">Back to your albums</a></p>` }, 422);
+        const owner = whoOf(req).requester;
+        await sharing.setDefaultAudience(owner, 'album', audience);
+        if (req.body.apply === '1') await sharing.applyDefault(owner, 'album', audience);
+        return res.redirect(303, '/albums');
     });
 
     async function ownAlbum(req, res) {
@@ -617,7 +647,8 @@ ${albums.length ? html`<div class="ovp-albums">${albums.map((a) => html`<a class
             const share = await sharing.shareOf('album', album.id).catch(() => null);
             if (share && !await sharing.canView(req.viewer, 'album', album.id).catch(() => false)) return notFound(req, res);
         }
-        const rows = (await store.albumImages(s, album.id, { visibleOnly: !owner })).filter((i) => owner || i.audience === 'public' || i.audience === 'link');
+        const images = await store.albumImages(s, album.id, { visibleOnly: !owner });
+        const rows = owner ? images : (await Promise.all(images.map(async (image) => await sharing.canView(req.viewer, 'picture', image.id) ? image : null))).filter(Boolean);
         return page(req, res, {
             title: album.title, noindex: true, scripts: ['js/pics.js'],
             image: rows[0] ? `${base}/i/${rows[0].slug}.${rows[0].ext}` : undefined,
@@ -722,7 +753,7 @@ ${row.state === 'hidden' ? html`<button class="ovp-btn" name="action" value="res
         markdown: true,
         base,
         summary: 'Picture hosting on the OpenVibe network: upload a picture, get a link to share or embed, albums, any size or format.',
-        details: 'Uploads start unlisted: anyone with the link can open a picture. Only explicitly published pictures appear in the public gallery. Each one is re-encoded with its metadata removed, and can be had resized and converted at /i/<slug>/w/<320|640|1280|1920|2560>.<webp|avif|jpg|png>. Alt text: the uploader writes it or asks OpenVibe.AI for a draft (POST /api/v1/images/<slug>/describe). API: POST /api/v1/images with the picture as the body (an OpenVibe sign-in token as a Bearer).',
+        details: 'Uploads use the person\'s audience choice, Everyone by default. Only explicitly published pictures appear in the public gallery. Each one is re-encoded with its metadata removed, and can be had resized and converted at /i/<slug>/w/<320|640|1280|1920|2560>.<webp|avif|jpg|png>. Alt text: the uploader writes it or asks OpenVibe.AI for a draft (POST /api/v1/images/<slug>/describe). API: POST /api/v1/images with the picture as the body (an OpenVibe sign-in token as a Bearer).',
         sections: [
             { title: 'Start here', links: [{ title: SITE_NAME, url: `${base}/` }] },
         ],

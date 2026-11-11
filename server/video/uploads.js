@@ -27,6 +27,9 @@ const crypto = require('crypto');
 const KINDS = { 'video/mp4': 'video/mp4', 'video/quicktime': 'video/mp4', 'video/x-m4v': 'video/mp4', 'video/webm': 'video/webm', 'video/x-matroska': 'video/x-matroska' };
 const EXT_KINDS = { mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska' };
 const VISIBILITY = ['public', 'unlisted', 'private'];
+const AUDIENCE = ['public', 'link', 'people', 'private'];
+const visibilityOf = (audience) => audience === 'public' ? 'public' : audience === 'link' ? 'unlisted' : 'private';
+const audienceOf = (visibility) => visibility === 'public' ? 'public' : visibility === 'unlisted' ? 'link' : 'private';
 const REASONS = ['child_safety', 'violence', 'harassment', 'sexual', 'copyright', 'spam', 'other'];
 const PART_SIZE = 8 * 1024 * 1024;
 const HIDE_AFTER = 3;
@@ -106,7 +109,9 @@ function createUploads({ s, media, config, log = console, events = null, sharing
         const title = cleanLine(input.title, 120);
         if (!title) throw new UploadError(422, 'upload.title_required', 'Give the video a title.');
         const description = cleanText(input.description, 5000);
-        const visibility = VISIBILITY.includes(input.visibility) ? input.visibility : 'public';
+        if (input.audience !== undefined && !AUDIENCE.includes(input.audience)) throw new UploadError(422, 'upload.audience', 'Choose Everyone, Anyone with the link, Specific people, or Only me.');
+        const audience = input.audience || (VISIBILITY.includes(input.visibility) ? audienceOf(input.visibility) : sharing ? await sharing.defaultAudience(who.requester, 'video') : 'public');
+        const visibility = visibilityOf(audience);
         const size = Number(input.size);
         const kind = kindOf(input.contentType, input.name);
         if (!kind) throw new UploadError(415, 'upload.type', 'Upload an MP4, MOV, WebM or MKV video.');
@@ -125,7 +130,7 @@ function createUploads({ s, media, config, log = console, events = null, sharing
         await s.db.query(`INSERT INTO video_uploads (id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, created_at, updated_at, watch_id)
                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12, $13)`,
         [id, who.requester, who.username || null, title, description, visibility, Number(vod.data.id), kind, size, PART_SIZE, Math.ceil(size / PART_SIZE), now, watchId]);
-        if (sharing) await sharing.register(who.requester, 'video', id, visibility);
+        if (sharing) await sharing.register(who.requester, 'video', id, audience);
         return await byId(id);
     }
 
@@ -133,7 +138,9 @@ function createUploads({ s, media, config, log = console, events = null, sharing
         if (!who || !who.requester) throw new UploadError(401, 'auth.required', 'Sign in to record a video.');
         const title = cleanLine(input.title, 120) || `Recording, ${s.iso().slice(0, 16).replace('T', ' ')} UTC`;
         const description = cleanText(input.description, 5000);
-        const visibility = VISIBILITY.includes(input.visibility) ? input.visibility : 'private';
+        if (input.audience !== undefined && !AUDIENCE.includes(input.audience)) throw new UploadError(422, 'upload.audience', 'Choose Everyone, Anyone with the link, Specific people, or Only me.');
+        const audience = input.audience || (VISIBILITY.includes(input.visibility) ? audienceOf(input.visibility) : sharing ? await sharing.defaultAudience(who.requester, 'video') : 'public');
+        const visibility = visibilityOf(audience);
         const t = String(input.contentType || '').split(';')[0].trim().toLowerCase();
         const kind = t === 'video/webm' || t === 'video/mp4' ? t : null;
         if (!kind) throw new UploadError(415, 'upload.type', 'This browser records in a format OpenVibe.Video does not take (WebM or MP4).');
@@ -150,7 +157,7 @@ function createUploads({ s, media, config, log = console, events = null, sharing
         await s.db.query(`INSERT INTO video_uploads (id, owner, owner_username, title, description, visibility, media_vod_id, content_type, size_bytes, part_size, parts_expected, created_at, updated_at, watch_id)
                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, 0, 0, $9, $9, $10)`,
         [id, who.requester, who.username || null, title, description, visibility, Number(vod.data.id), kind, now, watchId]);
-        if (sharing) await sharing.register(who.requester, 'video', id, visibility);
+        if (sharing) await sharing.register(who.requester, 'video', id, audience);
         return await byId(id);
     }
 
@@ -275,10 +282,21 @@ function createUploads({ s, media, config, log = console, events = null, sharing
         const patch = {};
         if (input.title !== undefined) { const t = cleanLine(input.title, 120); if (!t) throw new UploadError(422, 'upload.title_required', 'Give the video a title.'); patch.title = t; }
         if (input.description !== undefined) patch.description = cleanText(input.description, 5000);
-        if (input.visibility !== undefined) { if (!VISIBILITY.includes(input.visibility)) throw new UploadError(422, 'upload.visibility', 'Public, unlisted or private.'); patch.visibility = input.visibility; }
-        if (!Object.keys(patch).length) return row;
-        if (patch.title || patch.visibility) await media.vodUpdate(row.media_vod_id, { ...(patch.title ? { title: patch.title } : {}), ...(patch.visibility ? { visibility: patch.visibility } : {}) });
-        return await maybePublished(await patchRow(row.id, patch));
+        if (input.visibility !== undefined && !VISIBILITY.includes(input.visibility)) throw new UploadError(422, 'upload.visibility', 'Public, unlisted or private.');
+        if (input.audience !== undefined && !AUDIENCE.includes(input.audience)) throw new UploadError(422, 'upload.audience', 'Choose Everyone, Anyone with the link, Specific people, or Only me.');
+        const audience = input.audience || (input.visibility !== undefined ? audienceOf(input.visibility) : null);
+        if (!Object.keys(patch).length && !audience) return row;
+        if (patch.title) await media.vodUpdate(row.media_vod_id, { title: patch.title });
+        const registered = audience && sharing ? await sharing.shareOf('video', row.id) : null;
+        if (audience && registered) await sharing.setAudience({ subject: row.owner.slice(5) }, 'video', row.id, audience);
+        else if (audience) {
+            // Imports and older rows can predate share.v1. Keep their visibility change working,
+            // then give them a share row for future edits and reads.
+            patch.visibility = visibilityOf(audience);
+            await media.vodUpdate(row.media_vod_id, { visibility: patch.visibility });
+            if (sharing) await sharing.register(row.owner, 'video', row.id, audience);
+        }
+        return await maybePublished(Object.keys(patch).length ? await patchRow(row.id, patch) : await byId(row.id));
     }
 
     async function remove(row) {

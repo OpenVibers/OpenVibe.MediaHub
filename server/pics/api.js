@@ -30,12 +30,14 @@ const { sameOrigin } = require('../http/principal');
 const store = require('./store');
 const contentLabels = require('../labels');
 const gallery = require('./gallery');
+const { createCommentsClient } = require('./comments-client');
 
 function createPicsApi(ctx) {
     const { config, s, principal, limits } = ctx;
     const pics = ctx.pics;
     const cfg = config.pics;
     const r = asyncRouter();
+    const comments = createCommentsClient({ fetchImpl: ctx.fetchImpl || globalThis.fetch });
     const problem = (req, res, status, code, detail) => contracts.http.sendProblem(res, status, code, { detail, ctx: req.ov });
 
     r.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
@@ -127,7 +129,7 @@ function createPicsApi(ctx) {
     }), async (req, res) => {
         if (req.principal.kind === 'anonymous' && !cfg.anonymous) return problem(req, res, 401, 'pics.sign_in_required', 'Sign in with OpenVibe to upload pictures.');
         if (!/^image\//i.test(String(req.get('content-type') || ''))) return problem(req, res, 415, 'pics.not_an_image', 'Send the picture as the body, with its image/* Content-Type.');
-        const out = await pics.upload(whoOf(req), { buffer: Buffer.isBuffer(req.body) ? req.body : null, name: header(req, 'x-filename', 200) }, { title: header(req, 'x-title', 200), keepBoth: req.get('x-keep-both') === '1' });
+        const out = await pics.upload(whoOf(req), { buffer: Buffer.isBuffer(req.body) ? req.body : null, name: header(req, 'x-filename', 200) }, { title: header(req, 'x-title', 200), audience: req.get('x-share-audience') || undefined, keepBoth: req.get('x-keep-both') === '1' });
         if (!out.ok) return problem(req, res, out.status, out.code, out.detail);
         res.set('Location', `/api/v1/images/${out.image.slug}`);
         // The same picture again: 200 with the one the person already has (duplicate: true), nothing stored twice.
@@ -137,6 +139,45 @@ function createPicsApi(ctx) {
     });
 
     r.use(express.json({ limit: '64kb' }));
+
+    r.get('/share-defaults/:kind', person, async (req, res) => {
+        const kind = String(req.params.kind || '');
+        if (!['picture', 'album'].includes(kind)) return problem(req, res, 404, 'share.kind', 'No such share kind.');
+        return res.json({ kind, audience: await ctx.sharing.defaultAudience(whoOf(req).requester, kind) });
+    });
+    r.put('/share-defaults/:kind', person, async (req, res) => {
+        const kind = String(req.params.kind || '');
+        const audience = String((req.body || {}).audience || '');
+        if (!['picture', 'album'].includes(kind) || !ctx.sharing.AUDIENCES.includes(audience)) return problem(req, res, 422, 'share.default_invalid', 'Choose Everyone, Anyone with the link, Specific people, or Only me.');
+        const owner = whoOf(req).requester;
+        await ctx.sharing.setDefaultAudience(owner, kind, audience);
+        const changed = req.body && req.body.apply === true ? await ctx.sharing.applyDefault(owner, kind, audience) : 0;
+        return res.json({ kind, audience, changed });
+    });
+
+    const commentAnswer = (res, result) => res.status(result.status).json(result.body);
+    r.get('/images/:slug/comments', async (req, res) => {
+        const row = await load(req, res);
+        if (!row) return;
+        return commentAnswer(res, await comments.read(row.id, req.viewer.token, req.query));
+    });
+    r.post('/images/:slug/comments', person, async (req, res) => {
+        const row = await load(req, res);
+        if (!row) return;
+        const b = req.body || {};
+        if (!Array.isArray(b.attachments || []) || (b.attachments || []).length > 4)
+            return problem(req, res, 400, 'pics.comment.attachments', 'Attach up to four files');
+        return commentAnswer(res, await comments.add(row.id, req.viewer.token,
+            { message: b.message, parent_id: b.parent_id || null, attachments: b.attachments || [] }));
+    });
+    const commentFile = express.raw({ type: 'application/octet-stream', limit: '16mb' });
+    r.post('/images/:slug/comment-attachments', person, commentFile, async (req, res) => {
+        const row = await load(req, res);
+        if (!row) return;
+        if (!Buffer.isBuffer(req.body) || !req.body.length) return problem(req, res, 400, 'pics.comment.file', 'Choose a file');
+        return commentAnswer(res, await comments.upload(row.id, req.viewer.token, req.body,
+            String(req.get('x-file-name') || 'file').slice(0, 255), String(req.get('x-file-mime') || 'application/octet-stream').slice(0, 100)));
+    });
 
     r.get('/images/:slug/bytes', person, async (req, res) => {
         const row = await load(req, res);
@@ -197,7 +238,7 @@ function createPicsApi(ctx) {
     });
 
     // ── Albums ──────────────────────────────────────────────
-    const albumWire = (a, images) => ({ id: a.id, slug: a.slug, title: a.title, description: a.description, url: `${cfg.url}/a/${a.slug}`, created_at: a.created_at, updated_at: a.updated_at, ...(images ? { images } : { image_count: Number(a.image_count || 0) }) });
+    const albumWire = (a, images) => ({ id: a.id, slug: a.slug, title: a.title, description: a.description, audience: a.audience || 'public', url: `${cfg.url}/a/${a.slug}`, created_at: a.created_at, updated_at: a.updated_at, ...(images ? { images } : { image_count: Number(a.image_count || 0) }) });
     async function ownAlbum(req, res) {
         const slug = String(req.params.slug || '');
         const a = pics.isSlug(slug) ? await store.albumBySlug(s, slug) : null;
@@ -220,7 +261,10 @@ function createPicsApi(ctx) {
         if (!a) return problem(req, res, 404, 'pics.album_not_found', 'No such album.');
         const owner = a.owner === whoOf(req).requester;
         if (!owner && ctx.sharing && await ctx.sharing.shareOf('album', a.id).catch(() => null) && !await ctx.sharing.canView(req.viewer, 'album', a.id).catch(() => false)) return problem(req, res, 404, 'pics.album_not_found', 'No such album.');
-        return res.json(albumWire(a, (await store.albumImages(s, a.id, { visibleOnly: !owner })).map((x) => pics.toWire(x, { owner }))));
+        const viewer = req.principal.kind === 'user' ? { kind: 'user', subject: req.principal.requester.slice(5) } : req.viewer;
+        const images = await store.albumImages(s, a.id, { visibleOnly: !owner });
+        const visible = owner ? images : (await Promise.all(images.map(async (image) => await ctx.sharing.canView(viewer, 'picture', image.id) ? image : null))).filter(Boolean);
+        return res.json(albumWire(a, visible.map((image) => pics.toWire(image, { owner }))));
     });
 
     r.post('/albums/:slug/images', person, limits.budget('pics.image.write'), async (req, res) => {

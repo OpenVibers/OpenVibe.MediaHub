@@ -401,14 +401,18 @@ function chatMessageRows(vod, messages, limit = 1000) {
     return { rows: rows.slice(0, limit), leftOut };
 }
 
-function commentItem(c) {
+function commentItem(c, depth = 0) {
     const name = c.display_name || c.username || '';
     const text = c.message == null ? '' : String(c.message);
     const replies = Number(c.reply_count) || 0;
+    const files = (c.attachments || []).filter((a) => /^med_[0-9A-HJKMNP-TV-Z]{26}$/.test(String(a.id || ''))).slice(0, 4);
+    const shownReplies = depth ? [] : (c.replies || []).slice(0, 2);
     return html`<article class="ovv-comment">
 <header class="ovv-comment-header"><span class="ovv-comment-author">${name}</span>${c.created_at ? html`<time class="ovv-comment-date" datetime="${c.created_at}">${relativeDate(c.created_at)}</time>` : ''}</header>
 <p class="ovv-comment-text">${text}</p>
-${replies > 0 ? html`<p class="ovv-comment-replies"><i class="fa-regular fa-comments" aria-hidden="true"></i> ${replies} ${replies === 1 ? 'reply' : 'replies'}</p>` : ''}
+${files.length ? html`<ul>${files.map((file) => html`<li><a href="https://openvibe.media/o/${file.id}" rel="noopener noreferrer">${file.name || 'Attached file'}</a></li>`)}</ul>` : ''}
+${shownReplies.map((reply) => commentItem(reply, 1))}
+${replies > 0 ? html`<p class="ovv-comment-replies"><i class="fa-regular fa-comments" aria-hidden="true"></i> ${replies} ${replies === 1 ? 'reply' : 'replies'}${replies > shownReplies.length ? html` · ${replies - shownReplies.length} more` : ''}</p>` : ''}
 </article>`;
 }
 
@@ -950,7 +954,21 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
         res.json(item);
     });
 
-    r.use('/api/v1/video', createVideoApiRoutes(ctx));
+    r.use('/api/v1/video', createVideoApiRoutes({ ...ctx, live }));
+    r.get('/api/v1/share-defaults/video', ctx.principal.middleware, async (req, res) => {
+        if (req.principal.kind !== 'user') return res.status(401).json({ code: 'auth.required', detail: 'Sign in to see your video default.' });
+        res.set('Cache-Control', 'no-store').json({ kind: 'video', audience: await ctx.sharing.defaultAudience(req.principal.requester, 'video') });
+    });
+    r.put('/api/v1/share-defaults/video', ctx.principal.middleware, express.json({ limit: '8kb' }), async (req, res) => {
+        if (req.principal.kind !== 'user') return res.status(401).json({ code: 'auth.required', detail: 'Sign in to change your video default.' });
+        if (req.principal.viaSession && !sameOrigin(req, config.video.url)) return res.status(403).json({ code: 'request.cross_site' });
+        const audience = String((req.body || {}).audience || '');
+        if (!ctx.sharing.AUDIENCES.includes(audience)) return res.status(422).json({ code: 'share.default_invalid' });
+        const owner = req.principal.requester;
+        await ctx.sharing.setDefaultAudience(owner, 'video', audience);
+        const changed = req.body.apply === true ? await ctx.sharing.applyDefault(owner, 'video', audience) : 0;
+        return res.set('Cache-Control', 'no-store').json({ kind: 'video', audience, changed });
+    });
     // Uploads' part API (server/video/upload-routes.js): raw parts and its own JSON, before the forms' parser.
     r.use('/api/v1/videos', createUploadApi({ ctx, config }));
     // The playlist forms are web forms (no JavaScript): urlencoded text. The API router above has its own JSON

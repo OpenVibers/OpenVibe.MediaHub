@@ -69,7 +69,7 @@
         });
     }
     /** Upload one file into a folder (or the root); onProgress(sent, total). Resolves with the stored file. */
-    function sendFile(file, folderId, name, onProgress) {
+    function sendFile(file, folderId, name, audience, onProgress) {
         var sent = 0;
         var uploadId = null;
         onProgress(0, file.size);
@@ -81,6 +81,7 @@
                 size: file.size,
                 content_type: file.type || 'application/octet-stream',
                 folder_id: folderId || null,
+                audience: audience || 'public',
             }),
         }).then(function (started) {
             var up = started.upload;
@@ -161,9 +162,11 @@
         return li;
     }
     function enqueue(files, folderId, name) {
+        var audienceField = document.querySelector('form[data-upload] select[name=audience]');
+        var audience = audienceField ? audienceField.value : 'public';
         for (var i = 0; i < files.length; i++) {
             if (!files[i] || (files[i].size === 0 && !files[i].type)) continue;   // a dropped folder arrives as an empty, typeless entry
-            queue.push({ file: files[i], folderId: folderId, name: files.length === 1 ? name : '', row: addRow(files[i]) });
+            queue.push({ file: files[i], folderId: folderId, name: files.length === 1 ? name : '', audience: audience, row: addRow(files[i]) });
         }
         if (tray) trayHead();
         next();
@@ -176,7 +179,7 @@
         trayHead();
         var state = job.row.querySelector('.dr-tray-state');
         var fill = job.row.querySelector('.dr-tray-bar i');
-        sendFile(job.file, job.folderId, job.name, function (sent, total) {
+        sendFile(job.file, job.folderId, job.name, job.audience, function (sent, total) {
             var pct = total ? Math.round((sent / total) * 100) : 100;
             fill.style.width = pct + '%';
             state.textContent = pct + '% of ' + bytes(total);

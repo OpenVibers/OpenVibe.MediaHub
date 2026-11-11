@@ -57,7 +57,9 @@ const MB = 1024 * 1024;
             assert.strictEqual(part.status, 200, part.text);
             const done_ = await t.get(`/api/v1/uploads/${up.id}/complete`, { bearer: key, json: {} });
             assert.strictEqual(done_.status, 201, done_.text);
+            assert.strictEqual((await t.get(`/files/${done_.json().file.id}`)).status, 404, 'a backup is private even when the interactive upload default is Everyone');
         }
+        assert.strictEqual((await t.get('/api/v1/files', { bearer: key, json: { name: 'shared.txt', size: 10, content_type: 'text/plain', audience: 'public' } })).status, 403);
         const fourth = await t.get('/api/v1/files', { bearer: key, json: { name: 'note-4.txt', size: 10, content_type: 'text/plain' } });
         assert.strictEqual(fourth.status, 429, 'past the sync cap');
         assert.strictEqual(fourth.json().code, 'file.daily_limit');

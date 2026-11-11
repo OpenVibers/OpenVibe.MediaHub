@@ -36,11 +36,14 @@ function readSlice(file, start, length) {
     });
 }
 
-function createUploads({ s, media, config, service, log = console }) {
+function createUploads({ s, media, config, service, sharing, log = console }) {
     const nowIso = () => new Date(s.now()).toISOString();
 
     /** Media's object is `uploading`; the session is Media's, the row is ours. */
-    async function startSession({ owner, name, size, contentType, folderId = null, perDay }) {
+    async function startSession({ owner, name, size, contentType, folderId = null, perDay, audience }) {
+        if (audience !== undefined && !['public', 'link', 'people', 'private'].includes(audience)) {
+            return { ok: false, code: 'upload.audience', detail: 'Choose Everyone, Anyone with the link, Specific people, or Only me.' };
+        }
         const room = await service.uploadAllowed(owner, size, perDay ? { perDay } : {});
         if (!room.ok) return room;
         if (folderId && !await service.ownFolder(owner, folderId)) {
@@ -65,6 +68,7 @@ function createUploads({ s, media, config, service, log = console }) {
             name, size, content_type: contentType || 'application/octet-stream', folder_id: folderId || null,
             part_size: session.part_size, parts_expected: session.parts_expected,
             created_at: nowIso(), expires_at: new Date(s.now() + config.uploadTtlSeconds * 1000).toISOString(),
+            audience: audience || (sharing ? await sharing.defaultAudience(owner, 'download') : 'private'),
         });
         return { ok: true, upload: publicUpload(row, []) };
     }
@@ -73,7 +77,7 @@ function createUploads({ s, media, config, service, log = console }) {
     const publicUpload = (row, missing) => ({
         id: row.id, name: row.name, size: row.size, content_type: row.content_type,
         folder_id: row.folder_id, part_size: row.part_size, parts_expected: row.parts_expected,
-        expires_at: row.expires_at, missing,
+        expires_at: row.expires_at, missing, audience: row.audience,
         status: row.file_id ? 'complete' : 'open',
     });
 
@@ -134,6 +138,7 @@ function createUploads({ s, media, config, service, log = console }) {
             size: Number(object.size_bytes) || row.size, contentType: object.mime_type || row.content_type,
             sha256: object.content_hash || null, folderId: row.folder_id,
         });
+        if (sharing) await sharing.register(owner, 'download', file.id, row.audience);
         await store.setUploadFile(s, row.id, file.id);
         await store.dropUpload(s, row.id);
         return { ok: true, file };
@@ -151,8 +156,8 @@ function createUploads({ s, media, config, service, log = console }) {
      * The whole file through the session's parts, read from a spooled file. This is the no-JavaScript path: the
      * browser posted one request, we wrote it to disk, and Media gets it in parts exactly as it would from a script.
      */
-    async function uploadSpooled({ owner, file, name, size, contentType, folderId = null }) {
-        const started = await startSession({ owner, name, size, contentType, folderId });
+    async function uploadSpooled({ owner, file, name, size, contentType, folderId = null, audience }) {
+        const started = await startSession({ owner, name, size, contentType, folderId, audience });
         if (!started.ok) return started;
         const row = await store.getUpload(s, started.upload.id);
         try {

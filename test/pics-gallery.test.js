@@ -33,6 +33,10 @@ function hostClient(t) {
  const same = { 'sec-fetch-site': 'same-origin' };
  try {
  const image = (await t.ctx.pics.upload({requester: `user:${a.subject}`}, {buffer: await sharp({create:{width:120,height:90,channels:3,background:'#246'}}).png().toBuffer(), name:'forest.png'}, {title:'Forest'})).image;
+ await check('Pics comment writes require a signed-in person', async () => {
+   const out = await get(`/api/v1/images/${image.slug}/comments`, { json: { message: 'hello' }, headers: same });
+   assert.equal(out.status, 401, out.text);
+ });
  const pub = (as, json) => get(`/api/v1/images/${image.slug}/publication`, { as, json, headers: same });
  await check('resumable chunks enforce ownership, offsets and idempotent completion', async () => {
    const bytes = await sharp({create:{width:31,height:41,channels:3,background:'#a42'}}).png().toBuffer();

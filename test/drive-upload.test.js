@@ -117,10 +117,10 @@ const MB = 1024 * 1024;
         assert.ok(stored > 6 * MB);
     });
 
-    await check('an upload is private to its owner until it is shared', async () => {
+    await check('an upload chosen as Only me is private to its owner', async () => {
         // Somebody with their own numbers: kim's day is full by now, which is a different rule.
         const nia = t.network.addUser('nia');
-        const up = await upload(t, nia, bytes(200, 'private'), { name: 'mine.bin' });
+        const up = await upload(t, nia, bytes(200, 'private'), { name: 'mine.bin', audience: 'private' });
         assert.strictEqual(up.status, 201, up.text);
         const id = up.json().file.id;
         assert.strictEqual((await t.get(`/api/v1/files/${id}`, { as: sam })).status, 404);

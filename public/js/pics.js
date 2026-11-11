@@ -118,7 +118,7 @@
         if (links.bbcode) box.appendChild(copyRow('BBCode (forums)', links.bbcode));
         if (links.html) box.appendChild(copyRow('HTML', links.html));
         r.main.appendChild(box);
-        r.main.appendChild(el('p', { className: 'ovp-result-note', text: 'Anyone with the link can open it — no account needed.' }));
+        r.main.appendChild(el('p', { className: 'ovp-result-note', text: body.audience === 'private' ? 'Only you can open it.' : body.audience === 'people' ? 'Only people you name in Share can open it.' : body.audience === 'link' ? 'Anyone with the link can open it.' : 'Anyone can open it.' }));
         if (body.delete_url) r.main.appendChild(el('div', { className: 'ovp-result-error', text: 'Keep this delete link, shown only now: ' + body.delete_url }));
     }
 
@@ -128,6 +128,8 @@
             xhr.open('POST', '/api/v1/images');
             xhr.setRequestHeader('Content-Type', file.type);
             xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name || 'pasted'));
+            var audience = form.elements.audience && form.elements.audience.value;
+            if (audience) xhr.setRequestHeader('X-Share-Audience', audience);
             if (keepBoth) xhr.setRequestHeader('X-Keep-Both', '1');
             xhr.upload.onprogress = function (e) { if (e.lengthComputable) r.bar.style.width = Math.round(e.loaded / e.total * 100) + '%'; };
             xhr.onload = function () {

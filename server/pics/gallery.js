@@ -4,7 +4,7 @@
  *
  * A picture is public only when three things agree: its own row says it is listed and active, its audience is
  * Everyone, and the share row says Everyone too. The share row is the authority (openvibe-sdk/share); the listed
- * flag is the owner's opt-in. So a picture is unlisted by default, and it leaves the gallery the moment the owner
+ * flag is the owner's opt-in. So a picture stays off the gallery by default, and it leaves the gallery the moment the owner
  * narrows it (server/sharing.js clears the flag) or a moderator hides it.
  */
 const { html, raw } = require('../render/html');
@@ -72,14 +72,14 @@ const cards = (pics, rows) => rows.map((row) => card(pics, row));
 function render(pics, result) {
     const href = (sort, cursor = '') => `/?${new URLSearchParams({ sort, q: result.q, tag: result.tag, ...(cursor ? { cursor } : {}) })}`;
     return html`<section class="ovp-section sc-sec" aria-labelledby="sc-discover-pictures"><h2 id="sc-discover-pictures">${raw(headIcon('image'))}<span>Discover pictures</span></h2>
-<p class="sc-lede">Pictures people chose to share with everyone. An upload stays unlisted until its owner publishes it.</p>
+<p class="sc-lede">Pictures people chose to share with everyone. An upload stays out of the gallery until its owner publishes it.</p>
 <div class="ovp-gallery-bar"><form class="ovp-gallery-search" action="/" method="get" role="search">${glyph('search', 17)}<label class="ovp-sr" for="gallery-search">Search pictures and tags</label><input id="gallery-search" name="q" value="${result.q}" type="search" maxlength="120" placeholder="Search pictures or tags">${result.sort !== 'popular' ? html`<input type="hidden" name="sort" value="${result.sort}">` : ''}<button type="submit">Search</button></form>
 <nav class="ovp-gallery-tabs" aria-label="Gallery order">${['popular', 'new', 'rising'].map((sort) => html`<a href="${href(sort)}" ${sort === result.sort ? raw('aria-current="page"') : ''}>${sort[0].toUpperCase() + sort.slice(1)}</a>`)}</nav></div>
 ${result.tag ? html`<p class="ovp-gallery-tagged">Tagged <b>#${result.tag}</b> <a href="${href(result.sort).replace(/&?tag=[^&]*/, '')}">Clear</a></p>` : ''}
 <div class="ovp-gallery" data-gallery>${cards(pics, result.rows)}</div>
 ${!result.rows.length ? raw(`<div class="ovp-gallery-empty">${result.q || result.tag
     ? kit.empty({ icon: 'search', title: 'No public pictures match yet', text: 'Try another word or tag, or see everything published so far.', action: { href: '/', label: 'Clear the search', icon: 'image' } })
-    : kit.empty({ icon: 'image', title: 'The gallery is waiting for its first picture', text: 'Upload a picture, then choose Publish to gallery on its page. Until you do, it stays unlisted.', action: { href: '/mine', label: 'Your pictures', icon: 'image' } })}</div>`) : ''}
+    : kit.empty({ icon: 'image', title: 'The gallery is waiting for its first picture', text: 'Upload a picture, then choose Publish to gallery on its page. Until you do, it stays out of the gallery.', action: { href: '/mine', label: 'Your pictures', icon: 'image' } })}</div>`) : ''}
 ${result.next ? html`<a class="ovp-btn" data-gallery-next href="${href(result.sort, result.next)}">More pictures</a>` : ''}<p role="status" data-gallery-status></p></section>`;
 }
 module.exports = { PUBLIC, isPublic, tags, parseTags, options, browse, counts, publish, wire, cards, render };
