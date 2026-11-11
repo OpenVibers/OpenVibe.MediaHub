@@ -82,6 +82,10 @@ function multipart(fields, file) {
             const home = (await t.get('/', { headers: PICS })).text;
             assert.strictEqual((home.match(/<h1[\s>]/g) || []).length, 1, 'one h1');
             assert.match(home, /<title>OpenVibe\.Pics: share and embed pictures with a link<\/title>/);
+            // The duplicate check's hasher is Shared's ov-upload.js, from /shared/; the site never serves its own (a 404
+            // the 11-11 browser sweep found).
+            assert.ok(!/src="[^"]*\/ov-upload\.js\?v=dev"/.test(home) && !home.includes('src="/ov-upload.js'), 'not loaded as a site file');
+            assert.match(home, /<script src="[^"]*\/shared\/[^"]*ov-upload[^"]*\.js[^"]*" defer><\/script>/, 'loaded from Shared');
             const sections = ['How it works', 'The links a picture gets', 'Upload from your own app', 'What a free account gets', 'Questions', 'More on OpenVibe'];
             // The showcase kit puts every section title in a span inside its heading.
             assert.deepStrictEqual(sections.filter((h) => !home.includes(`${h}</span></h2>`)), [], 'every section is there');
