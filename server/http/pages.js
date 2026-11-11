@@ -558,8 +558,9 @@ ${agentGrants.length ? html`<h3 class="fv-h3">Agent grants for this file</h3><ul
     function notFoundFile(req, res) {
         return page(req, res, {
             title: 'No such file',
+            styles: ['kit.css'],
             crumbs: [{ label: 'Home', href: '/' }, { label: 'Your files', href: '/files' }],
-            body: html`<h1>No such file</h1><p class="muted">It is not yours, or it is gone. <a href="/files">Your files</a>.</p>`,
+            body: html`<h1>No such file</h1>${raw(kit.empty({ icon: 'download', title: 'No such file', text: 'It is not yours, or it is gone.', action: { href: '/files', label: 'Your files', icon: 'grid' } }))}`,
         }, 404);
     }
 
@@ -1108,7 +1109,7 @@ ${suspendedDrops.length ? html`<h2>Suspended uploads without an account</h2>${su
 <div id="drop-status" class="small" role="status"></div>
 </section>`;
     const dropCrumbs = (drop) => [{ label: 'Home', href: '/' }, { label: drop ? drop.name : 'A file' }];
-    const dropOff = (req, res) => page(req, res, { title: 'Not found', crumbs: dropCrumbs(null), body: html`<h1>Not found</h1><p class="muted">No file here. <a href="/">OpenVibe.Download</a>.</p>` }, 404);
+    const dropOff = (req, res) => page(req, res, { title: 'Not found', styles: ['kit.css'], crumbs: dropCrumbs(null), body: html`<h1>Not found</h1>${raw(kit.empty({ icon: 'download', title: 'No file here', text: 'This file page does not exist, or the file was removed.', action: { href: '/', label: 'Open OpenVibe.Download', icon: 'download' } }))}` }, 404);
     /** The drop behind /d/<slug>: active, or suspended (shown as such); removed or unknown is a 404, or a 410 when it was there. */
     async function openDrop(req, res) {
         if (!drops.enabled()) return dropOff(req, res) && null;
@@ -1213,6 +1214,7 @@ ${suspended ? '' : html`<section class="card" aria-labelledby="h-report"><h2 id=
         const keys = await syncKeys.list(requesterOf(req));
         return page(req, res, {
             title: 'Back up a folder',
+            styles: ['kit.css'],
             crumbs: syncCrumbs,
             body: html`<h1>Back up a folder from your computer</h1>
 <p class="sc-prose">The <code>openvibe-download</code> command keeps a folder on your computer copied into your drive: run it once, or on a schedule, and it sends only what is new or changed. It needs Node.js 20 or newer and a sync key from this page.</p>
@@ -1225,7 +1227,7 @@ ${suspended ? '' : html`<section class="card" aria-labelledby="h-report"><h2 id=
 <p class="small muted">Add <code>--dry-run</code> to see what it would send, and <code>--delete</code> to also remove drive files whose local copy is gone (without it, a backup only ever adds). Files keep their folders; a file is sent again when its size or contents change. Uploads through a sync key count against your ${rules.formatBytes(config.quotas.bytes)} and up to ${config.quotas.syncUploadsPerDay} files a day.</p></section>
 <section aria-labelledby="h-keys"><h2 id="h-keys">Your sync keys</h2>
 ${keys.length ? html`<ul class="file-list">${keys.map((k) => html`<li class="file"><span class="file-main"><span class="file-name">${k.name}</span><span class="file-meta small muted"><code>${k.prefix}…</code> · made ${time(k.created_at)} · ${keyState(k)}</span></span>
-${k.revoked_at ? '' : html`<form class="inline" method="post" action="/sync/keys/${k.id}/revoke"><button class="sc-btn" type="submit">Revoke</button></form>`}</li>`)}</ul>` : html`<p class="muted">No sync keys yet.</p>`}
+${k.revoked_at ? '' : html`<form class="inline" method="post" action="/sync/keys/${k.id}/revoke"><button class="sc-btn" type="submit">Revoke</button></form>`}</li>`)}</ul>` : raw(kit.empty({ icon: 'key', title: 'No sync keys yet', text: 'Make one below, then put it in the environment of the computer that backs up.', action: { href: '#key-name', label: 'Make a sync key', icon: 'plus' } }))}
 <form class="inline" method="post" action="/sync/keys">
 <label for="key-name">Computer</label> <input id="key-name" name="name" type="text" maxlength="${syncKeys.NAME_MAX}" placeholder="laptop" required> <button class="sc-btn sc-primary" type="submit">Make a sync key</button>
 </form>
