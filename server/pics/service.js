@@ -35,6 +35,7 @@ const REASON_TEXT = {
     private_info: 'Someone\'s private information', spam: 'Spam or a scam', other: 'Something else',
 };
 const LIMITS = { title: 120, description: 2000, alt: 160, albumTitle: 120, note: 500 };
+const AUDIENCES = ['public', 'link', 'people', 'private'];
 // A difference hash this close (of 64 bits) to a blocked one is the same picture, resized, re-compressed or retouched:
 // measured 2026-10-15, such copies of real photos land 0-10 bits away and different photos 23-42.
 const DHASH_DISTANCE = 10;
@@ -88,9 +89,11 @@ function createPics({ s, media, config, log = console, events = null, sharing = 
      * Upload one picture. who: { requester } (a person) or { anonymous: true, ip }. file: { buffer, name }.
      * → { ok, image, deleteKey? } or { ok: false, status, code, detail }.
      */
-    async function upload(who, file, { title = '', description = '', keepBoth = false } = {}) {
+    async function upload(who, file, { title = '', description = '', keepBoth = false, audience } = {}) {
         const anonymous = !who || !who.requester;
         if (anonymous && !cfg.anonymous) return { ok: false, status: 401, code: 'pics.sign_in_required', detail: 'Sign in with OpenVibe to upload pictures.' };
+        if (audience !== undefined && !AUDIENCES.includes(audience)) return { ok: false, status: 422, code: 'pics.audience', detail: 'Choose Everyone, Anyone with the link, Specific people, or Only me.' };
+        if (anonymous && ['people', 'private'].includes(audience)) return { ok: false, status: 401, code: 'pics.sign_in_required', detail: 'Sign in to make a picture private.' };
         const buf = file && file.buffer;
         const max = anonymous ? cfg.anonymousMaxImageBytes : cfg.maxImageBytes;
         if (!buf || !buf.length) return { ok: false, status: 422, code: 'pics.empty', detail: 'Choose a picture to upload.' };
@@ -126,7 +129,7 @@ function createPics({ s, media, config, log = console, events = null, sharing = 
         const thumb = await putObject(prepared.thumb.buffer, { mime: 'image/webp', name: `${id}-thumb.webp`, owner: who && who.requester, anonymous });
         const deleteKey = anonymous ? crypto.randomBytes(18).toString('base64url') : null;
         // The row and its mediahub.picture.uploaded event (signed-in uploads only) commit together.
-        const row = await s.tx(async () => { const r = await store.insertImage(s, {
+        let row = await s.tx(async () => { const r = await store.insertImage(s, {
             id, slug: slug(), owner: anonymous ? null : who.requester,
             delete_key_hash: deleteKey ? images.sha256(Buffer.from(deleteKey)) : null,
             title: base, description: cleanText(description, LIMITS.description),
@@ -137,9 +140,13 @@ function createPics({ s, media, config, log = console, events = null, sharing = 
         });
         if (events && !anonymous) await events.pictureUploaded(r);
         return r; });
-        // Unlisted by default: a picture is reachable by its link and by nobody else, until its owner publishes it
-        // to the gallery. The share row is the authority, so the page, the file and the thumbnail all agree.
-        if (sharing) await sharing.register(row.owner, 'picture', row.id, 'unlisted');
+        // The person's saved choice is the share row authority; anonymous pictures keep link access.
+        const chosen = audience || (anonymous ? 'link' : sharing ? await sharing.defaultAudience(row.owner, 'picture') : 'public');
+        if (sharing) await sharing.register(row.owner, 'picture', row.id, chosen);
+        if (chosen !== 'public') {
+            await s.db.exec('UPDATE pics_images SET audience = $1 WHERE id = $2', [chosen, row.id]);
+            row = await store.imageById(s, row.id);
+        }
         return { ok: true, image: row, ...(deleteKey ? { deleteKey } : {}), ...(similar ? { similar: { id: similar.id, slug: similar.slug } } : {}) };
     }
 
@@ -227,18 +234,28 @@ function createPics({ s, media, config, log = console, events = null, sharing = 
     }
 
     // ── Albums (account-only) ───────────────────────────────
-    async function createAlbum(owner, { title, description = '' }) {
+    async function createAlbum(owner, { title, description = '', audience } = {}) {
         const t = cleanLine(title, LIMITS.albumTitle);
         if (!t) return { ok: false, status: 422, code: 'pics.album_title', detail: 'Give the album a name.' };
+        if (audience !== undefined && !AUDIENCES.includes(audience)) return { ok: false, status: 422, code: 'pics.audience', detail: 'Choose Everyone, Anyone with the link, Specific people, or Only me.' };
         if (await store.albumCount(s, owner) >= cfg.albumsMax) return { ok: false, status: 409, code: 'pics.album_limit', detail: `You have ${cfg.albumsMax} albums, the most you can.` };
         const row = await store.insertAlbum(s, { id: s.newId('alb'), slug: slug(), owner, title: t, description: cleanText(description, LIMITS.description), created_at: s.iso() });
-        if (sharing) await sharing.register(owner, 'album', row.id, 'public');
-        return { ok: true, album: row };
+        const chosen = audience || (sharing ? await sharing.defaultAudience(owner, 'album') : 'public');
+        if (sharing) await sharing.register(owner, 'album', row.id, chosen);
+        if (chosen !== 'public') await s.db.exec('UPDATE pics_albums SET audience = $1 WHERE id = $2', [chosen, row.id]);
+        return { ok: true, album: chosen === 'public' ? row : await store.albumBySlug(s, row.slug) };
     }
 
     async function addToAlbum(album, image) {
         if (await store.albumImageCount(s, album.id) >= cfg.albumImagesMax) return { ok: false, status: 409, code: 'pics.album_full', detail: `An album holds ${cfg.albumImagesMax} pictures.` };
-        await store.addToAlbum(s, album.id, image.id);
+        await s.tx(async () => {
+            await store.addToAlbum(s, album.id, image.id);
+            const reach = { public: 3, link: 2, people: 1, private: 0 };
+            // Filing a picture in an album may narrow it, never expose it to more people.
+            if (sharing && album.audience && reach[album.audience] < reach[image.audience || 'public']) {
+                await sharing.setAudience({ subject: album.owner.slice(5) }, 'picture', image.id, album.audience);
+            }
+        });
         return { ok: true };
     }
 
@@ -264,7 +281,7 @@ function createPics({ s, media, config, log = console, events = null, sharing = 
         // L1 labels: `{ labels, suggested }` (common.content-labels@1). A suggestion is shown, never applied.
         content_labels: contentLabels.labelsOf(row),
         listed: Boolean(row.listed), tags: JSON.parse(row.tags || '[]'),
-        state: row.state, created_at: row.created_at, links: links(row),
+        state: row.state, audience: row.audience || 'public', created_at: row.created_at, links: links(row),
         ...(owner ? { report_count: Number(row.report_count) } : {}),
     });
 

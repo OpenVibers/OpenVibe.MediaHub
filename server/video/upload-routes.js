@@ -24,6 +24,7 @@ const cache = require('openvibe-shared/cache-policy');
 const { sameOrigin } = require('../http/principal');
 const { html, raw, notice, askAgent } = require('../render/html');
 const { UploadError } = require('./uploads');
+const { ShareError } = require('openvibe-sdk/share');
 
 const REASON_TEXT = {
     child_safety: 'It sexualises or endangers a child', violence: 'Violence or a threat', harassment: 'Harassment or someone\'s private details',
@@ -31,7 +32,7 @@ const REASON_TEXT = {
 };
 
 function problem(res, err) {
-    const e = err instanceof UploadError ? err : null;
+    const e = err instanceof UploadError || err instanceof ShareError ? err : null;
     if (!e) throw err;
     return res.status(e.status).type('application/problem+json').json({ type: 'about:blank', status: e.status, code: e.code, detail: e.detail });
 }
@@ -61,7 +62,7 @@ function createUploadApi({ ctx, config }) {
         if (!guard(req, res)) return undefined;
         try {
             const b = req.body || {};
-            const row = await up.start(who(req), { title: b.title, description: b.description, visibility: b.visibility, size: b.size, contentType: b.content_type, name: b.name });
+            const row = await up.start(who(req), { title: b.title, description: b.description, visibility: b.visibility, audience: b.audience, size: b.size, contentType: b.content_type, name: b.name });
             return res.status(201).json({ upload: { id: row.id, part_size: row.part_size, parts_expected: row.parts_expected } });
         } catch (err) { return problem(res, err); }
     });
@@ -79,7 +80,7 @@ function createUploadApi({ ctx, config }) {
         if (!row) return undefined;
         try {
             const b = req.body || {};
-            const updated = await up.update(row, { title: b.title, description: b.description, visibility: b.visibility });
+            const updated = await up.update(row, { title: b.title, description: b.description, visibility: b.visibility, audience: b.audience });
             return res.json({ upload: { id: updated.id, title: updated.title, visibility: updated.visibility } });
         } catch (err) { return problem(res, err); }
     });
@@ -106,7 +107,7 @@ function createUploadApi({ ctx, config }) {
         if (!guard(req, res)) return undefined;
         try {
             const b = req.body || {};
-            const row = await up.startRecording(who(req), { title: b.title, description: b.description, visibility: b.visibility, contentType: b.content_type });
+            const row = await up.startRecording(who(req), { title: b.title, description: b.description, visibility: b.visibility, audience: b.audience, contentType: b.content_type });
             return res.status(201).json({ upload: { id: row.id } });
         } catch (err) { return problem(res, err); }
     });
@@ -166,6 +167,8 @@ function mountUploadPages(r, h) {
     const cfg = ctx.config.videoUploads;
     const whoOf = (req) => ({ requester: signedIn(req) ? ownerOf(req) : null, staff: isStaff(req) });
     const GB = 1024 ** 3;
+    const audienceOptions = (current) => [['public', 'Everyone'], ['link', 'Anyone with the link'], ['people', 'Specific people'], ['private', 'Only me']]
+        .map(([value, label]) => html`<option value="${value}"${value === current ? raw(' selected') : ''}>${label}</option>`);
 
     const statusText = (row) => (row.state === 'hidden' ? 'Hidden after reports, waiting for staff'
         : row.status === 'uploading' ? `Upload stopped at ${Math.round((row.parts_received / row.parts_expected) * 100)}%`
@@ -246,10 +249,8 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
 <div class="ovv-upload-details">
 <label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="120" required></label>
 <label class="ovv-field"><span>Description</span><textarea name="description" rows="4" maxlength="5000"></textarea></label>
-<fieldset class="ovv-visibility"><legend>Who can see it?</legend>
-<label><input type="radio" name="visibility" value="public" checked><span><b>Public</b><small>Anyone can find and watch it.</small></span></label>
-<label><input type="radio" name="visibility" value="unlisted"><span><b>Unlisted</b><small>Only people with the link.</small></span></label>
-<label><input type="radio" name="visibility" value="private"><span><b>Only you</b><small>Your private video.</small></span></label></fieldset>
+<label class="ovv-field"><span>Who can see it?</span><select name="audience">${audienceOptions(await ctx.sharing.defaultAudience(ownerOf(req), 'video'))}</select></label>
+<p class="ovv-fine">For Specific people, name viewers on the video's Share sheet after upload.</p>
 <p class="ovv-fine">Upload only what you may share. <button type="button" class="ovv-link-button" data-upload-rules>Rules and limits</button></p>
 <p class="ovv-upload-status" role="status" aria-live="polite"></p>
 <button class="ovv-btn ovv-btn--primary" type="submit" disabled>Save details</button>
@@ -268,7 +269,7 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
 <p class="ovv-lede">Open the camera here, then review and trim your clip before saving it to Video.</p>
 <form class="ovv-record ovv-panel" data-video-upload data-video-record>
 <label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="120" placeholder="Untitled recording"></label>
-<label class="ovv-field"><span>Who can see it</span><select name="visibility">${visibilityOptions('private')}</select></label>
+<label class="ovv-field"><span>Who can see it</span><select name="audience">${audienceOptions(await ctx.sharing.defaultAudience(ownerOf(req), 'video'))}</select></label>
 <input name="file" type="file" accept="video/webm,video/mp4" class="ovv-record-file" aria-label="Recorded file" tabindex="-1" required>
 <textarea name="description" hidden></textarea>
 <progress hidden value="0" max="1"></progress>
@@ -292,6 +293,7 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
         const rows = await up.mine(ownerOf(req));
         await Promise.all(rows.filter((x) => x.status === 'processing').map((x) => up.refresh(x).catch(() => null)));
         const fresh = await up.mine(ownerOf(req));
+        const defaultAudience = await ctx.sharing.defaultAudience(ownerOf(req), 'video');
         return page(req, res, {
             title: 'Your videos',
             crumbs: [{ label: 'Home', href: '/' }, { label: 'Your videos' }],
@@ -303,6 +305,7 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
         ? `${fresh.length} video${fresh.length === 1 ? '' : 's'}, newest first. A processing video finishes in the background, so you can close the page.`
         : 'Everything you upload to OpenVibe.Video appears here, with its state and who can see it.'}</p>
 <a class="ovv-btn ovv-btn--primary" href="/upload"><i class="fa-solid fa-upload" aria-hidden="true"></i> Upload a video</a></div>
+<form class="ovv-panel" method="post" action="/me/videos/share-default"><label>New videos <select name="audience">${audienceOptions(defaultAudience)}</select></label> <label><input type="checkbox" name="apply" value="1"> Apply to all my existing videos</label> <button class="ovv-btn" type="submit">Save default</button></form>
 ${fresh.length ? html`<ul class="ovv-mylist">${fresh.map(myVideoRow)}</ul>` : html`<div class="ovv-my-empty"><i class="fa-solid fa-film" aria-hidden="true"></i><h2>No videos yet</h2><p>Choose a video and the upload starts while you fill in the title.</p><a class="ovv-btn ovv-btn--primary" href="/upload">Upload your first video</a></div>`}
 <dialog class="ovv-rules" data-delete-sheet aria-label="Delete this video">
 <h2>Delete this video?</h2>
@@ -311,6 +314,16 @@ ${fresh.length ? html`<ul class="ovv-mylist">${fresh.map(myVideoRow)}</ul>` : ht
 <p class="ovv-sheet-actions"><button class="ovv-btn ovv-btn--danger" type="submit">Delete for good</button> <button class="ovv-btn" type="button" data-delete-cancel>Keep it</button></p></form>
 </dialog>`,
         });
+    });
+
+    r.post('/me/videos/share-default', mustSignIn('/me/videos', 'Sign in to change video sharing.'), async (req, res) => {
+        if (!sameSite(req, res, '/me/videos')) return;
+        const audience = String(req.body.audience || '');
+        if (!ctx.sharing.AUDIENCES.includes(audience)) return res.status(422).type('text/plain').send('Choose a sharing audience.');
+        const owner = ownerOf(req);
+        await ctx.sharing.setDefaultAudience(owner, 'video', audience);
+        if (req.body.apply === '1') await ctx.sharing.applyDefault(owner, 'video', audience);
+        return res.redirect(303, '/me/videos');
     });
 
     // The numbered address answers 301 to the watch address, so an old link or card still lands on the video.
@@ -324,18 +337,25 @@ ${fresh.length ? html`<ul class="ovv-mylist">${fresh.map(myVideoRow)}</ul>` : ht
         return res.redirect(301, `/watch?v=${watchId}${tail}`);
     });
 
-    /** The upload a request may see (its owner, staff, a share's people, the public), or null (and 404). */
-    async function visibleUpload(req, res, id) {
-        const row = await up.byId(id);
+    async function maySeeUpload(req, row) {
         const who = whoOf(req);
-        if (!up.canSee(row, who)) { notFound(req, res); return null; }
+        if (!row || row.state === 'removed') return false;
         // Specific people and Only me: the share row decides, beside the old column. A row written before the
         // sharing model (an import, a cut) does not exist yet: the column still decides, failing closed for private.
         const own = Boolean(who.requester && row.owner === who.requester);
-        if (!own && !who.staff && ctx.sharing) {
+        if (own || who.staff) return true;
+        if (row.state !== 'active' || row.status !== 'ready') return false;
+        if (ctx.sharing) {
             const share = await ctx.sharing.shareOf('video', row.id).catch(() => null);
-            if (share && !await ctx.sharing.canView(req.viewer, 'video', row.id).catch(() => false)) { notFound(req, res); return null; }
+            if (share) return await ctx.sharing.canView(req.viewer, 'video', row.id).catch(() => false);
         }
+        return up.canSee(row, who);
+    }
+
+    /** The upload a request may see (its owner, staff, a share's people, the public), or null (and 404). */
+    async function visibleUpload(req, res, id) {
+        const row = await up.byId(id);
+        if (!await maySeeUpload(req, row)) { notFound(req, res); return null; }
         return row;
     }
 
@@ -380,6 +400,8 @@ ${fresh.length ? html`<ul class="ovv-mylist">${fresh.map(myVideoRow)}</ul>` : ht
         const who = whoOf(req);
         const own = Boolean(who.requester && row.owner === who.requester);
         const manage = own || who.staff;
+        const share = manage && ctx.sharing ? await ctx.sharing.shareOf('video', row.id).catch(() => null) : null;
+        const currentAudience = share ? share.audience : row.visibility === 'unlisted' ? 'link' : row.visibility;
         const ready = row.status === 'ready';
         const vod = ready ? await up.playback(row) : null;
         const ai = ready ? await ctx.videoAi.forUpload(row) : null;
@@ -445,7 +467,7 @@ ${what}
 ${channel ? html`<a class="ovv-avatar" href="/@${channel}" aria-hidden="true" tabindex="-1">${channel.slice(0, 1).toUpperCase()}${/^[A-Za-z0-9_]{1,32}$/.test(channel) ? html`<img src="${ctx.config.networkUrl}/avatar/${channel}" alt="" loading="lazy">` : ''}</a>` : ''}
 <div class="ovv-byline-text">${channel ? html`<a class="ovv-channel-name" href="/@${channel}">@${channel}</a>` : ''}
 </div>
-<div class="ovv-byline-actions">${saveForm}${ready && vod && fileOf(vod) ? html`<a class="ovv-btn" href="https://openvibe.party/new?media=${encodeURIComponent(fileOf(vod))}&source_url=${encodeURIComponent(`${String(ctx.config.video.url).replace(/\/+$/, '')}${watchPath}`)}&title=${encodeURIComponent(String(row.title || 'Watch party'))}"><i class="fa-solid fa-users" aria-hidden="true"></i> Watch together</a>` : ''}${own && ready && row.state === 'active' && studioVideoEdit ? html`<a class="ovk-btn ovk-btn--quiet" href="${studioEditUrl(row)}">Edit in Studio</a>` : ''}${raw(shareButton({ cls: 'ovv-btn', url: `${ctx.config.video.url}${watchPath}`, title: row.title, text: about, image: thumb || '', timeFrom: ready && vod ? '.ovv-player' : null }))}${raw(askAgent({ text: `About the video “${row.title}” on OpenVibe.Video (${ctx.config.video.url}${watchPath}): ` }))}</div>
+<div class="ovv-byline-actions">${saveForm}${ready && vod && fileOf(vod) ? html`<a class="ovv-btn" href="https://openvibe.party/new?media=${encodeURIComponent(fileOf(vod))}&source_url=${encodeURIComponent(`${String(ctx.config.video.url).replace(/\/+$/, '')}${watchPath}`)}&title=${encodeURIComponent(String(row.title || 'Watch party'))}"><i class="fa-solid fa-users" aria-hidden="true"></i> Watch together</a>` : ''}${own && ready && row.state === 'active' && studioVideoEdit ? html`<a class="ovk-btn ovk-btn--quiet" href="${studioEditUrl(row)}">Edit in Studio</a>` : ''}${raw(shareButton({ cls: 'ovv-btn', url: `${ctx.config.video.url}${watchPath}`, title: row.title, text: about, image: thumb || '', timeFrom: ready && vod ? '.ovv-player' : null, kind: 'video', id: row.id }))}${raw(askAgent({ text: `About the video “${row.title}” on OpenVibe.Video (${ctx.config.video.url}${watchPath}): ` }))}</div>
 </div>
 ${row.description ? html`<section class="ovv-panel ovv-description"><p>${row.description}</p></section>` : ''}
 ${aiDone && ai.overview ? html`<section class="ovv-panel" aria-labelledby="h-ai"><h2 id="h-ai">About this video</h2><p>${ai.overview}</p><p class="ovv-fine">Written by AI from the video's sound and pictures (OpenVibe.AI, run on OpenVibe's own servers).</p>
@@ -459,7 +481,8 @@ ${manage ? html`<section class="ovv-panel ovv-owner" aria-labelledby="h-owner"><
 <form class="ovv-owner-form" method="post" action="/u/${row.id}/manage">
 <label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="120" value="${row.title}" required></label>
 <label class="ovv-field"><span>Description</span><textarea name="description" rows="3" maxlength="5000">${row.description}</textarea></label>
-<label class="ovv-field"><span>Visibility</span><select name="visibility">${visibilityOptions(row.visibility)}</select></label>
+${own ? html`<label class="ovv-field"><span>Who can see it</span><select name="audience">${audienceOptions(currentAudience)}</select></label>`
+    : html`<label class="ovv-field"><span>Visibility</span><select name="visibility">${visibilityOptions(row.visibility)}</select></label>`}
 <button class="ovv-btn ovv-btn--primary" type="submit">Save changes</button></form>
 <details class="ovv-danger"><summary>Delete this video</summary>
 <form class="ovv-owner-delete" method="post" action="/u/${row.id}/delete"><label class="ovv-confirm"><input type="checkbox" name="confirm" value="1" required> I want to delete it for good</label> <button class="ovv-btn ovv-btn--danger" type="submit">Delete</button></form>
@@ -480,7 +503,7 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
     // The AI's transcript and chapters as WebVTT tracks, for whoever may see the video.
     async function aiOf(req) {
         const row = await up.byId(req.params.id);
-        if (!up.canSee(row, whoOf(req)) || row.status !== 'ready') return null;
+        if (!await maySeeUpload(req, row) || row.status !== 'ready') return null;
         const ai = await ctx.videoAi.forUpload(row);
         return ai && ai.status === 'done' ? { row, ai } : null;
     }
@@ -500,9 +523,9 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
         if (!sameSite(req, res, `/u/${row.id}`)) return undefined;
         try {
             const b = req.body || {};
-            await up.update(row, { title: b.title === undefined ? undefined : b.title, description: b.description, visibility: b.visibility === undefined ? undefined : b.visibility });
+            await up.update(row, { title: b.title === undefined ? undefined : b.title, description: b.description, visibility: b.visibility === undefined ? undefined : b.visibility, audience: b.audience === undefined ? undefined : b.audience });
         } catch (err) {
-            if (!(err instanceof UploadError)) throw err;
+            if (!(err instanceof UploadError || err instanceof ShareError)) throw err;
             return page(req, res, { title: 'Not saved', body: html`<h1>Not saved</h1><p>${err.detail}</p><p><a href="${row.watch_id ? `/watch?v=${row.watch_id}` : `/u/${row.id}`}">Back</a></p>` }, err.status);
         }
         if (ctx.videoSearch) ctx.videoSearch.kick();
@@ -536,7 +559,7 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
 
     r.post('/u/:id/report', async (req, res) => {
         const row = await up.byId(req.params.id);
-        if (!up.canSee(row, whoOf(req))) return notFound(req, res);
+        if (!await maySeeUpload(req, row)) return notFound(req, res);
         if (!sameSite(req, res, `/u/${row.id}`)) return undefined;
         try {
             const b = req.body || {};

@@ -57,7 +57,7 @@
             });
         }).catch(function () { return null; });
     }
-    function snapshot() { return stored(state.file && state.upload ? { file: state.file, upload: state.upload, title: form.elements.title.value, description: form.elements.description.value, visibility: form.elements.visibility.value, saved: state.saved } : null); }
+    function snapshot() { return stored(state.file && state.upload ? { file: state.file, upload: state.upload, title: form.elements.title.value, description: form.elements.description.value, audience: form.elements.audience.value, saved: state.saved } : null); }
     function choose(file) {
         if (state.file) { say('Remove this video before choosing another.'); return; }
         state.file = file; state.cancelled = false; state.saved = false; state.complete = null;
@@ -166,7 +166,7 @@
         event.preventDefault();
         if (!state.upload || !state.file) { say('Choose a video first.'); return; }
         button.disabled = true;
-        json('PATCH', '/api/v1/videos/' + encodeURIComponent(state.upload.id), { title: form.elements.title.value, description: form.elements.description.value, visibility: form.elements.visibility.value }).then(function () {
+        json('PATCH', '/api/v1/videos/' + encodeURIComponent(state.upload.id), { title: form.elements.title.value, description: form.elements.description.value, audience: form.elements.audience.value }).then(function () {
             state.saved = true; snapshot(); button.disabled = false; button.textContent = 'Details saved';
             if (state.complete) { stored(null); window.location.assign(state.complete.video.url); }
             else say('Details saved. Your video is still uploading.');
@@ -177,7 +177,7 @@
         if (state.file || !pending || !pending.file || !pending.upload) return;
         state.file = pending.file; state.upload = pending.upload; state.saved = !!pending.saved;
         form.elements.title.value = pending.title; form.elements.description.value = pending.description;
-        form.elements.visibility.value = pending.visibility;
+        form.elements.audience.value = pending.audience || (pending.visibility === 'unlisted' ? 'link' : pending.visibility || 'public');
         button.disabled = false;
         picker.add([pending.file]);
         say('Resuming your video…'); send();

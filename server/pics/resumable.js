@@ -10,14 +10,15 @@ function resumable(ctx, { person, problem, whoOf }) {
     r.post('/', limits.budget('pics.image.upload'), express.json({ limit: '8kb' }), async (req, res) => {
         const b = req.body || {};
         if (!Number.isInteger(b.size) || b.size < 1 || b.size > config.pics.maxImageBytes || !/^image\/(jpeg|png|webp|gif|avif)$/.test(b.content_type)) return problem(req, res, 422, 'pics.upload_invalid', 'Choose a supported image within the upload limit.');
+        if (b.audience !== undefined && !ctx.sharing.AUDIENCES.includes(b.audience)) return problem(req, res, 422, 'pics.audience', 'Choose Everyone, Anyone with the link, Specific people, or Only me.');
         const result = await s.tx(async () => {
             // A per-owner advisory lock bounds simultaneous unfinished uploads too.
             await s.db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [whoOf(req).requester]);
             await s.db.query('DELETE FROM pics_uploads WHERE expires_at < $1', [s.iso()]);
             const count = Number(await s.db.value('SELECT count(*) FROM pics_uploads WHERE owner = $1 AND image_id IS NULL', [whoOf(req).requester]));
             if (count >= 4) return null;
-            return s.db.maybe(`INSERT INTO pics_uploads (id, owner, size, content_type, name, title, expires_at)
-                VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`, ['pup_' + crypto.randomBytes(18).toString('hex'), whoOf(req).requester, b.size, b.content_type, String(b.name || 'picture').slice(0, 200), String(b.title || '').slice(0, 120), new Date(s.now() + 86400000).toISOString()]);
+            return s.db.maybe(`INSERT INTO pics_uploads (id, owner, size, content_type, name, title, audience, expires_at)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`, ['pup_' + crypto.randomBytes(18).toString('hex'), whoOf(req).requester, b.size, b.content_type, String(b.name || 'picture').slice(0, 200), String(b.title || '').slice(0, 120), b.audience || null, new Date(s.now() + 86400000).toISOString()]);
         });
         if (!result) return problem(req, res, 429, 'pics.upload_limit', 'Finish or cancel an upload before starting another.');
         return res.status(201).json(wire(result));
@@ -42,7 +43,7 @@ function resumable(ctx, { person, problem, whoOf }) {
         if (u.image_id) { const image = await images.imageById(s, u.image_id); return res.json(pics.toWire(image, { owner: true })); }
         if (u.offset_bytes !== u.size) return problem(req, res, 409, 'pics.upload_incomplete', 'Upload all bytes before completing.');
         const chunks = await s.db.many('SELECT bytes FROM pics_upload_chunks WHERE upload_id = $1 ORDER BY offset_bytes', [u.id]);
-        const out = await pics.upload(whoOf(req), { buffer: Buffer.concat(chunks.map((x) => Buffer.from(x.bytes))), name: u.name }, { title: u.title });
+        const out = await pics.upload(whoOf(req), { buffer: Buffer.concat(chunks.map((x) => Buffer.from(x.bytes))), name: u.name }, { title: u.title, audience: u.audience || undefined });
         if (!out.ok) return problem(req, res, out.status, out.code, out.detail);
         await s.db.query('UPDATE pics_uploads SET image_id = $2 WHERE id = $1', [u.id, out.image.id]);
         await s.db.query('DELETE FROM pics_upload_chunks WHERE upload_id = $1', [u.id]);
