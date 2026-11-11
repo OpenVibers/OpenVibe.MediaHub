@@ -75,6 +75,7 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
     await check('upload page uses the shared picker, progress and a rules sheet', async () => {
         const page = await vreq(t.base, '/upload', { cookie: kimCookie });
         assert.strictEqual(page.status, 200, page.text.slice(0, 180));
+        assert.ok(page.text.includes('data-ov-upload-picker data-ov-guide="video.upload"'), 'the upload picker has the Quest guide target');
         assert.ok(page.text.includes('/shared/ov-upload.js') && page.text.includes('/shared/ov-upload.css'));
         assert.ok(page.text.includes('<ov-progress') && page.text.includes('data-ov-upload-picker'));
         assert.ok(page.text.includes('data-upload-rules-sheet'));

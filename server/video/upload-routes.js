@@ -241,7 +241,7 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
         scripts: ['js/video-upload.js'],
         body: html`<h1>Upload a video</h1>
 <form class="ovv-upload ovv-panel" data-video-upload method="post" action="/upload">
-<div class="ovv-upload-pick"><div data-ov-upload-picker></div>
+<div class="ovv-upload-pick"><div data-ov-upload-picker data-ov-guide="video.upload"></div>
 <ov-progress data-ov-upload-progress hidden></ov-progress></div>
 <div class="ovv-upload-details">
 <label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="120" required></label>
