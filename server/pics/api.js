@@ -30,12 +30,14 @@ const { sameOrigin } = require('../http/principal');
 const store = require('./store');
 const contentLabels = require('../labels');
 const gallery = require('./gallery');
+const { createCommentsClient } = require('./comments-client');
 
 function createPicsApi(ctx) {
     const { config, s, principal, limits } = ctx;
     const pics = ctx.pics;
     const cfg = config.pics;
     const r = asyncRouter();
+    const comments = createCommentsClient({ fetchImpl: ctx.fetchImpl || globalThis.fetch });
     const problem = (req, res, status, code, detail) => contracts.http.sendProblem(res, status, code, { detail, ctx: req.ov });
 
     r.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
@@ -137,6 +139,30 @@ function createPicsApi(ctx) {
     });
 
     r.use(express.json({ limit: '64kb' }));
+
+    const commentAnswer = (res, result) => res.status(result.status).json(result.body);
+    r.get('/images/:slug/comments', async (req, res) => {
+        const row = await load(req, res);
+        if (!row) return;
+        return commentAnswer(res, await comments.read(row.id, req.viewer.token, req.query));
+    });
+    r.post('/images/:slug/comments', person, async (req, res) => {
+        const row = await load(req, res);
+        if (!row) return;
+        const b = req.body || {};
+        if (!Array.isArray(b.attachments || []) || (b.attachments || []).length > 4)
+            return problem(req, res, 400, 'pics.comment.attachments', 'Attach up to four files');
+        return commentAnswer(res, await comments.add(row.id, req.viewer.token,
+            { message: b.message, parent_id: b.parent_id || null, attachments: b.attachments || [] }));
+    });
+    const commentFile = express.raw({ type: 'application/octet-stream', limit: '16mb' });
+    r.post('/images/:slug/comment-attachments', person, commentFile, async (req, res) => {
+        const row = await load(req, res);
+        if (!row) return;
+        if (!Buffer.isBuffer(req.body) || !req.body.length) return problem(req, res, 400, 'pics.comment.file', 'Choose a file');
+        return commentAnswer(res, await comments.upload(row.id, req.viewer.token, req.body,
+            String(req.get('x-file-name') || 'file').slice(0, 255), String(req.get('x-file-mime') || 'application/octet-stream').slice(0, 100)));
+    });
 
     r.get('/images/:slug/bytes', person, async (req, res) => {
         const row = await load(req, res);
