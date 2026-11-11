@@ -185,6 +185,15 @@ function startLive() {
             if (memories[1] === '101') return json(200, { memories: [{ offset_seconds: 10, description: 'Intro & setup' }, { offset_seconds: 30, description: 'The <main> part' }] });
             return json(200, { memories: [] });
         }
+        const agentSteps = /^\/api\/vods\/(\d+)\/agent-steps$/.exec(p);
+        if (agentSteps) {
+            if (agentSteps[1] === '104') return json(200, { task: 'Fix checkout', steps: [
+                { offset_seconds: 2, title: 'Run checkout tests', status: 'started' },
+                { offset_seconds: 8, title: 'A test failed', status: 'failed' },
+                { offset_seconds: 15, title: 'Try again', status: 'started' },
+            ] });
+            return json(404, { error: 'not an agent recording' });
+        }
         // Live's stream history: stream 1001 (VOD 101) was streamed upright from a phone, then turned sideways later.
         const history = /^\/api\/streams\/(\d+)\/history$/.exec(p);
         if (history) {
@@ -396,6 +405,20 @@ function countOccurrences(haystack, needle) {
         assert.strictEqual(q.get('media'), 'https://openvibe.media/v/101', 'the party plays the file, not the page');
         assert.strictEqual(q.get('source_url'), 'https://openvibe.video/v/101', 'the page goes with it');
         assert.strictEqual(q.get('title'), 'A public recording');
+    });
+
+    await check('an agent recording replays its steps and takes chapters from started steps', async () => {
+        const page = await getVideo('/v/104');
+        assert.strictEqual(page.status, 200);
+        assert.ok(page.text.includes('data-ovv-agent='));
+        assert.ok(page.text.includes('Fix checkout'));
+        assert.ok(page.text.includes('Run checkout tests'));
+        assert.ok(page.text.includes('Try again'));
+        const track = await getVideo('/v/104/chapters.vtt');
+        assert.strictEqual(track.status, 200);
+        assert.ok(track.text.includes('Run checkout tests'));
+        assert.ok(track.text.includes('Try again'));
+        assert.ok(!track.text.includes('A test failed'));
     });
 
     await check('the clip watch page attributes its maker and links the full recording', async () => {

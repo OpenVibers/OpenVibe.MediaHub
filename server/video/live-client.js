@@ -241,6 +241,10 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
         vodMemories(id) {
             return getJson(`/api/vods/${id}/memories`);
         },
+        agentSteps(id) {
+            return getJson(`/api/vods/${id}/agent-steps`);
+        },
+        agentStepsAs: (token, id) => asPerson(token, 'GET', `/api/vods/${id}/agent-steps`),
         /** What was heard in a VOD, as caption cues in its own time ("[laughter]"; Live's sound-captions.js), or null. */
         vodSounds(id) {
             return getJson(`/api/vods/${id}/sounds`);
