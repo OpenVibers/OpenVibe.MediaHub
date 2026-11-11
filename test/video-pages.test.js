@@ -406,6 +406,7 @@ function countOccurrences(haystack, needle) {
         assert.ok(/data-ovv-hls-lib="\/vendor\/hls\.light\.min\.js\?v=[0-9a-f]{10}"/.test(r.text), 'hls.js, self-hosted and content-hashed');
         assert.ok(/media-src[^;]*blob:/.test(String(r.headers['content-security-policy'])), 'MSE plays from blob:');
         assert.ok(/connect-src[^;]*https:\/\/openvibe\.live/.test(String(r.headers['content-security-policy'])), 'the beacon may reach Live');
+        assert.ok(/frame-src[^;]*https:\/\/openvibe\.live/.test(String(r.headers['content-security-policy'])), 'a carried live player may frame Live');
         assert.ok(r.text.includes('kind="captions"') && r.text.includes('src="/v/101/captions.vtt"'), 'the transcript track');
         assert.ok(r.text.includes('kind="chapters"') && r.text.includes('src="/v/101/chapters.vtt"'), 'the chapters track');
         assert.ok(r.text.includes('Chapters'));

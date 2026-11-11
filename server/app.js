@@ -140,7 +140,8 @@ async function createApp(opts = {}) {
                 // The watch page counts a view on OpenVibe.Live with a beacon (Live's /api/views).
                 // The navbar's Messages count asks Chat (openvibe-shared 4.130.0).
                 connectSrc: ["'self'", 'https://openvibe.community', 'https://openvibe.chat', 'https://openvibe.network', 'https://openvibe.quest', 'https://cloudflareinsights.com', 'https://openvibe.events', ...MEDIA_ORIGINS, liveOrigin],
-                frameSrc: ["'self'", 'https://openvibe.network'],
+                // Shared's portable player frames Live's first-party /embed page after a cross-site handoff.
+                frameSrc: ["'self'", 'https://openvibe.network', liveOrigin],
                 frameAncestors: ["'none'"],
                 objectSrc: ["'none'"],
                 baseUri: ["'self'"],
