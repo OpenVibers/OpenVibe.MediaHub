@@ -30,6 +30,7 @@ const TABLES = [
     { table: 'mh_usage', subject: 'owner', value: AS_REQUESTER, file: 'usage.json' },
     // Radio publications refer to drive files. Export and erase them before the file rows cascade.
     { table: 'mh_radio_tracks', subject: 'owner', value: AS_REQUESTER, file: 'radio_tracks.json' },
+    { table: 'mh_agent_grants', subject: 'owner', value: AS_REQUESTER, file: 'agent_grants.json' },
     { table: 'mh_files', subject: 'owner', value: AS_REQUESTER, file: 'files.json' },
     { table: 'mh_folders', subject: 'owner', value: AS_REQUESTER, file: 'folders.json' },
     // A playlist's items have no owner column of their own; they are exported with extraExport below and erased
