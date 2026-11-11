@@ -69,15 +69,15 @@ async function createApp(opts = {}) {
     const media = createMediaClient({ config, fetchImpl, log });
     const identity = createIdentity({ config, fetchImpl, log });
     const drive = createService({ s, media, identity, config, log });
-    const uploads = createUploads({ s, media, config, service: drive, log });
     // videoUploads is made below; the account consumer only calls it when an event arrives.
     const account = createAccount({ db: s.db, config, media, log, onMediaVodReady: (vod) => videoUploads.importRecording(vod) });
     const playlists = createPlaylists({ s, config, log });
     // MediaHub's own events (server/events-outbox.js): written with the change, relayed to OpenVibe.Events.
     const eventsOutbox = require('./events-outbox').createEventsOutbox({ s, config, log, fetchImpl: opts.fetchImpl || null });
     const { createSharing, describeRef } = require('./sharing');
-    // Sharing (openvibe-sdk/share): the row next to each picture, album and video upload, and the one access check.
+    // Sharing (openvibe-sdk/share): the row next to each picture, album, video and drive upload.
     const sharing = opts.sharing || createSharing({ db: s.db, config, outbox: { emit: (envelope) => eventsOutbox.emit(envelope) }, now: s.now, fetchImpl, log });
+    const uploads = createUploads({ s, media, config, service: drive, sharing, log });
     const pics = createPics({ s, media, config, log, events: eventsOutbox, sharing });
     const picsDescribe = opts.picsDescribe || require('./pics/describe').createPicDescriber({ s, media, config, fetchImpl, log });
     // OpenVibe.Video uploads (server/video/uploads.js): Media VODs in this tenant.
@@ -257,6 +257,8 @@ async function createApp(opts = {}) {
     {
         const shareApi = express.Router();
         shareApi.use(sso.middleware());
+        // Express initializes req.body to {} on this host; parse JSON before the SDK reads it.
+        shareApi.use(express.json({ limit: '9mb' }));
         shareApi.use(sharing.shares.router({
             service: 'mediahub',
             authenticate: (req) => sharing.shareViewer(req.viewer),

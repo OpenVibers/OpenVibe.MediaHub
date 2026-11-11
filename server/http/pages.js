@@ -80,7 +80,7 @@ function driveScene() {
 }
 
 function createPageRoutes(ctx) {
-    const { config, s, drive, uploads, media, syncKeys, drops } = ctx;
+    const { config, s, drive, uploads, media, syncKeys, drops, sharing } = ctx;
     const r = asyncRouter();
     // The pages' forms are web forms (no JavaScript): urlencoded text, and one multipart file upload whose body the
     // upload route reads itself. The JSON parser is deliberately absent here.
@@ -310,10 +310,11 @@ ${raw(showcase.cta({ title: 'Before you upload', text: 'Read the rules: what is 
 </nav>`;
 
     /** The upload: a big "Upload files" target over a plain file form. upload.js takes it over (many files, the tray). */
-    const uploadForm = (folder) => html`<form class="dr-upload" method="post" action="/files/upload" enctype="multipart/form-data" data-upload>
+    const uploadForm = (folder, audience) => html`<form class="dr-upload" method="post" action="/files/upload" enctype="multipart/form-data" data-upload>
 ${folder ? html`<input type="hidden" name="folder" value="${folder.id}">` : ''}
 <input id="file" class="dr-pick-in" name="file" type="file" required>
 <label class="dr-pick" for="file">${ui.icon('upload')}<span><b>Upload files</b><small>Or drop them anywhere on this page</small></span></label>
+<label>Who can open a new file <select name="audience"><option value="public"${audience === 'public' ? raw(' selected') : ''}>Everyone</option><option value="link"${audience === 'link' ? raw(' selected') : ''}>Anyone with the link</option><option value="people"${audience === 'people' ? raw(' selected') : ''}>Specific people</option><option value="private"${audience === 'private' ? raw(' selected') : ''}>Only me</option></select></label>
 <div class="dr-upload-go" data-nojs><input id="name" name="name" type="text" maxlength="${rules.NAME_MAX}" placeholder="Name (optional)" aria-label="Name (optional)"><button class="dr-btn is-primary" type="submit">Upload</button></div>
 <progress id="upload-progress" max="100" value="0" hidden></progress>
 <p id="upload-status" class="dr-fine" role="status"></p>
@@ -356,6 +357,7 @@ ${folder ? html`<input type="hidden" name="folder" value="${folder.id}">` : ''}
         }
         const usage = await drive.usage(owner);
         const binCount = await drive.binCount(owner);
+        const shareDefault = await sharing.defaultAudience(owner, 'download');
         const title = q ? `“${q}”` : folder ? folder.name : 'My files';
         const empty = !files.length && !folders.length;
         const keep = (extra) => html`${folder ? html`<input type="hidden" name="folder" value="${folder.id}">` : ''}${extra || ''}`;
@@ -370,7 +372,8 @@ ${folder ? html`<input type="hidden" name="folder" value="${folder.id}">` : ''}
 <details class="dr-new" data-new><summary class="dr-new-btn">${ui.icon('plus')}<span>New</span></summary>
 <div class="dr-new-panel" role="group" aria-label="Add to ${folder ? folder.name : 'My files'}">
 <p class="dr-new-title">Add to <b>${folder ? folder.name : 'My files'}</b></p>
-${uploadForm(folder)}
+${uploadForm(folder, shareDefault)}
+<form method="post" action="/files/share-default"><label>New files <select name="audience"><option value="public"${shareDefault === 'public' ? raw(' selected') : ''}>Everyone</option><option value="link"${shareDefault === 'link' ? raw(' selected') : ''}>Anyone with the link</option><option value="people"${shareDefault === 'people' ? raw(' selected') : ''}>Specific people</option><option value="private"${shareDefault === 'private' ? raw(' selected') : ''}>Only me</option></select></label><label><input type="checkbox" name="apply" value="1"> Apply to all my existing files</label><button class="ovk-btn ovk-btn--quiet" type="submit">Save default</button></form>
 ${folderForm(folder)}
 <a class="dr-new-row" href="/sync">${ui.icon('sync')}<span><b>Back up a folder</b><small>Keep a folder on your computer copied here</small></span></a>
 </div></details>
@@ -441,10 +444,37 @@ ${files.length ? html`<ul class="dr-files" data-items>${files.map((row) => ui.fi
         });
     });
 
-    r.get('/files/:id', mustSignIn('/files'), async (req, res) => {
+    r.post('/files/share-default', mustSignIn('/files'), async (req, res) => {
+        if (!sameSite(req, res, '/files')) return undefined;
+        const audience = String((req.body || {}).audience || '');
+        if (!['public', 'link', 'people', 'private'].includes(audience)) return res.status(422).type('text/plain').send('Choose Everyone, Anyone with the link, Specific people, or Only me.');
         const owner = requesterOf(req);
-        const row = await drive.ownFile(owner, String(req.params.id || ''));
+        await sharing.setDefaultAudience(owner, 'download', audience);
+        if (req.body && req.body.apply === '1') await sharing.applyDefault(owner, 'download', audience);
+        return res.redirect(303, '/files');
+    });
+
+    r.get('/files/:id', async (req, res) => {
+        const id = String(req.params.id || '');
+        const row = rules.isFileId(id) ? await ctx.store.getFile(s, id) : null;
+        const mine = row && signedIn(req) && row.owner === requesterOf(req);
+        if (row && (row.deleted_at || row.binned_at)) return notFoundFile(req, res);
+        if (row && !mine && !await sharing.canView(req.viewer, 'download', row.id)) {
+            const share = await sharing.shareOf('download', row.id);
+            if (share && share.audience === 'people') return page(req, res, {
+                title: 'A file on OpenVibe.Download', noindex: true,
+                body: html`<h1>A file on OpenVibe.Download</h1><p>This is shared with specific people.</p>
+<div data-ov-share-gate data-kind="download" data-id="${row.id}" data-signed-in-as="${req.viewer && req.viewer.username ? req.viewer.username : ''}" data-sign-in-url="${`/auth/login?next=${encodeURIComponent(req.originalUrl)}`}"><p>Sign in to ask for access.</p></div>
+<link rel="stylesheet" href="${ovServe.url('ov-share.css')}"><script src="${ovServe.url('ov-share.js')}" defer></script>`,
+            }, 404);
+            return notFoundFile(req, res);
+        }
         if (!row) return notFoundFile(req, res);
+        if (!mine) return page(req, res, {
+            title: row.name,
+            body: html`<h1>${row.name}</h1><p>${fileSize(row)} · ${row.content_type}</p><p><a class="ovk-btn ovk-btn--primary" href="/files/${row.id}/download">Download</a> ${raw(shareButton({ url: `${config.baseUrl}/files/${row.id}`, title: row.name }))}</p>`,
+        });
+        const owner = requesterOf(req);
         const shares = (await drive.listShares(owner)).filter((sh) => sh.file_id === row.id);
         const agentGrants = await drive.listAgentGrants(owner, row.id);
         const allFolders = await drive.listFolders(owner);
@@ -470,7 +500,7 @@ ${pathBar(path, row.name)}
 <div class="fv-side">
 <h1 class="fv-name">${row.name}</h1>
 <p class="fv-sub"><span class="fv-kind" data-kind="${kind}">${ui.icon(ui.KINDS[kind].icon)}${ui.kindWord(row)}</span><span>${fileSize(row)}</span><span>Added ${ui.when(row.created_at)}</span></p>
-<div class="fv-actions"><a class="dr-btn is-primary" href="/files/${row.id}/download">${ui.icon('download')}Download</a>${raw(shareButton({ url: `${config.baseUrl}/files/${row.id}`, title: row.name, text: `${row.name} — a file on ${SITE_NAME}.`, image: pic ? `${config.baseUrl}/files/${row.id}/preview?w=640` : '', cls: 'dr-btn' }))}${raw(askAgent({ text: `About my file “${row.name}” (${ui.kindWord(row)}, ${fileSize(row)}): ` }))}</div>
+<div class="fv-actions"><a class="dr-btn is-primary" href="/files/${row.id}/download">${ui.icon('download')}Download</a>${raw(shareButton({ url: `${config.baseUrl}/files/${row.id}`, title: row.name, text: `${row.name} — a file on ${SITE_NAME}.`, image: pic ? `${config.baseUrl}/files/${row.id}/preview?w=640` : '', cls: 'dr-btn', kind: 'download', id: row.id }))}${raw(askAgent({ text: `About my file “${row.name}” (${ui.kindWord(row)}, ${fileSize(row)}): ` }))}</div>
 ${/^audio\/(mpeg|mp4|ogg|webm|wav|flac)$/.test(row.content_type) ? html`<section class="fv-card"><h2>OpenVibe Radio</h2>${radioTrack
     ? html`<p>This music is published for listening parties.</p><a class="dr-btn" href="/radio/tracks/${radioTrack.id}">Open in Radio</a>`
     : html`<p>Mark this audio file as music and choose a licence before anyone can listen in a party.</p><a class="dr-btn" href="/radio/publish?file=${row.id}">Publish as music</a>`}</section>` : ''}
@@ -564,6 +594,7 @@ ${agentGrants.length ? html`<h3 class="fv-h3">Agent grants for this file</h3><ul
                 name: rules.fileName(got.fields.name || got.file.filename, got.file.filename),
                 contentType: rules.normalizeType(got.file.contentType) || 'application/octet-stream',
                 folderId: folder ? folder.id : null,
+                audience: got.fields.audience,
             });
             // A refusal by our own rules is shown as it came; a Media outage is one sentence, not Media's own words.
             if (!out.ok) return uploadFailed(req, res, String(out.code).startsWith('media.')
@@ -790,13 +821,21 @@ ${agentGrants.length ? html`<h3 class="fv-h3">Agent grants for this file</h3><ul
         return undefined;
     }
 
-    r.get('/files/:id/preview', mustSignIn('/files'), async (req, res) => {
-        const row = await drive.ownFile(requesterOf(req), String(req.params.id || ''));
+    async function fileForRead(req) {
+        const id = String(req.params.id || '');
+        const row = rules.isFileId(id) ? await ctx.store.getFile(s, id) : null;
+        if (!row || row.deleted_at || row.binned_at) return null;
+        if (signedIn(req) && row.owner === requesterOf(req)) return row;
+        return await sharing.canView(req.viewer, 'download', row.id) ? row : null;
+    }
+
+    r.get('/files/:id/preview', async (req, res) => {
+        const row = await fileForRead(req);
         return sendPreview(req, res, row);
     });
 
-    r.get('/files/:id/download', mustSignIn('/files'), async (req, res) => {
-        const row = await drive.ownFile(requesterOf(req), String(req.params.id || ''));
+    r.get('/files/:id/download', async (req, res) => {
+        const row = await fileForRead(req);
         if (!row) return notFoundFile(req, res);
         return sendFile(req, res, row);
     });
@@ -835,6 +874,13 @@ ${agentGrants.length ? html`<h3 class="fv-h3">Agent grants for this file</h3><ul
                 body: html`<h1>This link is not for you</h1><p class="muted">It was shared with particular OpenVibe accounts. You are signed in as <strong>${req.viewer.username || 'you'}</strong>. <a href="/files">Your files</a>.</p>`,
             }, 403);
             return null;
+        }
+        if (share.file_id) {
+            const file = await fileById(share);
+            if (file && file.share_v1 && !await sharing.canView(req.viewer, 'download', file.id)) {
+                notFoundFile(req, res);
+                return null;
+            }
         }
         return share;
     }
@@ -877,7 +923,8 @@ ${mine ? '' : reportForm(share)}
 <p class="small muted">${REPORT_NOTE}</p>`,
             });
         }
-        const files = await drive.listFiles(share.owner, { folderId: share.folder_id, limit: 200 });
+        const files = (await Promise.all((await drive.listFiles(share.owner, { folderId: share.folder_id, limit: 200 }))
+            .map(async (f) => !f.share_v1 || await sharing.canView(req.viewer, 'download', f.id) ? f : null))).filter(Boolean);
         const folder = await drive.ownFolder(share.owner, share.folder_id);
         return page(req, res, {
             title: `${folder ? folder.name : 'A folder'} · shared by ${share.owner_username || 'an OpenVibe member'}`,
@@ -933,6 +980,7 @@ ${mine ? '' : reportForm(share)}`,
                 body: html`<h1>No such file in this share</h1><p class="muted"><a href="/s/${share.slug}">The share page</a>.</p>`,
             }, 404);
         }
+        if (file.share_v1 && !await sharing.canView(req.viewer, 'download', file.id)) return notFoundFile(req, res);
         await ctx.store.countDownload(s, share.slug);
         return sendFile(req, res, file);
     });

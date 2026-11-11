@@ -7,7 +7,9 @@
  *
  *   GET    /ping                                  anyone   liveness
  *   GET    /files?folder_id=&limit=&before=&q=    person   your drive (one folder, the root, or every folder by name)
- *   POST   /files                                 person   start an upload: { name, size, content_type, folder_id }
+ *   POST   /files                                 person   start an upload: { name, size, content_type, folder_id, audience? }
+ *   GET    /share-defaults/download               person   audience for new uploads
+ *   PUT    /share-defaults/download               person   { audience, apply? }
  *   GET    /files/:id                             person   one of your files
  *   PATCH  /files/:id                             person   { name?, folder_id? (null = the top) }
  *   DELETE /files/:id                             person   put it in the bin (or ?forever=1: delete a binned file now)
@@ -58,7 +60,7 @@ function readBody(req, cap) {
 }
 
 function createApi(ctx) {
-    const { config, s, principal, limits, drive, uploads, syncKeys, drops, media } = ctx;
+    const { config, s, principal, limits, drive, uploads, syncKeys, drops, media, sharing } = ctx;
     const r = asyncRouter();
     const problem = (req, res, status, code, detail) => contracts.http.sendProblem(res, status, code, { detail, ctx: req.ov });
 
@@ -201,6 +203,24 @@ function createApi(ctx) {
     // ── Liveness ────────────────────────────────────────────
     r.get('/ping', limits.reads('media-hub.api.read'), (_req, res) => res.json({ ok: true, service: config.service }));
 
+    r.get('/share-defaults/:kind', person, async (req, res) => {
+        const kind = String(req.params.kind || '');
+        if (kind !== 'download') return problem(req, res, 404, 'share.kind', 'No such share kind.');
+        return res.json({ kind, audience: await sharing.defaultAudience(personOf(req), kind) });
+    });
+
+    r.put('/share-defaults/:kind', person, async (req, res) => {
+        const kind = String(req.params.kind || '');
+        const audience = String((req.body || {}).audience || '');
+        if (kind !== 'download' || !['public', 'link', 'people', 'private'].includes(audience)) {
+            return problem(req, res, 422, 'share.default_invalid', 'Choose Everyone, Anyone with the link, Specific people, or Only me.');
+        }
+        const owner = personOf(req);
+        await sharing.setDefaultAudience(owner, kind, audience);
+        const changed = req.body && req.body.apply === true ? await sharing.applyDefault(owner, kind, audience) : 0;
+        return res.json({ kind, audience, changed });
+    });
+
     // ── Files ───────────────────────────────────────────────
     r.get('/files', person, limits.reads('media-hub.file.read'), async (req, res) => {
         const owner = personOf(req);
@@ -238,8 +258,9 @@ function createApi(ctx) {
         const contentType = rules.normalizeType(b.content_type) || 'application/octet-stream';
         const folderId = b.folder_id ? String(b.folder_id) : null;
         if (folderId && !rules.isFolderId(folderId)) return problem(req, res, 422, 'folder.invalid', 'folder_id must be a folder id.');
+        if (req.principal.viaSyncKey && b.audience && b.audience !== 'private') return problem(req, res, 403, 'sync_key.not_allowed', 'A sync key cannot share a backup.');
         const perDay = req.principal.viaSyncKey ? config.quotas.syncUploadsPerDay : undefined;
-        const out = await uploads.startSession({ owner, name, size, contentType, folderId, perDay });
+        const out = await uploads.startSession({ owner, name, size, contentType, folderId, perDay, audience: req.principal.viaSyncKey ? 'private' : b.audience });
         if (!out.ok) return problem(req, res, refused(out.code), out.code, out.detail);
         res.set('Location', `/api/v1/uploads/${out.upload.id}`);
         return res.status(201).json({

@@ -21,10 +21,10 @@ const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
  * Upload through the API the way the page's script does: POST /files, one PUT per part, then complete.
  * Answers the final response (t.get's shape), so a caller can assert on it directly.
  */
-async function upload(t, as, data, { name = 'file.bin', contentType = 'application/octet-stream', folder = null, onPart = null } = {}) {
+async function upload(t, as, data, { name = 'file.bin', contentType = 'application/octet-stream', folder = null, audience, onPart = null } = {}) {
     const started = await t.get('/api/v1/files', {
         as, headers: SAME,
-        json: { name, size: data.length, content_type: contentType, folder_id: folder },
+        json: { name, size: data.length, content_type: contentType, folder_id: folder, audience },
     });
     if (started.status !== 201 || !started.json().upload) return started;
     const up = started.json().upload;

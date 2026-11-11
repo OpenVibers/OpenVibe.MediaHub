@@ -47,11 +47,12 @@ const { bytes, upload, share } = require('./helpers/drive');
     });
 
     await check('no preview for other people\'s files, for files that are not images, or for SVG', async () => {
-        assert.strictEqual((await t.get(`/files/${photo.id}/preview?w=96`, { as: sam })).status, 404);
+        const secret = (await upload(t, kim, bytes(257, 'secret png'), { name: 'secret.png', contentType: 'image/png', audience: 'private' })).json().file;
+        assert.strictEqual((await t.get(`/files/${secret.id}/preview?w=96`, { as: sam })).status, 404);
         assert.strictEqual((await t.get(`/files/${notes.id}/preview?w=96`, { as: kim })).status, 404);
         assert.strictEqual((await t.get(`/files/${vector.id}/preview?w=96`, { as: kim })).status, 404);
-        const anon = await t.get(`/files/${photo.id}/preview?w=96`);
-        assert.ok([302, 303, 401].includes(anon.status), `signed out: ${anon.status}`);
+        assert.strictEqual((await t.get(`/files/${secret.id}/preview?w=96`)).status, 404);
+        assert.strictEqual((await t.get(`/files/${photo.id}/preview?w=96`, { as: sam })).status, 200);
     });
 
     await check('a single-file share shows its picture to whoever may open it; it is not a download', async () => {

@@ -96,12 +96,12 @@ const { SAME, bytes, sha256, upload, share } = require('./helpers/drive');
         assert.strictEqual(part.headers.get('content-disposition'), `attachment; filename="slice.bin"; filename*=UTF-8''slice.bin`);
     });
 
-    await check('nothing is served to anybody who is not signed in', async () => {
-        const file = await put('guarded.bin', bytes(30, 'guarded'), 'application/octet-stream');
+    await check('a file chosen as Only me sends no bytes to a guest; an ordinary expiring link still asks for sign-in', async () => {
+        const file = (await upload(t, kim, bytes(30, 'guarded'), { name: 'guarded.bin', audience: 'private' })).json().file;
         const slug = (await share(t, kim, { file_id: file.id, hours: 24 })).json().share.slug;
-        for (const p of [`/files/${file.id}/download`, `/s/${slug}/download`]) {
+        for (const [p, status] of [[`/files/${file.id}/download`, 404], [`/s/${slug}/download`, 401]]) {
             const r = await t.get(p);
-            assert.strictEqual(r.status, 401, p);
+            assert.strictEqual(r.status, status, p);
             assert.ok(!r.buffer.includes(Buffer.from('guarded')), `${p}: no bytes to a guest`);
         }
     });
