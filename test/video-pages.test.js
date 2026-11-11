@@ -779,7 +779,7 @@ function countOccurrences(haystack, needle) {
         assert.ok(!r.text.includes('Nice <b>stream</b>!'), 'raw comment HTML never appears');
         assert.ok(r.text.includes('1 more reply'), 'the remaining replies load separately');
         assert.ok(r.text.includes('class="ovc-target"'), 'the exact reply target is shown');
-        assert.ok(r.text.includes('class="ovc-attach"'), 'the picture attachment is shown');
+        assert.ok(r.text.includes('class="ovc-attach ovc-attach--image"'), 'the picture attachment is shown');
         assert.ok(r.text.includes('<time datetime='), 'a relative date is shown');
         assert.strictEqual(countOccurrences(r.text, 'class="ovc-comment"'), 5, 'top-level comments and first replies are rendered');
         assert.ok(r.text.includes('class="ovc-order"'), 'Top and Newest are server-rendered');
