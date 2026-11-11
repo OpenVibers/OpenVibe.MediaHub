@@ -17,6 +17,7 @@ const SHARES = 'mh_shares';
 const REPORTS = 'mh_reports';
 const USAGE = 'mh_usage';
 const UPLOADS = 'mh_uploads';
+const AGENT_GRANTS = 'mh_agent_grants';
 
 // ── Files ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -126,6 +127,29 @@ const countDownload = (s, slug) => s.db.exec(`UPDATE ${SHARES} SET downloads = d
 const deleteSharesForFile = (s, fileId) => s.db.exec(`DELETE FROM ${SHARES} WHERE file_id = $1`, [fileId]);
 const deleteSharesForFolder = (s, folderId) => s.db.exec(`DELETE FROM ${SHARES} WHERE folder_id = $1`, [folderId]);
 
+// ── Agent grants ──────────────────────────────────────────────────────────────────────────────────────────────
+
+async function insertAgentGrant(s, row) {
+    await s.db.query(
+        `INSERT INTO ${AGENT_GRANTS} (id, owner, file_id, agent_subject, created_at, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [row.id, row.owner, row.file_id, row.agent_subject, row.created_at, row.expires_at]);
+    return getAgentGrant(s, row.id);
+}
+
+const getAgentGrant = (s, id) => s.db.maybe(`SELECT * FROM ${AGENT_GRANTS} WHERE id = $1`, [id]);
+const listAgentGrants = (s, owner, fileId = null) => s.db.many(
+    `SELECT g.*, f.name AS file_name FROM ${AGENT_GRANTS} g JOIN ${FILES} f ON f.id = g.file_id
+      WHERE g.owner = $1 AND ($2::text IS NULL OR g.file_id = $2) ORDER BY g.created_at DESC`, [owner, fileId]);
+const activeAgentGrant = (s, fileId, agentSubject, nowIso) => s.db.maybe(
+    `SELECT g.* FROM ${AGENT_GRANTS} g JOIN ${FILES} f ON f.id = g.file_id
+      WHERE g.file_id = $1 AND g.agent_subject = $2 AND g.revoked_at IS NULL AND g.expires_at > $3
+        AND f.deleted_at IS NULL AND f.binned_at IS NULL`, [fileId, agentSubject, nowIso]);
+const revokeAgentGrant = (s, id, owner, at) => s.db.exec(
+    `UPDATE ${AGENT_GRANTS} SET revoked_at = $3 WHERE id = $1 AND owner = $2 AND revoked_at IS NULL`, [id, owner, at]);
+const revokeGrantsForFile = (s, fileId, at) => s.db.exec(
+    `UPDATE ${AGENT_GRANTS} SET revoked_at = $2 WHERE file_id = $1 AND revoked_at IS NULL`, [fileId, at]);
+
 // ── Reports ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Record a report. The primary key is the truth: one per person per share, raced or not. */
@@ -200,6 +224,7 @@ module.exports = {
     insertFolder, getFolder, listFolders, countFolders, deleteFolder, renameFolder, folderInUse,
     insertShare, getShare, listShares, countLiveShares, revokeShare, suspendShare, restoreShare, countDownload,
     deleteSharesForFile, deleteSharesForFolder,
+    insertAgentGrant, getAgentGrant, listAgentGrants, activeAgentGrant, revokeAgentGrant, revokeGrantsForFile,
     addReport, reportsFor, reportCount, bumpReportCount, staffQueue, staffCounts,
     bumpUploads, uploadsToday, usageFor,
     insertUpload, getUpload, setUploadFile, dropUpload,

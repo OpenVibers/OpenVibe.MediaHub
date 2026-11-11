@@ -105,7 +105,7 @@ function when(iso) {
 /** The thumbnail of a file: its own picture when it is an image, else a tile in its kind's colour with its icon. */
 function thumb(row, { big = false } = {}) {
     const kind = kindOf(row);
-    if (rules.isPreviewable(row.content_type)) {
+    if (!row.source && rules.isPreviewable(row.content_type)) {
         return html`<span class="dr-thumb is-pic" data-kind="${kind}"><img src="/files/${row.id}/preview?w=${big ? 640 : 96}" alt="" loading="lazy" decoding="async"></span>`;
     }
     const ext = extOf(row.name);
@@ -137,6 +137,13 @@ ${thumb(row, { big: true })}
 <form method="post" action="/files/${row.id}/restore"><button class="dr-btn is-quiet" type="submit">${icon('restore')}Restore</button></form>
 <form method="post" action="/files/${row.id}/purge" data-confirm="Delete “${row.name}” forever? Its bytes are deleted from OpenVibe.Media and this cannot be undone."><button class="dr-btn is-quiet is-danger" type="submit">${icon('trash')}Delete forever</button></form>
 </div></li>`;
+    }
+    if (row.source) {
+        return html`<li class="dr-file" data-name="${String(row.name).toLowerCase()}" data-time="${row.created_at || ''}" data-size="${Number(row.size) || 0}" data-kind="${kindOf(row)}">
+<a class="dr-file-open" href="${row.source_url}">${thumb(row, { big: true })}
+<span class="dr-file-text"><span class="dr-name">${row.name}</span>
+<span class="dr-meta"><span>${rules.formatBytes(row.size)}</span><span>${when(row.created_at)}</span><span class="dr-where">${row.source_label}</span></span></span></a>
+<a class="dr-btn is-quiet" href="${row.source_url}">Open in ${row.source_label.replace('OpenVibe.', '')}</a></li>`;
     }
     return html`<li class="dr-file" data-name="${String(row.name).toLowerCase()}" data-time="${row.created_at || ''}" data-size="${Number(row.size) || 0}" data-kind="${kindOf(row)}">
 <a class="dr-file-open" href="/files/${row.id}">${thumb(row, { big: true })}

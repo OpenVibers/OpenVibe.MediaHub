@@ -27,7 +27,7 @@ const PROJECT_RE = /^prj_[0-9A-HJKMNP-TV-Z]{26}$/;
 // The product fills this in: one entry per capability its routes name, in openvibe-contracts
 // manifests/capabilities/<media-hub>.*. requireCapability('<name>') refuses a name that is not listed here, so a
 // route can never be guarded by a capability the service does not declare.
-const CAPABILITIES = ['video.playlist.read', 'video.playlist.manage'];
+const CAPABILITIES = ['video.playlist.read', 'video.playlist.manage', 'download.file.read'];
 
 function decodePayload(token) {
     const parts = String(token || '').split('.');

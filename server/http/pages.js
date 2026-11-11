@@ -340,7 +340,11 @@ ${folder ? html`<input type="hidden" name="folder" value="${folder.id}">` : ''}
         if (sort === 'name') folders.sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true, sensitivity: 'base' }));
         else if (sort === 'new') folders.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
         else if (sort === 'old') folders.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
-        const files = sortRows(q ? await drive.searchFiles(owner, q, { limit: 200 }) : await drive.listFiles(owner, { folderId: here, limit: 200 }), sort);
+        const [ownFiles, sourceFiles] = await Promise.all([
+            q ? drive.searchFiles(owner, q, { limit: 200 }) : drive.listFiles(owner, { folderId: here, limit: 200 }),
+            drive.listSourceFiles(owner, { query: q, include: Boolean(q || !here) }),
+        ]);
+        const files = sortRows([...ownFiles, ...sourceFiles], sort);
         const liveShares = (await drive.listShares(owner)).filter((sh) => drive.stateOf(sh, s.iso()) === 'live');
         const showShares = !q && !folder && liveShares.length > 0;
         const shareNames = new Map();
@@ -442,6 +446,7 @@ ${files.length ? html`<ul class="dr-files" data-items>${files.map((row) => ui.fi
         const row = await drive.ownFile(owner, String(req.params.id || ''));
         if (!row) return notFoundFile(req, res);
         const shares = (await drive.listShares(owner)).filter((sh) => sh.file_id === row.id);
+        const agentGrants = await drive.listAgentGrants(owner, row.id);
         const allFolders = await drive.listFolders(owner);
         const labels = folderLabels(allFolders);
         const path = row.folder_id ? await drive.folderPath(owner, row.folder_id) : [];
@@ -484,6 +489,15 @@ ${/^audio\/(mpeg|mp4|ogg|webm|wav|flac)$/.test(row.content_type) ? html`<section
 ${shares.length ? html`<h3 class="fv-h3">Links to this file</h3><ul class="dr-links">${shares.map((sh) => { const state = drive.stateOf(sh, s.iso()); const [ic, who] = whoOf(sh); return html`<li class="dr-link">${ui.icon(ic)}<span class="dr-link-main"><a href="/s/${sh.slug}">/s/${sh.slug}</a>
 <small>${shareBadge(state)} ${who} · expires ${time(sh.expires_at)} · ${Number(sh.downloads)} downloads</small></span>
 ${state === 'live' ? html`<button class="dr-btn is-quiet" type="button" data-copy="${config.baseUrl}/s/${sh.slug}" hidden>Copy link</button><form method="post" action="/shares/${sh.slug}/revoke"><input type="hidden" name="from" value="${row.id}"><button class="dr-btn is-quiet" type="submit">Revoke</button></form>` : ''}</li>`; })}</ul>` : ''}
+</section>
+
+<section class="fv-card" id="agent-access" aria-labelledby="h-agent-access"><h2 id="h-agent-access">Give an agent access</h2>
+<p>Read access to this file only. The grant expires automatically and you can revoke it here. The agent must already have the <code>download.file.read</code> capability.</p>
+<form class="fv-row" method="post" action="/files/${row.id}/agent-grants"><label for="agent-subject">Agent subject</label><input id="agent-subject" name="agent_subject" type="text" placeholder="agent:agt_…" required><label for="agent-hours">Hours</label><input id="agent-hours" name="hours" type="number" min="1" max="720" value="24" required><button class="dr-btn" type="submit">Grant read access</button></form>
+${agentGrants.length ? html`<h3 class="fv-h3">Agent grants for this file</h3><ul class="dr-links">${agentGrants.map((grant) => {
+                const live = !grant.revoked_at && grant.expires_at > s.iso();
+                return html`<li class="dr-link"><span class="dr-link-main"><code>${grant.agent_subject}</code><small>${live ? 'Read access until' : grant.revoked_at ? 'Revoked' : 'Expired'} ${live ? time(grant.expires_at) : ''}</small></span>${live ? html`<form method="post" action="/agent-grants/${grant.id}/revoke"><input type="hidden" name="from" value="${row.id}"><button class="dr-btn is-quiet" type="submit">Revoke</button></form>` : ''}</li>`;
+            })}</ul>` : ''}
 </section>
 
 <section class="fv-card" id="move" aria-labelledby="h-move"><h2 id="h-move">${ui.icon('move')}Move</h2>
@@ -622,6 +636,29 @@ ${state === 'live' ? html`<button class="dr-btn is-quiet" type="button" data-cop
 <p class="muted">${out.share.public ? 'Anyone with the link can open the page and download, no account needed. Revoke it at any time.' : 'Everyone who opens it has to be signed in to OpenVibe before they can download.'}</p>
 <p><a class="sc-btn sc-primary" href="/s/${out.share.slug}">Open the share page</a> <a class="sc-btn" href="/files/${row.id}">Back to the file</a></p>`,
         });
+    });
+
+    r.post('/files/:id/agent-grants', mustSignIn('/files'), budgeted('media-hub.file.grant'), async (req, res) => {
+        if (!sameSite(req, res, '/files')) return undefined;
+        const owner = requesterOf(req);
+        const out = await drive.createAgentGrant(owner, {
+            fileId: String(req.params.id || ''),
+            agentSubject: String(req.body.agent_subject || '').trim(),
+            hours: req.body.hours,
+        });
+        if (out.error) return page(req, res, {
+            title: 'Agent access not granted', crumbs: [{ label: 'Home', href: '/' }, { label: 'Your files', href: '/files' }],
+            body: html`<h1>Agent access not granted</h1><p>${out.error === 'file.not_found' ? 'No such file.' : 'Use an agent subject such as agent:agt_… and an expiry from 1 to 720 hours.'}</p><p><a href="/files/${req.params.id}#agent-access">Back to this file</a></p>`,
+        }, 422);
+        return res.redirect(303, `/files/${req.params.id}#agent-access`);
+    });
+
+    r.post('/agent-grants/:id/revoke', mustSignIn('/files'), async (req, res) => {
+        if (!sameSite(req, res, '/files')) return undefined;
+        const out = await drive.revokeAgentGrant(requesterOf(req), String(req.params.id || ''));
+        const from = String(req.body.from || '');
+        if (!out.error && rules.isFileId(from) && out.grant.file_id === from) return res.redirect(303, `/files/${from}#agent-access`);
+        return res.redirect(303, '/files');
     });
 
     r.post('/folders', mustSignIn('/files'), budgeted('media-hub.folder.create'), async (req, res) => {

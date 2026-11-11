@@ -29,6 +29,8 @@
  * apart from the rate limiter's `rate_limited`, and answered before anything is written.
  */
 const express = require('express');
+const { Readable } = require('stream');
+const { pipeline } = require('stream/promises');
 const contracts = require('openvibe-contracts');
 const { asyncRouter } = require('./router');
 const { sameOrigin } = require('./principal');
@@ -56,7 +58,7 @@ function readBody(req, cap) {
 }
 
 function createApi(ctx) {
-    const { config, s, principal, limits, drive, uploads, syncKeys, drops } = ctx;
+    const { config, s, principal, limits, drive, uploads, syncKeys, drops, media } = ctx;
     const r = asyncRouter();
     const problem = (req, res, status, code, detail) => contracts.http.sendProblem(res, status, code, { detail, ctx: req.ov });
 
@@ -281,6 +283,56 @@ function createApi(ctx) {
         const out = await drive.restoreFile(personOf(req), String(req.params.id || ''));
         if (out.error) return problem(req, res, 404, 'file.not_found', out.detail || 'No such file in the bin.');
         return res.json({ file: wireFile(out.file) });
+    });
+
+    // A person grants one agent access to one file; the read capability never expands that grant to a drive listing.
+    r.get('/agent-grants', person, limits.reads('media-hub.file.read'), async (req, res) => {
+        const fileId = req.query.file_id ? String(req.query.file_id) : null;
+        if (fileId && !rules.isFileId(fileId)) return problem(req, res, 422, 'file.invalid', 'file_id must be a file id.');
+        return res.json({ grants: await drive.listAgentGrants(personOf(req), fileId) });
+    });
+
+    r.post('/agent-grants', person, limits.budget('media-hub.file.grant'), async (req, res) => {
+        const b = req.body || {};
+        const fileId = String(b.file_id || '');
+        if (!rules.isFileId(fileId)) return problem(req, res, 422, 'file.invalid', 'file_id must be a file id.');
+        const out = await drive.createAgentGrant(personOf(req), { fileId, agentSubject: b.agent_subject, hours: b.hours });
+        if (out.error) return problem(req, res, out.error === 'file.not_found' ? 404 : 422, out.error, 'Choose one of your files, a valid agent subject, and an expiry from 1 to 720 hours.');
+        res.set('Location', `/api/v1/agent-grants/${out.grant.id}`);
+        return res.status(201).json({ grant: out.grant });
+    });
+
+    r.delete('/agent-grants/:id', person, async (req, res) => {
+        const out = await drive.revokeAgentGrant(personOf(req), String(req.params.id || ''));
+        if (out.error) return problem(req, res, 404, 'grant.not_found', 'No such grant.');
+        return res.status(204).end();
+    });
+
+    // Link workers use this read-only endpoint for job inputs. Both the capability and the owner's file grant are
+    // required. Stream through Media so a provider URL never becomes the agent's durable credential.
+    r.get('/agent/files/:id/content', principal.requireCapability('download.file.read'), limits.reads('media-hub.file.read'), async (req, res) => {
+        const caller = req.principal;
+        if (!caller || caller.kind !== 'app' || !/^agent:agt_[0-9A-HJKMNP-TV-Z]{26}$/.test(caller.requester || '')) {
+            return problem(req, res, 403, 'agent.required', 'This endpoint is for an agent with download.file.read.');
+        }
+        const fileId = String(req.params.id || '');
+        const row = rules.isFileId(fileId) ? await drive.agentFile(fileId, caller.requester) : null;
+        if (!row) {
+            return problem(req, res, 404, 'grant.not_found', 'No active grant for this file.');
+        }
+        const result = await media.bytes(row.object_id, { range: req.get('range') || null });
+        if (!result.ok) return problem(req, res, result.status || 502, result.code || 'media.unreachable', result.detail || 'OpenVibe.Media could not read this file.');
+        const upstream = result.res;
+        res.status(result.status);
+        res.set('Content-Type', row.content_type || 'application/octet-stream');
+        res.set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(row.name)}`);
+        res.set('Accept-Ranges', 'bytes');
+        for (const header of ['content-length', 'content-range', 'etag', 'last-modified']) {
+            const value = upstream.headers.get(header);
+            if (value) res.set(header, value);
+        }
+        if (!upstream.body) return res.end();
+        await pipeline(Readable.fromWeb(upstream.body), res);
     });
 
     // ── Folders ─────────────────────────────────────────────

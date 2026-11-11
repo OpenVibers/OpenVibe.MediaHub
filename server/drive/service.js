@@ -146,6 +146,7 @@ function createService({ s, media, identity, config, log = console }) {
         const row = await ownFile(owner, id);
         if (!row) return { error: 'file.not_found' };
         await store.deleteSharesForFile(s, id);
+        await store.revokeGrantsForFile(s, id, nowIso());
         await store.binFile(s, id, nowIso());
         return { file: await store.getFile(s, id) };
     }
@@ -163,10 +164,41 @@ function createService({ s, media, identity, config, log = console }) {
     /** What deleteFile did before the bin: the shares go, the row is soft-deleted and Media is asked for the object. */
     async function hardDelete(row) {
         await store.deleteSharesForFile(s, row.id);
+        await store.revokeGrantsForFile(s, row.id, nowIso());
         await store.softDeleteFile(s, row.id, nowIso());
         const removed = await media.remove(row.object_id);
         if (!removed.ok) log.warn(`[MediaHub] Media refused to delete ${row.object_id}: ${removed.status} ${removed.code}`);
         return { file: row, media: removed };
+    }
+
+    /** Give one agent read access to one of this person's files for a bounded period. */
+    async function createAgentGrant(owner, { fileId, agentSubject, hours = 24 }) {
+        const file = await ownFile(owner, fileId);
+        if (!file) return { error: 'file.not_found' };
+        if (!/^agent:agt_[0-9A-HJKMNP-TV-Z]{26}$/.test(String(agentSubject || ''))) return { error: 'agent.invalid' };
+        const ttl = Number(hours);
+        if (!Number.isInteger(ttl) || ttl < 1 || ttl > 720) return { error: 'grant.invalid_expiry' };
+        const createdAt = nowIso();
+        return { grant: await store.insertAgentGrant(s, {
+            id: s.newId('agr'), owner, file_id: file.id, agent_subject: agentSubject,
+            created_at: createdAt, expires_at: new Date(Date.parse(createdAt) + ttl * 60 * 60 * 1000).toISOString(),
+        }) };
+    }
+
+    async function revokeAgentGrant(owner, id) {
+        const row = await store.getAgentGrant(s, id);
+        if (!row || row.owner !== owner) return { error: 'grant.not_found' };
+        await store.revokeAgentGrant(s, id, owner, nowIso());
+        return { grant: await store.getAgentGrant(s, id) };
+    }
+
+    const listAgentGrants = (owner, fileId = null) => store.listAgentGrants(s, owner, fileId);
+    const activeAgentGrant = (fileId, agentSubject) => store.activeAgentGrant(s, fileId, agentSubject, nowIso());
+    async function agentFile(fileId, agentSubject) {
+        const grant = await activeAgentGrant(fileId, agentSubject);
+        if (!grant) return null;
+        const row = await store.getFile(s, fileId);
+        return row && !row.deleted_at && !row.binned_at ? row : null;
     }
 
     /** Delete one binned file forever. Only a file already in the bin resolves here. */
@@ -414,6 +446,28 @@ function createService({ s, media, identity, config, log = console }) {
 
     // ── Reads the pages and the API both need (no SQL outside this module) ──
     const listFiles = (owner, opts) => store.listFiles(s, owner, opts);
+    /** Read-only source records from Pics and Video in the same MediaHub database; bytes remain with each product. */
+    async function listSourceFiles(owner, { query = '', include = true } = {}) {
+        if (!include) return [];
+        const q = String(query || '').trim();
+        const like = q ? `%${q.replace(/[\\%_]/g, '\\$&')}%` : null;
+        const [pictures, videos] = await Promise.all([
+            s.db.many(
+                `SELECT id, slug, title, object_id, mime_type AS content_type, bytes AS size, created_at
+                   FROM pics_images WHERE owner = $1 AND state IN ('active', 'hidden')
+                    AND ($2::text IS NULL OR title ILIKE $2 ESCAPE '\\' OR slug ILIKE $2 ESCAPE '\\')
+                  ORDER BY id DESC LIMIT 200`, [owner, like]),
+            s.db.many(
+                `SELECT id, title, media_vod_id, content_type, size_bytes AS size, created_at
+                   FROM video_uploads WHERE owner = $1 AND state <> 'removed' AND status = 'ready' AND media_vod_id IS NOT NULL
+                    AND ($2::text IS NULL OR title ILIKE $2 ESCAPE '\\' OR id ILIKE $2 ESCAPE '\\')
+                  ORDER BY id DESC LIMIT 200`, [owner, like]),
+        ]);
+        return [
+            ...pictures.map((row) => ({ ...row, name: String(row.title || '').trim() || `Picture ${row.slug}`, source: 'pics', source_label: 'OpenVibe.Pics', source_url: `${config.pics.url}/i/${encodeURIComponent(row.slug)}` })),
+            ...videos.map((row) => ({ ...row, name: String(row.title || '').trim() || 'Video', source: 'video', source_label: 'OpenVibe.Video', source_url: `${config.video.url}/u/${encodeURIComponent(row.id)}` })),
+        ];
+    }
     const listBinned = (owner, opts) => store.listBinned(s, owner, opts);
     const binCount = (owner) => store.countBinned(s, owner);
     const listFolders = (owner) => store.listFolders(s, owner);
@@ -426,9 +480,10 @@ function createService({ s, media, identity, config, log = console }) {
         uploadAllowed, shareAllowed, usage, dayOf,
         recordFile, ownFile, ownBinnedFile, deleteFile, restoreFile, purgeFile, purgeDue, emptyBin, updateFile,
         renameFile, moveFile, searchFiles,
-        listFiles, listBinned, binCount, listFolders, listShares, usageDays, shareBySlug, reportsFor,
+        listFiles, listSourceFiles, listBinned, binCount, listFolders, listShares, usageDays, shareBySlug, reportsFor,
         ownFolder, createFolder, renameFolder, deleteFolder, folderPath,
         createShare, ownShare, revokeShare,
+        createAgentGrant, revokeAgentGrant, listAgentGrants, activeAgentGrant, agentFile,
         report, restoreShare, removeShared,
         stateOf, allowedFor, parseAllow,
     };

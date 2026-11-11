@@ -44,6 +44,7 @@ const BUDGETS = {
     'media-hub.upload.part': { minute: 300, hour: 5_000 },
     'media-hub.upload.complete': { minute: 30, hour: 300 },
     'media-hub.folder.create': { minute: 20, hour: 120 },
+    'media-hub.file.grant': { minute: 10, hour: 60 },
     'media-hub.sync_key.create': { minute: 5, hour: 20 },
     // A drop (an upload without an account) started per address: the per-day count and bytes are the drop's own caps.
     'media-hub.drop.start': { minute: 10, hour: 40 },
