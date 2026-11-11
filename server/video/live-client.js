@@ -85,19 +85,19 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
     }
 
     const refreshing = new Map();   // url → the load that refreshes it
-    async function getJson(path) {
+    async function getJson(path, { fresh = false } = {}) {
         const url = `${config.video.liveUrl}${path}`;
-        const cached = hit(url);
+        const cached = fresh ? undefined : hit(url);
         if (cached !== undefined) return cached;
         const entry = cache.get(url);
-        if (entry && Date.now() - entry.at < SERVE_STALE_MS) {
+        if (!fresh && entry && Date.now() - entry.at < SERVE_STALE_MS) {
             if (!refreshing.has(url)) refreshing.set(url, load(url).catch(() => {}).finally(() => refreshing.delete(url)));
             return entry.value;
         }
-        return load(url);
+        return load(url, fresh);
     }
 
-    async function load(url) {
+    async function load(url, fresh = false) {
         let res;
         try {
             res = await fetchImpl(url, {
@@ -108,19 +108,24 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
                 signal: AbortSignal.timeout(TIMEOUT_MS),
             });
         } catch (err) {
+            if (fresh) throw new LiveUnavailableError('OpenVibe.Live did not answer; try again in a minute.');
             return unavailable(url, err && err.name);
         }
 
         if (res.status === 404) return null;
-        if (!res.ok) return unavailable(url, `HTTP ${res.status}`);
+        if (!res.ok) {
+            if (fresh) throw new LiveUnavailableError(`OpenVibe.Live answered ${res.status}; try again in a minute.`);
+            return unavailable(url, `HTTP ${res.status}`);
+        }
 
         let body;
         try {
             body = await res.json();
         } catch {
+            if (fresh) throw new LiveUnavailableError('OpenVibe.Live did not answer with JSON.');
             return unavailable(url, 'not JSON');
         }
-        return remember(url, body);
+        return fresh ? body : remember(url, body);
     }
 
     /**
@@ -256,8 +261,30 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
         clip(id) {
             return getJson(`/api/clips/${id}`);
         },
-        comments(kind, id) {
-            return getJson(`/api/comments/${kind}/${id}`);
+        comments(kind, id, { sort = 'top', after = null } = {}) {
+            const q = new URLSearchParams({ inline: '1', sort });
+            if (after) q.set('after', after);
+            return getJson(`/api/comments/${kind}/${id}?${q}`, { fresh: true });
+        },
+        commentsAs(token, kind, id, opts = {}) {
+            const q = new URLSearchParams({ inline: '1', sort: opts.sort || 'top' });
+            if (opts.after) q.set('after', opts.after);
+            return asPerson(token, 'GET', `/api/comments/${kind}/${id}?${q}`);
+        },
+        commentReplies(token, commentId) {
+            const path = `/api/comments/${commentId}/replies`;
+            return token ? asPerson(token, 'GET', path) : getJson(path, { fresh: true });
+        },
+        postComment(token, kind, id, body, viewerIp) {
+            return asPerson(token, 'POST', `/api/comments/${kind}/${id}`, body, { viewerIp });
+        },
+        uploadCommentFile(token, kind, id, file, viewerIp) {
+            const form = new FormData();
+            form.set('file', file, file.name || 'file');
+            return asPerson(token, 'POST', `/api/comments/${kind}/${id}/attachments`, form, { viewerIp });
+        },
+        deleteComment(token, commentId, viewerIp) {
+            return asPerson(token, 'DELETE', `/api/comments/${commentId}`, null, { viewerIp });
         },
         commentsPage(kind, id, query = {}) {
             const qs = new URLSearchParams();

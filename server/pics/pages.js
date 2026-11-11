@@ -38,6 +38,10 @@ const { ACCESS_COOKIE, REFRESH_COOKIE } = require('../auth/sso');
 const { send, assetVersion, SITE_NAME } = require('./layout');
 const store = require('./store');
 const { createPicsApi } = require('./api');
+const { createCommentsClient } = require('./comments-client');
+const { createCommentsClient: createServiceCommentsClient } = require('../video/comments-client');
+const { renderThread } = require('../comments/inline');
+const { multipart: commentMultipart, readCommentForm } = require('../comments/form');
 const { createPicVariants } = require('./variants');
 const kit = require('openvibe-shared/kit');
 const gallery = require('./gallery');
@@ -56,6 +60,9 @@ const KIND = { jpg: 'JPEG', png: 'PNG', gif: 'GIF', webp: 'WebP', avif: 'AVIF' }
 function createPicsRoutes(ctx) {
     const { config, s, media, log } = ctx;
     const pics = ctx.pics;
+    const comments = createCommentsClient({ fetchImpl: ctx.fetchImpl || globalThis.fetch });
+    const commentModeration = createServiceCommentsClient({ config, fetchImpl: ctx.fetchImpl || globalThis.fetch,
+        refOf: (row) => ({ service: 'pics', type: 'picture', id: String(row.id) }) });
     const sharing = ctx.sharing;
     const cfg = config.pics;
     const base = cfg.url;
@@ -391,6 +398,27 @@ ${raw(showcase.network({
         const title = row.title || 'Untitled picture';
         const hidden = row.state !== 'active';
         const commentsAvailable = !hidden && !!(sharing && await sharing.canView({ kind: 'anonymous' }, 'picture', row.id).catch(() => false));
+        const sort = req.query.sort === 'new' ? 'new' : 'top';
+        let commentsHtml = '';
+        if (commentsAvailable) {
+            const result = await comments.read(row.id, req.viewer && req.viewer.token, { sort, after: req.query.after });
+            if (result.status === 200) {
+                const answer = result.body;
+                if (owner || (signedIn(req) && pics.isStaff(req.viewer))) {
+                    for (const c of answer.comments) {
+                        c.can_delete = true;
+                        for (const reply of c.replies || []) reply.can_delete = true;
+                    }
+                }
+                const expandedId = /^\d{1,15}$/.test(String(req.query.replies || '')) ? String(req.query.replies) : null;
+                const belongs = expandedId && answer.comments.some((c) => String(c.id) === expandedId);
+                const more = belongs ? await comments.replies(row.id, req.viewer && req.viewer.token, expandedId) : null;
+                commentsHtml = renderThread({ answer, base: `/i/${row.slug}`, post: `/i/${row.slug}/comments?sort=${sort}`,
+                    remove: `/i/${row.slug}/comments/delete?sort=${sort}`, signedIn: signedIn(req) && answer.viewer.can_comment !== false,
+                    sort, replyId: req.query.reply, expandedId: belongs ? expandedId : null,
+                    expandedReplies: more && more.status === 200 ? more.body.replies : null });
+            } else commentsHtml = '<section class="ovc-thread" id="comments"><h2>Comments</h2><p>Comments are unavailable right now.</p></section>';
+        }
         // ?like=<slug> after an upload: a near-duplicate of one of the person's own pictures (VIS-6). Only a slug of theirs is linked.
         const likeRow = owner && /^[A-Za-z0-9]{4,16}$/.test(String(req.query.like || '')) ? await store.imageBySlug(s, String(req.query.like)) : null;
         const likeSlug = likeRow && likeRow.id !== row.id && likeRow.owner === row.owner ? likeRow.slug : null;
@@ -399,8 +427,8 @@ ${raw(showcase.network({
             jsonLd: gallery.isPublic(row) ? { '@context': 'https://schema.org', '@type': 'ImageObject', name: title, contentUrl: L.direct, url: L.page, caption: row.description || title, author: { '@type': 'Person', name: row.author_name || 'OpenVibe member' } } : undefined,
             description: row.description || `${title}: a picture on ${SITE_NAME}.`,
             image: hidden ? undefined : L.direct, ogType: 'article',
-            scripts: ['js/pics.js', 'js/pics-gallery.js'], styles: ['kit.css'], sharedScripts: ['kit-web.js'],
-            ...(owner ? { localStyles: ['css/labels.css'] } : {}),
+            scripts: ['js/pics.js', 'js/pics-gallery.js', 'js/comments.js'], styles: ['kit.css', 'thread.css'], sharedScripts: ['kit-web.js'],
+            localStyles: ['css/comments.css', ...(owner ? ['css/labels.css'] : [])],
             private: deleteKey ? true : undefined,
             body: html`${message ? notice(message, tone) : ''}${fresh || req.query.new ? notice('Uploaded. Copy a link below to share it.', 'ok') : ''}${owner && req.query.again ? notice('You had already uploaded this picture: here it is. Nothing was stored twice.', 'info') : ''}${owner && req.query.new && likeSlug ? notice(html`It looks like a picture you uploaded before: <a href="/i/${likeSlug}">that one</a>. If you meant to keep only one, delete the other.`, 'info') : ''}
 ${deleteKey ? html`<div class="notice warn" role="status"><b>Keep this delete link.</b> It is the only way to delete this picture, and it is shown only now:<br><code class="ovp-key">${base}/i/${row.slug}/delete?key=${deleteKey}</code></div>` : ''}
@@ -423,7 +451,7 @@ ${!hidden ? html`<nav class="ovp-pic-make" aria-label="Make something with this 
 ${row.description ? html`<p class="ovp-desc">${row.description}</p>` : ''}
 ${row.ai_caption && row.alt_source === 'ai' ? html`<p class="ovp-ai"><span class="ovp-ai-label">Described by AI</span> ${row.ai_caption}</p>` : ''}
 </article>
-${commentsAvailable ? html`<section class="ovp-section ovp-comments" aria-labelledby="h-comments"><div class="ovp-comments-head"><h2 id="h-comments">Comments</h2><button type="button" class="ovk-btn ovk-btn--quiet" data-comments="${row.slug}">${glyph('chat', 17)}<span>Show the discussion</span></button></div><div class="ovp-comments-list" data-comments-list aria-live="polite"></div></section>` : ''}
+${raw(commentsHtml)}
 <section class="ovp-share" aria-labelledby="h-share"><h2 id="h-share">Share and embed</h2>
 <p class="ovp-share-lede">These links follow the audience you choose in Share. Private pictures are visible only to you. The direct link is the picture itself, at full size — no page around it.</p>
 <div class="ovp-link-grid">
@@ -468,6 +496,43 @@ ${pics.REASONS.map((r) => html`<label class="ovp-radio"><input type="radio" name
 </form></details>` : ''}`,
         }, status);
     }
+
+    const commentFailure = (req, res, slug, detail, status = 422) => page(req, res, {
+        title: 'Comment not sent', cache: cache.htmlHeaders({ private: true }),
+        body: html`<h1>Comment not sent</h1><p>${detail}</p><p><a href="/i/${slug}#comments">Go back</a></p>`,
+    }, status);
+    r.post('/i/:slug/comments', mustSignIn('Sign in to comment.'), budgeted('pics.image.write'), commentMultipart, async (req, res) => {
+        const { row, status } = await picture(req, res);
+        if (!row || status !== 200) return notFound(req, res);
+        if (!sameSite(req, res, `/i/${row.slug}`)) return undefined;
+        if (!await sharing.canView({ kind: 'anonymous' }, 'picture', row.id)) return notFound(req, res);
+        let form;
+        try { form = await readCommentForm(req); }
+        catch (err) { return commentFailure(req, res, row.slug, err.message); }
+        const attachments = [];
+        for (const file of form.files) {
+            const uploaded = await comments.upload(row.id, req.viewer.token, Buffer.from(await file.arrayBuffer()), file.name, file.type);
+            if (uploaded.status !== 201 || !uploaded.body.attachment) return commentFailure(req, res, row.slug, uploaded.body.detail || uploaded.body.error || 'The attachment could not be saved', uploaded.status);
+            attachments.push(uploaded.body.attachment);
+        }
+        const result = await comments.add(row.id, req.viewer.token, { message: form.message, parent_id: form.parent_id, attachments });
+        if (result.status !== 201) return commentFailure(req, res, row.slug, result.body.detail || result.body.error || 'The comment could not be saved', result.status);
+        return res.redirect(303, `/i/${row.slug}?sort=${req.query.sort === 'new' ? 'new' : 'top'}#comments`);
+    });
+    r.post('/i/:slug/comments/delete', mustSignIn('Sign in to remove a comment.'), budgeted('pics.image.write'), async (req, res) => {
+        const { row, status } = await picture(req, res);
+        if (!row || status !== 200) return notFound(req, res);
+        if (!sameSite(req, res, `/i/${row.slug}`)) return undefined;
+        const id = String(req.body.comment_id || '');
+        if (!/^\d{1,15}$/.test(id)) return commentFailure(req, res, row.slug, 'Invalid comment');
+        let result;
+        if (pics.isOwner(row, whoOf(req)) || (signedIn(req) && pics.isStaff(req.viewer))) {
+            try { await commentModeration.remove(row, req.viewer.subject, true, id, req.ip); result = { status: 200 }; }
+            catch (err) { result = { status: err.status || 503, body: { detail: err.message } }; }
+        } else result = await comments.remove(id, req.viewer.token);
+        if (result.status !== 200) return commentFailure(req, res, row.slug, result.body.detail || result.body.error || 'The comment could not be removed', result.status);
+        return res.redirect(303, `/i/${row.slug}?sort=${req.query.sort === 'new' ? 'new' : 'top'}#comments`);
+    });
 
     r.get('/i/:slug', async (req, res) => {
         const { row, status, denied } = await picture(req, res);

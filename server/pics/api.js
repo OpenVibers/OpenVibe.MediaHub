@@ -161,7 +161,7 @@ function createPicsApi(ctx) {
         if (!row) return;
         return commentAnswer(res, await comments.read(row.id, req.viewer.token, req.query));
     });
-    r.post('/images/:slug/comments', person, async (req, res) => {
+    r.post('/images/:slug/comments', person, limits.budget('pics.image.write'), async (req, res) => {
         const row = await load(req, res);
         if (!row) return;
         const b = req.body || {};
@@ -171,12 +171,18 @@ function createPicsApi(ctx) {
             { message: b.message, parent_id: b.parent_id || null, attachments: b.attachments || [] }));
     });
     const commentFile = express.raw({ type: 'application/octet-stream', limit: '16mb' });
-    r.post('/images/:slug/comment-attachments', person, commentFile, async (req, res) => {
+    r.post('/images/:slug/comment-attachments', person, limits.budget('pics.image.upload'), commentFile, async (req, res) => {
         const row = await load(req, res);
         if (!row) return;
         if (!Buffer.isBuffer(req.body) || !req.body.length) return problem(req, res, 400, 'pics.comment.file', 'Choose a file');
         return commentAnswer(res, await comments.upload(row.id, req.viewer.token, req.body,
             String(req.get('x-file-name') || 'file').slice(0, 255), String(req.get('x-file-mime') || 'application/octet-stream').slice(0, 100)));
+    });
+    r.delete('/images/:slug/comments/:commentId', person, limits.budget('pics.image.write'), async (req, res) => {
+        const row = await load(req, res);
+        if (!row) return;
+        if (!/^\d{1,15}$/.test(req.params.commentId)) return problem(req, res, 400, 'pics.comment.id', 'Invalid comment');
+        return commentAnswer(res, await comments.remove(req.params.commentId, req.viewer.token));
     });
 
     r.get('/images/:slug/bytes', person, async (req, res) => {
