@@ -789,7 +789,7 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('href="https://openvibe.community/t/vod-101"'));
     });
 
-    await check('a VOD with no comments uses the kit empty state and keeps the Community link', async () => {
+    await check('a VOD with no comments says so on the sign-in line and keeps the Community link', async () => {
         const r = await getVideo('/v/102');
         assert.strictEqual(r.status, 200);
         assert.ok(r.text.includes('Be the first to comment'));
