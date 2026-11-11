@@ -22,6 +22,7 @@
  * the sitemap. A private item is missing (Live already answers 404) and becomes a 404 here.
  */
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const cache = require('openvibe-shared/cache-policy');
 const securityTxt = require('../http/security-txt');
@@ -46,6 +47,8 @@ const { createUploadApi, mountUploadPages } = require('./upload-routes');
 const { ACCESS_COOKIE, REFRESH_COOKIE } = require('../auth/sso');
 const { mountDownloads, downloadMenu } = require('./downloads');
 const { actionMenu, deleteAction, menuLinks, companion, whatItIs, shareButton, lengthWords, dayLabel, streamDate } = require('./watch-ui');
+const { renderThread } = require('../comments/inline');
+const { multipart: commentMultipart, readCommentForm } = require('../comments/form');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 const HOME_LIMIT = 10;
@@ -665,6 +668,9 @@ function createVideoRoutes(ctx) {
     const chat = createChatClient({ config, fetchImpl: ctx.fetchImpl || globalThis.fetch, log });
     const shelves = createSearchReads({ config, fetchImpl: ctx.fetchImpl || globalThis.fetch, log });
     const r = asyncRouter();
+    const commentSort = (req) => req.query.sort === 'new' ? 'new' : 'top';
+    const commentAfter = (req) => typeof req.query.after === 'string' && /^(?:-?\d{1,12}:)?\d{1,15}$/.test(req.query.after) ? req.query.after : null;
+    const commentLimit = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
     // The menu's network card (frame.menu-card@1): the week's most viewed public recordings and clips. Public,
     // CORS *, cached two minutes; the rows are Live's Content feed (which reads Media) and never a private item.
     r.get('/.well-known/openvibe-menu.json', createMenuCardHandler({ feed: (opts) => live.feed(opts) }));
@@ -734,6 +740,26 @@ function createVideoRoutes(ctx) {
         return sameName(me, item.username) || sameName(me, item.source_streamer_username) || sameName(me, item.channel_username);
     }
     const asPerson = (req, res, fn) => ctx.sso.asViewer(req, res, fn);
+    async function liveThread(req, res, kind, id) {
+        const opts = { sort: commentSort(req), after: commentAfter(req) };
+        return signedIn(req) ? asPerson(req, res, (token) => live.commentsAs(token, kind, id, opts)) : live.comments(kind, id, opts);
+    }
+    async function liveThreadHtml(req, res, kind, id, basePath, answer) {
+        if (!answer) return raw('<section class="ovc-thread" id="comments"><h2>Comments</h2><p>Comments are unavailable right now.</p></section>');
+        const expandedId = /^\d{1,15}$/.test(String(req.query.replies || '')) ? String(req.query.replies) : null;
+        const belongs = expandedId && answer.comments && answer.comments.some((c) => String(c.id) === expandedId);
+        let expandedReplies = null;
+        if (belongs) {
+            try {
+                const out = signedIn(req) ? await asPerson(req, res, (token) => live.commentReplies(token, expandedId)) : await live.commentReplies(null, expandedId);
+                expandedReplies = out && out.replies;
+            } catch { /* the first two remain visible */ }
+        }
+        const endpoint = `/${kind === 'clip' ? 'c' : 'v'}/${id}/comments`;
+        return raw(renderThread({ answer, base: basePath, post: `${endpoint}?sort=${commentSort(req)}`, remove: `${endpoint}/delete?sort=${commentSort(req)}`,
+            signedIn: signedIn(req) && (!answer.viewer || answer.viewer.can_comment !== false), sort: commentSort(req),
+            replyId: req.query.reply, expandedId: belongs ? expandedId : null, expandedReplies }));
+    }
     /** A signed-in person's own view of an item Live hides from everyone else (private), or null. */
     async function ownView(req, res, kind, id) {
         if (!signedIn(req)) return null;
@@ -974,6 +1000,39 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
     // The playlist forms are web forms (no JavaScript): urlencoded text. The API router above has its own JSON
     // parser, so the two never read each other's bodies.
     r.use(express.urlencoded({ extended: false, limit: '64kb' }));
+    r.post('/:kind(v|c)/:id/comments', mustSignIn('here', 'Sign in to comment.'), commentLimit, commentMultipart, async (req, res) => {
+        const kind = req.params.kind === 'c' ? 'clip' : 'vod';
+        const id = String(req.params.id || '');
+        const back = `/watch?v=${encodeURIComponent(String(req.query.v || ''))}`;
+        if (!live.isId(id)) return notFound(req, res);
+        if (!sameSite(req, res, back)) return undefined;
+        let form;
+        try { form = await readCommentForm(req); }
+        catch (err) { return page(req, res, { title: 'Comment not sent', body: html`<h1>Comment not sent</h1><p>${err.message}</p><p><a href="/${req.params.kind}/${id}#comments">Go back</a></p>` }, 422); }
+        try {
+            await asPerson(req, res, async (token) => {
+                const attachments = [];
+                for (const file of form.files) {
+                    const out = await live.uploadCommentFile(token, kind, id, file, req.ip);
+                    if (!out || !out.attachment) throw new Error('The file could not be attached');
+                    attachments.push(out.attachment);
+                }
+                return live.postComment(token, kind, id, { message: form.message, parent_id: form.parent_id, attachments }, req.ip);
+            });
+            return res.redirect(303, `/${req.params.kind}/${id}?sort=${commentSort(req)}#comments`);
+        } catch (err) { return ownerRefused(req, res, err, `/${req.params.kind}/${id}#comments`); }
+    });
+    r.post('/:kind(v|c)/:id/comments/delete', mustSignIn('here', 'Sign in to remove a comment.'), commentLimit, async (req, res) => {
+        const id = String(req.params.id || '');
+        if (!live.isId(id)) return notFound(req, res);
+        if (!sameSite(req, res, `/${req.params.kind}/${id}`)) return undefined;
+        const commentId = String(req.body.comment_id || '');
+        if (!/^\d{1,15}$/.test(commentId)) return notFound(req, res);
+        try {
+            await asPerson(req, res, (token) => live.deleteComment(token, commentId, req.ip));
+            return res.redirect(303, `/${req.params.kind}/${id}?sort=${commentSort(req)}#comments`);
+        } catch (err) { return ownerRefused(req, res, err, `/${req.params.kind}/${id}#comments`); }
+    });
     r.post('/watch/like', async (req, res) => {
         if (!signedIn(req)) return res.status(401).json({ error: 'Sign in to like this video.' });
         if (!sameSite(req, res, '/')) return undefined;
@@ -1454,7 +1513,7 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
         const [m, cm, replay, saveForm, up, hist, more, agent] = await Promise.all([
             // A private recording's moments are Live's answer to its owner only.
             Promise.resolve().then(() => (ownOnly ? asPerson(req, res, (token) => live.vodMemoriesAs(token, id)) : live.vodMemories(id))).catch(() => fail),
-            Promise.resolve().then(() => live.comments('vod', id)).catch(() => fail),
+            Promise.resolve().then(() => liveThread(req, res, 'vod', id)).catch(() => fail),
             Promise.resolve().then(() => chat.chatReplay(vod.stream_id)).catch(() => fail),
             playlistForm(req, 'vod', id),
             upNext(req, 'vod', id),
@@ -1470,16 +1529,8 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
         if (agentSteps) mems = agentSteps.filter((s) => s.status === 'started' && Number.isFinite(Number(s.offset_seconds)))
             .map((s) => ({ offset_seconds: Number(s.offset_seconds), description: String(s.title || '').slice(0, 120) }));
         let threadUrl = null;
-        let commentRows = [];
-        let commentsOk = false;
-        if (cm !== fail) {
-            try {
-                threadUrl = httpsUrl(cm && cm.thread && cm.thread.url);
-                const list = Array.isArray(cm && cm.comments) ? cm.comments : [];
-                commentRows = list.filter((c) => c && !c.is_deleted && !c.deleted).slice(0, 20);
-                commentsOk = true;
-            } catch { threadUrl = null; }
-        }
+        if (cm !== fail) threadUrl = httpsUrl(cm && cm.thread && cm.thread.url);
+        const commentsHtml = await liveThreadHtml(req, res, 'vod', id, watchPath, cm === fail ? null : cm);
 
         let chatRows = null;
         if (replay !== fail) {
@@ -1519,15 +1570,15 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
             noindex: unlisted || ownOnly || thin,
             ...(ownOnly ? { cache: cache.htmlHeaders({ private: true }) } : {}),
             title: watchTitle(vod.title || 'Stream recording', vod.username, vod.created_at),
-            styles: ['kit.css'],
+            styles: ['kit.css', 'thread.css'],
             description: about,
             canonical: `${base}${watchPath}`,
             ...(ownOnly || vod.is_recording ? {} : {
                 jsonLd: videoLd({ base, path: watchPath, item: vod, title: vod.title || 'Stream recording', description: about, chapterList: mems }),
                 image: httpsUrl(vod.thumbnail_url) || undefined, ogType: 'video.other',
             }),
-            scripts: ['js/video.js'],
-            ...(manageable ? { localStyles: ['css/labels.css'] } : {}),
+            scripts: ['js/video.js', 'js/comments.js'],
+            localStyles: ['css/comments.css', ...(manageable ? ['css/labels.css'] : [])],
             player: true,
             body: html`<div class="ovv-watch ovv-watch--vod">
 <div class="ovv-col ovv-col--main">
@@ -1546,7 +1597,7 @@ ${vod.is_recording ? html`<p class="ovv-recording" role="status"><i class="fa-so
 </div>
 ${manageable ? ownerPanel('vod', id, vod) : ''}
 ${watchAbout({ facts, description: vod.description || about, ai: vod.ai_overview, parts: partNav, chapters: mems, path: watchPath, tags: Array.isArray(vod.tags) ? vod.tags : [], from: channelName ? html`<p class="ovv-about-from">Streamed live on <a href="${liveChannel}">${channelName}'s OpenVibe.Live channel</a>${vod.stream_category ? html`, in ${String(vod.stream_category).charAt(0).toUpperCase()}${String(vod.stream_category).slice(1)}` : ''}.</p>` : '' })}
-${commentsOk ? html`<section class="ovv-panel ovv-comments" aria-labelledby="h-comments"><header class="ovv-panel-head"><h2 id="h-comments">Comments${commentRows.length ? html` <span class="ovv-count">${commentRows.length}</span>` : ''}</h2>${threadUrl ? html`<a class="ovv-panel-link" href="${threadUrl}">Discuss on OpenVibe.Community <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>` : ''}</header>${commentRows.length ? commentRows.map(commentItem) : html`<p class="ovv-comments-empty">No comments yet.${threadUrl ? html` <a href="${threadUrl}">Start the discussion</a>.` : ''}</p>`}</section>` : ''}
+<section class="ovv-panel ovv-comments">${commentsHtml}</section>
 </div>
 <aside class="ovv-col ovv-col--side">
 ${side || ''}
@@ -1593,7 +1644,7 @@ ${more || ''}
             ? live.vod(String(clip.vod_id)).then((s) => (s && s.vod) || null).catch(() => 'down')
             : Promise.resolve('none');
         const [cm, saveForm, up, sourceVod, more] = await Promise.all([
-            Promise.resolve().then(() => live.comments('clip', id)).catch(() => null),
+            Promise.resolve().then(() => liveThread(req, res, 'clip', id)).catch(() => null),
             playlistForm(req, 'clip', id),
             upNext(req, 'clip', id),
             sourceAnswer,
@@ -1601,7 +1652,7 @@ ${more || ''}
         ]);
         let threadUrl = null;
         try { threadUrl = httpsUrl(cm && cm.thread && cm.thread.url); } catch { threadUrl = null; }
-        const commentRows = cm && Array.isArray(cm.comments) ? cm.comments.filter((c) => c && !c.is_deleted && !c.deleted).slice(0, 20) : null;
+        const commentsHtml = await liveThreadHtml(req, res, 'clip', id, watchPath, cm);
 
         const unlisted = clip.visibility === 'unlisted';
         // AI clips stay out of search, as on Live: noindex and no structured data.
@@ -1644,15 +1695,15 @@ ${more || ''}
             noindex: unlisted || ownOnly || aiClip,
             ...(ownOnly ? { cache: cache.htmlHeaders({ private: true }) } : {}),
             title: watchTitle(clip.title || 'Clip', clip.source_streamer_username, clip.created_at),
-            styles: ['kit.css'],
+            styles: ['kit.css', 'thread.css'],
             description: clip.ai_overview || factualDescription('clip', clip),
             canonical: `${base}${watchPath}`,
             ...(ownOnly || aiClip ? {} : {
                 jsonLd: videoLd({ base, path: watchPath, item: clip, title: clip.title || 'Clip', description: clip.ai_overview || factualDescription('clip', clip) || attribution, partOf: sourceVod && sourceVod !== 'down' && sourceVod.watch_id ? `/watch?v=${sourceVod.watch_id}` : (clip.vod_id ? `/v/${clip.vod_id}` : null) }),
                 image: httpsUrl(clip.thumbnail_url) || undefined, ogType: 'video.other',
             }),
-            scripts: ['js/video.js'],
-            ...(manageable ? { localStyles: ['css/labels.css'] } : {}),
+            scripts: ['js/video.js', 'js/comments.js'],
+            localStyles: ['css/comments.css', ...(manageable ? ['css/labels.css'] : [])],
             player: true,
             body: html`<div class="ovv-watch ovv-watch--clip">
 <div class="ovv-col ovv-col--main">
@@ -1671,7 +1722,7 @@ ${channelRow(clip.source_streamer_username || clip.username, clip.source_streame
 </div>
 ${manageable ? ownerPanel('clip', id, clip) : ''}
 ${watchAbout({ facts, description: clip.description || clip.ai_overview || attribution, source: clipCredit, madeBy, ai: clip.ai_overview, tags: Array.isArray(clip.tags) ? clip.tags : [] })}
-${commentRows ? html`<section class="ovv-panel ovv-comments" aria-labelledby="h-comments"><header class="ovv-panel-head"><h2 id="h-comments">Comments${commentRows.length ? html` <span class="ovv-count">${commentRows.length}</span>` : ''}</h2>${threadUrl ? html`<a class="ovv-panel-link" href="${threadUrl}">Discuss on OpenVibe.Community <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>` : ''}</header>${commentRows.length ? commentRows.map(commentItem) : html`<p class="ovv-comments-empty">No comments yet.${threadUrl ? html` <a href="${threadUrl}">Start the discussion</a>.` : ''}</p>`}</section>` : ''}
+<section class="ovv-panel ovv-comments">${commentsHtml}</section>
 </div>
 <aside class="ovv-col ovv-col--side">
 ${side || ''}

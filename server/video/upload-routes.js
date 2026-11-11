@@ -20,11 +20,15 @@
  * Origin). Reports are open to anyone who can see the video, one per person (or per keyed address) per video.
  */
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const cache = require('openvibe-shared/cache-policy');
 const { sameOrigin } = require('../http/principal');
 const { html, raw, notice, askAgent } = require('../render/html');
 const { UploadError } = require('./uploads');
 const { ShareError } = require('openvibe-sdk/share');
+const { createCommentsClient, CommentError } = require('./comments-client');
+const { renderThread } = require('../comments/inline');
+const { multipart: commentMultipart, readCommentForm } = require('../comments/form');
 
 const REASON_TEXT = {
     child_safety: 'It sexualises or endangers a child', violence: 'Violence or a threat', harassment: 'Harassment or someone\'s private details',
@@ -164,6 +168,10 @@ function createUploadApi({ ctx, config }) {
 function mountUploadPages(r, h) {
     const { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt, playlistForm, upNext, whatItIs, shareButton, renderVod, renderClip } = h;
     const up = ctx.videoUploads;
+    const comments = createCommentsClient({ config: ctx.config, fetchImpl: ctx.fetchImpl || globalThis.fetch });
+    const commentLimit = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
+    const commentSort = (req) => req.query.sort === 'new' ? 'new' : 'top';
+    const commentAfter = (req) => typeof req.query.after === 'string' && /^(?:-?\d{1,12}:)?\d{1,15}$/.test(req.query.after) ? req.query.after : null;
     const cfg = ctx.config.videoUploads;
     const whoOf = (req) => ({ requester: signedIn(req) ? ownerOf(req) : null, staff: isStaff(req) });
     const GB = 1024 ** 3;
@@ -359,6 +367,34 @@ ${fresh.length ? html`<ul class="ovv-mylist">${fresh.map(myVideoRow)}</ul>` : ht
         return row;
     }
 
+    async function uploadThread(req, row, watchPath) {
+        if (row.state !== 'active' || row.status !== 'ready') return '';
+        const subject = signedIn(req) ? req.viewer.subject : null;
+        const staff = signedIn(req) && (isStaff(req) || row.owner === ownerOf(req));
+        try {
+            const answer = await comments.read(row, { subject, staff, sort: commentSort(req), after: commentAfter(req), ip: req.ip });
+            const expandedId = /^\d{1,15}$/.test(String(req.query.replies || '')) ? String(req.query.replies) : null;
+            const belongs = expandedId && answer.comments.some((c) => String(c.id) === expandedId);
+            let expandedReplies = null;
+            if (belongs) {
+                expandedReplies = [];
+                let cursor = null;
+                do {
+                    const more = await comments.read(row, { subject, staff, parent: expandedId, after: cursor, limit: 100, ip: req.ip });
+                    expandedReplies.push(...more.comments);
+                    if (more.next_cursor === cursor) break;
+                    cursor = more.next_cursor;
+                } while (cursor);
+            }
+            const shown = row.visibility === 'private' ? { ...answer, thread: {} } : answer;
+            return raw(renderThread({ answer: shown, base: watchPath, post: `/u/${row.id}/comments?sort=${commentSort(req)}`,
+                remove: `/u/${row.id}/comments/delete?sort=${commentSort(req)}`, signedIn: Boolean(subject) && answer.viewer.can_comment !== false,
+                sort: commentSort(req), replyId: req.query.reply, expandedId: belongs ? expandedId : null, expandedReplies }));
+        } catch (err) {
+            return raw(`<section class="ovc-thread" id="comments"><h2>Comments</h2><p>${err instanceof CommentError && err.status === 404 ? 'Comments are hidden here.' : 'Comments are unavailable right now.'}</p></section>`);
+        }
+    }
+
     /** A query as the tail of /watch?v=<id> (its own ?v= is never carried): ?t= a moment, ?list= a playlist. */
     function queryTail(query) {
         const qs = new URLSearchParams();
@@ -421,6 +457,7 @@ ${fresh.length ? html`<ul class="ovv-mylist">${fresh.map(myVideoRow)}</ul>` : ht
         const thumb = httpsUrl(row.thumbnail_url);
         // The page's one address: /watch?v=<watch id> (its /u/<id> redirects here until an id exists).
         const watchPath = row.watch_id ? `/watch?v=${row.watch_id}` : `/u/${row.id}`;
+        const commentsHtml = await uploadThread(req, row, watchPath);
         if (row.status === 'processing') res.set('Refresh', '15');   // the page reloads itself until Media is done
         // Playlists (kind upload, by seq): a ready video anyone else may watch can be saved, and ?list= plays the next one.
         const saveForm = ready && row.state === 'active' && row.visibility !== 'private' && playlistForm ? await playlistForm(req, 'upload', row.seq) : '';
@@ -445,11 +482,12 @@ ${fresh.length ? html`<ul class="ovv-mylist">${fresh.map(myVideoRow)}</ul>` : ht
             index: listed, noindex: !listed,
             ...(listed ? {} : { cache: cache.htmlHeaders({ private: true }) }),
             title: row.title,
-            styles: ['kit.css'],
+            styles: ['kit.css', 'thread.css'],
+            localStyles: ['css/comments.css'],
             description: about,
             canonical: `${ctx.config.video.url}${watchPath}`,
             ...(listed && thumb ? { image: thumb, ogType: 'video.other' } : {}),
-            scripts: ready ? ['js/video.js'] : [],
+            scripts: ready ? ['js/video.js', 'js/comments.js'] : [],
             player: !!(ready && vod),
             body: html`<div class="ovv-watch">
 <div class="ovv-main">
@@ -474,6 +512,7 @@ ${aiDone && ai.overview ? html`<section class="ovv-panel" aria-labelledby="h-ai"
 ${manage && ai.overview !== row.description ? html`<form method="post" action="/u/${row.id}/manage"><input type="hidden" name="description" value="${ai.overview}"><button class="ovv-btn" type="submit">Use this as the description</button></form>` : ''}</section>` : ''}
 ${aiDone && ai.segments.length ? html`<details class="ovv-panel ovv-transcript"><summary>Transcript <span class="ovv-fine">(AI, ${ai.segments.length} lines)</span></summary><div class="ovv-transcript-body">${ai.segments.map((x) => html`<p><button type="button" class="ovv-seek" data-ovv-seek="${x.start}">${vttTime(x.start).slice(0, 8)}</button> <span>${x.text}</span></p>`)}</div></details>` : ''}
 ${manage && ready && ai && (ai.status === 'queued' || ai.status === 'running') ? html`<p class="ovv-fine">Captions, chapters and a summary are being made by OpenVibe.AI.</p>` : ''}
+<section class="ovv-panel ovv-comments">${commentsHtml}</section>
 </div>
 <aside class="ovv-side">
 ${inList.html}
@@ -514,6 +553,42 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
     r.get('/u/:id/chapters.vtt', async (req, res) => {
         const x = await aiOf(req);
         return x && x.ai.chapters.length ? sendVtt(res, renderChaptersVtt(x.ai.chapters.map((c) => ({ offset_seconds: c.start, description: c.title })), x.row.duration_seconds)) : notFoundVtt(req, res);
+    });
+
+    const commentFailure = (req, res, row, err) => page(req, res, { title: 'Comment not sent',
+        body: html`<h1>Comment not sent</h1><p>${err.message}</p><p><a href="${row.watch_id ? `/watch?v=${row.watch_id}` : `/u/${row.id}`}#comments">Go back</a></p>`,
+    }, err.status && err.status >= 400 && err.status <= 599 ? err.status : 422);
+    const commentReturn = (row, sort) => {
+        const path = row.watch_id ? `/watch?v=${row.watch_id}` : `/u/${row.id}`;
+        return `${path}${path.includes('?') ? '&' : '?'}sort=${sort}#comments`;
+    };
+    r.post('/u/:id/comments', mustSignIn('here', 'Sign in to comment.'), commentLimit, commentMultipart, async (req, res) => {
+        const row = await visibleUpload(req, res, req.params.id);
+        if (!row) return undefined;
+        if (!sameSite(req, res, commentReturn(row, commentSort(req)))) return undefined;
+        if (row.state !== 'active' || row.status !== 'ready') return notFound(req, res);
+        try {
+            const form = await readCommentForm(req);
+            const attachments = [];
+            for (const file of form.files) {
+                const out = await comments.upload(row, req.viewer.subject, file, req.ip);
+                if (!out || !out.attachment) throw new CommentError(503, 'The attachment could not be saved');
+                attachments.push(out.attachment);
+            }
+            await comments.add(row, req.viewer.subject, { message: form.message, parent_id: form.parent_id, attachments }, req.ip);
+            return res.redirect(303, commentReturn(row, commentSort(req)));
+        } catch (err) { return commentFailure(req, res, row, err); }
+    });
+    r.post('/u/:id/comments/delete', mustSignIn('here', 'Sign in to remove a comment.'), commentLimit, async (req, res) => {
+        const row = await visibleUpload(req, res, req.params.id);
+        if (!row) return undefined;
+        if (!sameSite(req, res, commentReturn(row, commentSort(req)))) return undefined;
+        const id = String(req.body.comment_id || '');
+        if (!/^\d{1,15}$/.test(id)) return notFound(req, res);
+        try {
+            await comments.remove(row, req.viewer.subject, isStaff(req) || row.owner === ownerOf(req), id, req.ip);
+            return res.redirect(303, commentReturn(row, commentSort(req)));
+        } catch (err) { return commentFailure(req, res, row, err); }
     });
 
     r.post('/u/:id/manage', mustSignIn('here'), async (req, res) => {

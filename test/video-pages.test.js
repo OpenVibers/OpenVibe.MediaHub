@@ -80,9 +80,12 @@ function startLive() {
     };
 
     const comments101 = [
-        { id: 'c1', message: 'Nice <b>stream</b>!', display_name: 'Commenter', username: 'commenter', created_at: '2026-10-12T10:00:00.000Z', reply_count: 3, is_deleted: 0, deleted: false },
-        { id: 'c2', message: 'Agreed', display_name: null, username: 'other_user', created_at: '2026-10-12T10:05:00.000Z', reply_count: 0, is_deleted: 0, deleted: false },
-        { id: 'c3', message: '', display_name: null, username: null, created_at: '2026-10-12T10:10:00.000Z', reply_count: 0, is_deleted: 1, deleted: true },
+        { id: 1, message: 'Nice <b>stream</b>!', display_name: 'Commenter', username: 'commenter', created_at: '2026-10-12T10:00:00.000Z', reply_count: 3, is_deleted: 0, deleted: false,
+            attachments: [{ id: 'med_01JAB2C3D4E5F6G7H8J9K0MNPQ', name: 'look.png', media_type: 'image/png' }],
+            replies: [{ id: 4, message: 'First reply', display_name: 'Alice', username: 'alice', created_at: '2026-10-12T10:01:00.000Z', reply_to_id: 1, reply_to: { display_name: 'Commenter' } },
+                { id: 5, message: 'Second reply', display_name: 'Bob', username: 'bob', created_at: '2026-10-12T10:02:00.000Z', reply_to_id: 4, reply_to: { display_name: 'Alice' } }] },
+        { id: 2, message: 'Agreed', display_name: null, username: 'other_user', created_at: '2026-10-12T10:05:00.000Z', reply_count: 0, is_deleted: 0, deleted: false },
+        { id: 3, message: '', display_name: null, username: null, created_at: '2026-10-12T10:10:00.000Z', reply_count: 0, is_deleted: 1, deleted: true },
     ];
     const chatMessages101 = [
         { id: 'm1', timestamp: '2026-10-12 09:29:59', username: 'early', display_name: 'Early', message: 'EARLY_MSG_XYZ', message_type: 'chat', user_id: 900001, anon_id: 'anon-PRIVATE-1', metadata: { note: 'meta-PRIVATE-1' }, profile_color: '#PRIVATE-COLOR', role: 'PRIVATE-ROLE' },
@@ -767,7 +770,7 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('1005 messages'), 'the Download menu counts every message');
     });
 
-    await check('the VOD page shows the newest comments and the Community link', async () => {
+    await check('the VOD page renders replies, targets, attachments, order and the Community link', async () => {
         const r = await getVideo('/v/101');
         assert.strictEqual(r.status, 200);
         assert.ok(r.text.includes('Comments'));
@@ -775,17 +778,21 @@ function countOccurrences(haystack, needle) {
         assert.ok(r.text.includes('other_user'), 'username fallback for the author');
         assert.ok(r.text.includes('Nice &lt;b&gt;stream&lt;/b&gt;!'), 'comment text is escaped');
         assert.ok(!r.text.includes('Nice <b>stream</b>!'), 'raw comment HTML never appears');
-        assert.ok(r.text.includes('3 replies'), 'reply count when present');
-        assert.ok(r.text.includes('<time class="ovv-comment-date"'), 'a relative date is shown');
-        assert.strictEqual(countOccurrences(r.text, 'class="ovv-comment"'), 2, 'the deleted comment is not rendered');
+        assert.ok(r.text.includes('1 more reply'), 'the remaining replies load separately');
+        assert.ok(r.text.includes('class="ovc-target"'), 'the exact reply target is shown');
+        assert.ok(r.text.includes('class="ovc-attach ovc-attach--image"'), 'the picture attachment is shown');
+        assert.ok(r.text.includes('<time datetime='), 'a relative date is shown');
+        assert.strictEqual(countOccurrences(r.text, 'class="ovc-comment"'), 5, 'top-level comments and first replies are rendered');
+        assert.ok(r.text.includes('class="ovc-order"'), 'Top and Newest are server-rendered');
+        assert.ok(r.text.includes('Sign in to comment.'), 'the signed-out composer spot has a sign-in action');
         assert.ok(r.text.includes('Discuss on OpenVibe.Community'));
         assert.ok(r.text.includes('href="https://openvibe.community/t/vod-101"'));
     });
 
-    await check('a VOD with no comments shows the empty line and the link', async () => {
+    await check('a VOD with no comments uses the kit empty state and keeps the Community link', async () => {
         const r = await getVideo('/v/102');
         assert.strictEqual(r.status, 200);
-        assert.ok(r.text.includes('No comments yet.'));
+        assert.ok(r.text.includes('Be the first to comment'));
         assert.ok(r.text.includes('href="https://openvibe.community/t/vod-102"'));
     });
 

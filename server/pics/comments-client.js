@@ -27,8 +27,8 @@ function createCommentsClient({ fetchImpl = globalThis.fetch } = {}) {
         const found = await thread(id, token);
         if (!found.id) return found;
         const qs = new URLSearchParams();
-        if (query.sort === 'new') qs.set('sort', 'new');
-        if (query.after && /^\d{1,15}$/.test(String(query.after))) qs.set('after', String(query.after));
+        if (query.sort === 'new' || query.sort === 'top') qs.set('sort', query.sort);
+        if (query.after && /^(?:-?\d{1,12}:)?\d{1,15}$/.test(String(query.after))) qs.set('after', String(query.after));
         if (query.parent && /^\d{1,15}$/.test(String(query.parent))) qs.set('parent', String(query.parent));
         if (query.limit) qs.set('limit', String(Math.min(Math.max(Number(query.limit) || 30, 1), 100)));
         return await call('GET', `/threads/${encodeURIComponent(found.id)}${qs.size ? `?${qs}` : ''}`, { token });
@@ -44,7 +44,22 @@ function createCommentsClient({ fetchImpl = globalThis.fetch } = {}) {
         form.set('file', new Blob([buffer], { type: mime || 'application/octet-stream' }), name || 'file');
         return await call('POST', '/attachments', { token, body: form });
     }
-    return { read, add, upload };
+    async function remove(commentId, token) {
+        return await call('DELETE', `/${encodeURIComponent(commentId)}`, { token });
+    }
+    async function replies(id, token, parent) {
+        const all = [];
+        let after = null;
+        while (true) {
+            const result = await read(id, token, { parent, after, limit: 100 });
+            if (result.status !== 200) return result;
+            all.push(...result.body.comments);
+            if (!result.body.next_cursor) return { status: 200, body: { replies: all } };
+            if (result.body.next_cursor === after) return { status: 503, body: { error: 'Replies could not be loaded' } };
+            after = result.body.next_cursor;
+        }
+    }
+    return { read, add, upload, remove, replies };
 }
 
 module.exports = { createCommentsClient };
