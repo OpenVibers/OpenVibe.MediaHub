@@ -27,7 +27,7 @@ const { html, raw, notice, askAgent } = require('../render/html');
 const { UploadError } = require('./uploads');
 const { ShareError } = require('openvibe-sdk/share');
 const { createCommentsClient, CommentError } = require('./comments-client');
-const { renderThread } = require('../comments/inline');
+const { renderThread } = require('openvibe-shared/thread');
 const { multipart: commentMultipart, readCommentForm } = require('../comments/form');
 
 const REASON_TEXT = {
@@ -482,8 +482,8 @@ ${fresh.length ? html`<ul class="ovv-mylist">${fresh.map(myVideoRow)}</ul>` : ht
             index: listed, noindex: !listed,
             ...(listed ? {} : { cache: cache.htmlHeaders({ private: true }) }),
             title: row.title,
-            styles: ['kit.css', 'thread.css'],
-            localStyles: ['css/comments.css'],
+            styles: ['kit.css', 'thread.css', 'thread-inline.css'],
+            localStyles: [],
             description: about,
             canonical: `${ctx.config.video.url}${watchPath}`,
             ...(listed && thumb ? { image: thumb, ogType: 'video.other' } : {}),

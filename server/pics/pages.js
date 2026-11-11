@@ -40,7 +40,7 @@ const store = require('./store');
 const { createPicsApi } = require('./api');
 const { createCommentsClient } = require('./comments-client');
 const { createCommentsClient: createServiceCommentsClient } = require('../video/comments-client');
-const { renderThread } = require('../comments/inline');
+const { renderThread } = require('openvibe-shared/thread');
 const { multipart: commentMultipart, readCommentForm } = require('../comments/form');
 const { createPicVariants } = require('./variants');
 const kit = require('openvibe-shared/kit');
@@ -427,8 +427,8 @@ ${raw(showcase.network({
             jsonLd: gallery.isPublic(row) ? { '@context': 'https://schema.org', '@type': 'ImageObject', name: title, contentUrl: L.direct, url: L.page, caption: row.description || title, author: { '@type': 'Person', name: row.author_name || 'OpenVibe member' } } : undefined,
             description: row.description || `${title}: a picture on ${SITE_NAME}.`,
             image: hidden ? undefined : L.direct, ogType: 'article',
-            scripts: ['js/pics.js', 'js/pics-gallery.js', 'js/comments.js'], styles: ['kit.css', 'thread.css'], sharedScripts: ['kit-web.js'],
-            localStyles: ['css/comments.css', ...(owner ? ['css/labels.css'] : [])],
+            scripts: ['js/pics.js', 'js/pics-gallery.js', 'js/comments.js'], styles: ['kit.css', 'thread.css', 'thread-inline.css'], sharedScripts: ['kit-web.js'],
+            localStyles: [...(owner ? ['css/labels.css'] : [])],
             private: deleteKey ? true : undefined,
             body: html`${message ? notice(message, tone) : ''}${fresh || req.query.new ? notice('Uploaded. Copy a link below to share it.', 'ok') : ''}${owner && req.query.again ? notice('You had already uploaded this picture: here it is. Nothing was stored twice.', 'info') : ''}${owner && req.query.new && likeSlug ? notice(html`It looks like a picture you uploaded before: <a href="/i/${likeSlug}">that one</a>. If you meant to keep only one, delete the other.`, 'info') : ''}
 ${deleteKey ? html`<div class="notice warn" role="status"><b>Keep this delete link.</b> It is the only way to delete this picture, and it is shown only now:<br><code class="ovp-key">${base}/i/${row.slug}/delete?key=${deleteKey}</code></div>` : ''}

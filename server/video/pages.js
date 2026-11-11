@@ -47,7 +47,7 @@ const { createUploadApi, mountUploadPages } = require('./upload-routes');
 const { ACCESS_COOKIE, REFRESH_COOKIE } = require('../auth/sso');
 const { mountDownloads, downloadMenu } = require('./downloads');
 const { actionMenu, deleteAction, menuLinks, companion, whatItIs, shareButton, lengthWords, dayLabel, streamDate } = require('./watch-ui');
-const { renderThread } = require('../comments/inline');
+const { renderThread } = require('openvibe-shared/thread');
 const { multipart: commentMultipart, readCommentForm } = require('../comments/form');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
@@ -1570,7 +1570,7 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
             noindex: unlisted || ownOnly || thin,
             ...(ownOnly ? { cache: cache.htmlHeaders({ private: true }) } : {}),
             title: watchTitle(vod.title || 'Stream recording', vod.username, vod.created_at),
-            styles: ['kit.css', 'thread.css'],
+            styles: ['kit.css', 'thread.css', 'thread-inline.css'],
             description: about,
             canonical: `${base}${watchPath}`,
             ...(ownOnly || vod.is_recording ? {} : {
@@ -1578,7 +1578,7 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
                 image: httpsUrl(vod.thumbnail_url) || undefined, ogType: 'video.other',
             }),
             scripts: ['js/video.js', 'js/comments.js'],
-            localStyles: ['css/comments.css', ...(manageable ? ['css/labels.css'] : [])],
+            localStyles: [...(manageable ? ['css/labels.css'] : [])],
             player: true,
             body: html`<div class="ovv-watch ovv-watch--vod">
 <div class="ovv-col ovv-col--main">
@@ -1695,7 +1695,7 @@ ${more || ''}
             noindex: unlisted || ownOnly || aiClip,
             ...(ownOnly ? { cache: cache.htmlHeaders({ private: true }) } : {}),
             title: watchTitle(clip.title || 'Clip', clip.source_streamer_username, clip.created_at),
-            styles: ['kit.css', 'thread.css'],
+            styles: ['kit.css', 'thread.css', 'thread-inline.css'],
             description: clip.ai_overview || factualDescription('clip', clip),
             canonical: `${base}${watchPath}`,
             ...(ownOnly || aiClip ? {} : {
@@ -1703,7 +1703,7 @@ ${more || ''}
                 image: httpsUrl(clip.thumbnail_url) || undefined, ogType: 'video.other',
             }),
             scripts: ['js/video.js', 'js/comments.js'],
-            localStyles: ['css/comments.css', ...(manageable ? ['css/labels.css'] : [])],
+            localStyles: [...(manageable ? ['css/labels.css'] : [])],
             player: true,
             body: html`<div class="ovv-watch ovv-watch--clip">
 <div class="ovv-col ovv-col--main">
