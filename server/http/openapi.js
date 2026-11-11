@@ -66,17 +66,17 @@ route('get', '/ping', {
     responses: { 200: json('The service answers', { type: 'object', properties: { ok: { const: true }, service: str() } }), ...errors([429]) },
 });
 
-// ── Download audience default ─────────────────────────────────────────────────────────────────
+// ── Audience defaults ─────────────────────────────────────────────────────────────────────────
 route('get', '/share-defaults/{kind}', {
-    operationId: 'getShareDefault', summary: 'Audience for new Download uploads', tags: ['shares'], security: PERSON,
-    parameters: [path('kind', str({ enum: ['download'] }))],
+    operationId: 'getShareDefault', summary: 'Audience for new uploads or albums', tags: ['shares'], security: PERSON,
+    parameters: [path('kind', str({ enum: ['download', 'picture', 'album', 'video'] }))],
     responses: { 200: json('The saved default, or Everyone when none is saved', { type: 'object', properties: {
         kind: str(), audience: str({ enum: ['public', 'link', 'people', 'private'] }),
     } }), ...errors([401, 404, 429]) },
 });
 route('put', '/share-defaults/{kind}', {
-    operationId: 'setShareDefault', summary: 'Save a Download audience default and optionally apply it to existing files', tags: ['shares'], security: PERSON,
-    parameters: [path('kind', str({ enum: ['download'] }))],
+    operationId: 'setShareDefault', summary: 'Save an audience default and optionally apply it to existing items', tags: ['shares'], security: PERSON,
+    parameters: [path('kind', str({ enum: ['download', 'picture', 'album', 'video'] }))],
     requestBody: body({ type: 'object', required: ['audience'], properties: {
         audience: str({ enum: ['public', 'link', 'people', 'private'] }), apply: { type: 'boolean' },
     } }),

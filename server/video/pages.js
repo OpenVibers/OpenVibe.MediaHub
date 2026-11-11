@@ -955,6 +955,20 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
     });
 
     r.use('/api/v1/video', createVideoApiRoutes({ ...ctx, live }));
+    r.get('/api/v1/share-defaults/video', ctx.principal.middleware, async (req, res) => {
+        if (req.principal.kind !== 'user') return res.status(401).json({ code: 'auth.required', detail: 'Sign in to see your video default.' });
+        res.set('Cache-Control', 'no-store').json({ kind: 'video', audience: await ctx.sharing.defaultAudience(req.principal.requester, 'video') });
+    });
+    r.put('/api/v1/share-defaults/video', ctx.principal.middleware, express.json({ limit: '8kb' }), async (req, res) => {
+        if (req.principal.kind !== 'user') return res.status(401).json({ code: 'auth.required', detail: 'Sign in to change your video default.' });
+        if (req.principal.viaSession && !sameOrigin(req, config.video.url)) return res.status(403).json({ code: 'request.cross_site' });
+        const audience = String((req.body || {}).audience || '');
+        if (!ctx.sharing.AUDIENCES.includes(audience)) return res.status(422).json({ code: 'share.default_invalid' });
+        const owner = req.principal.requester;
+        await ctx.sharing.setDefaultAudience(owner, 'video', audience);
+        const changed = req.body.apply === true ? await ctx.sharing.applyDefault(owner, 'video', audience) : 0;
+        return res.set('Cache-Control', 'no-store').json({ kind: 'video', audience, changed });
+    });
     // Uploads' part API (server/video/upload-routes.js): raw parts and its own JSON, before the forms' parser.
     r.use('/api/v1/videos', createUploadApi({ ctx, config }));
     // The playlist forms are web forms (no JavaScript): urlencoded text. The API router above has its own JSON

@@ -29,6 +29,7 @@ const TABLES = [
     { table: 'mh_shares', subject: 'owner', value: AS_REQUESTER, file: 'shares.json' },
     { table: 'mh_usage', subject: 'owner', value: AS_REQUESTER, file: 'usage.json' },
     { table: 'mh_share_defaults', subject: 'owner', value: AS_REQUESTER, file: 'share-defaults.json' },
+    { table: 'mh_content_share_defaults', subject: 'owner', value: AS_REQUESTER, file: 'content-share-defaults.json' },
     // Radio publications refer to drive files. Export and erase them before the file rows cascade.
     { table: 'mh_radio_tracks', subject: 'owner', value: AS_REQUESTER, file: 'radio_tracks.json' },
     { table: 'mh_agent_grants', subject: 'owner', value: AS_REQUESTER, file: 'agent_grants.json' },

@@ -76,6 +76,7 @@ const DELETION = 'del_01JABCDEFGHJKMNPQRSTVWXYZ0';
 
     await check('the export carries the person\'s files, folders, shares, reports and upload counts', async () => {
         await t.ctx.sharing.setDefaultAudience(`user:${kim.subject}`, 'download', 'private');
+        await t.ctx.sharing.setDefaultAudience(`user:${kim.subject}`, 'picture', 'people');
         const r = await deliver(envelope('network.account.export_requested', { export_id: EXPORT, subject: kim.subject }));
         assert.strictEqual(r.status, 200, r.text.slice(0, 300));
         assert.strictEqual(r.json().outcome, 'exported');
@@ -86,8 +87,9 @@ const DELETION = 'del_01JABCDEFGHJKMNPQRSTVWXYZ0';
         assert.ok(files, 'a files.json part');
         assert.strictEqual(files.content.length, 1);
         assert.strictEqual(files.content[0].id, file.id);
-        assert.deepStrictEqual(part.files.map((f) => f.name).sort(), ['files.json', 'radio_tracks.json', 'reports.json', 'share-defaults.json', 'shares.json', 'uniform-sharing.json', 'usage.json', 'video_likes.json'], 'and the rest of the person\'s own data');
+        assert.deepStrictEqual(part.files.map((f) => f.name).sort(), ['content-share-defaults.json', 'files.json', 'radio_tracks.json', 'reports.json', 'share-defaults.json', 'shares.json', 'uniform-sharing.json', 'usage.json', 'video_likes.json'], 'and the rest of the person\'s own data');
         assert.strictEqual(part.files.find((f) => f.name === 'share-defaults.json').content[0].audience, 'private');
+        assert.strictEqual(part.files.find((f) => f.name === 'content-share-defaults.json').content[0].audience, 'people');
         assert.ok(part.files.find((f) => f.name === 'uniform-sharing.json').content.owned.some((s) => s.kind === 'download' && s.resource_id === file.id));
         assert.deepStrictEqual(part.files.find((f) => f.name === 'radio_tracks.json').content.map((track) => track.id), ['radio_kim'], 'a person can export their radio publications');
         assert.deepStrictEqual(part.files.find((f) => f.name === 'video_likes.json').content.map((like) => like.item_id), [101], 'a person can export their likes');
@@ -116,6 +118,7 @@ const DELETION = 'del_01JABCDEFGHJKMNPQRSTVWXYZ0';
         assert.ok(confirmation.erased.mh_files >= 1, JSON.stringify(confirmation));
         assert.ok(confirmation.erased.mh_shares >= 1, JSON.stringify(confirmation));
         assert.strictEqual(confirmation.erased.mh_share_defaults, 1, 'the saved share default is erased');
+        assert.strictEqual(confirmation.erased.mh_content_share_defaults, 1, 'the Pics share default is erased');
         assert.strictEqual(confirmation.erased.mh_radio_tracks, 1, 'radio publications are erased with the account');
         assert.strictEqual(confirmation.erased.video_likes, 1, 'likes are erased with the account');
         assert.strictEqual(Number(await t.ctx.s.db.value('SELECT COUNT(*) FROM mh_radio_tracks WHERE owner = $1', [`user:${sam.subject}`])), 1, 'another person\'s radio publication remains');

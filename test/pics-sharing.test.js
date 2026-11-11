@@ -1,7 +1,7 @@
 'use strict';
 /**
  * Sharing on MediaHub pictures and albums (design 2026-11-06, VISIBILITY-EVERYWHERE step 4;
- * openvibe-sdk/share). Unlisted by default (publishing is explicit),
+ * openvibe-sdk/share). Everyone by default (gallery publishing is explicit),
  * Only me and Specific people narrow it; the share row decides the page, the file, the thumbnail
  * and an album, and the gate never shows the picture.
  */
@@ -49,10 +49,10 @@ function hostClient(t) {
     const putShare = (kind, id, body) => share(kind, id, { method: 'PUT', as: kate, json: body });
     const row = async (id) => await t.ctx.s.db.maybe('SELECT * FROM shares WHERE service = $1 AND kind = $2 AND resource_id = $3', ['mediahub', 'picture', id]);
 
-    await check('a new picture is registered for anyone with the link, owned by its uploader', async () => {
+    await check('a new picture is registered for Everyone, owned by its uploader', async () => {
         const img = await upload();
         const s = await row(img.id);
-        assert.strictEqual(s.audience, 'link');
+        assert.strictEqual(s.audience, 'public');
         assert.deepStrictEqual(s.owner_subject, { type: 'user', id: kate.subject });
         assert.strictEqual((await get(`/i/${img.slug}`)).status, 200);
         assert.strictEqual((await get(`/i/${img.slug}.png`)).status, 200);
@@ -124,11 +124,30 @@ function hostClient(t) {
         const hidden = await get(`/a/${album.slug}`);
         assert.strictEqual(hidden.status, 200);
         assert.ok(!hidden.text.includes(`/i/${img.slug}.png`), 'Only me is not in the album page');
+        const hiddenApi = await get(`/api/v1/albums/${album.slug}`);
+        assert.strictEqual(hiddenApi.status, 200);
+        assert.strictEqual(hiddenApi.json().images.length, 0, 'the album API does not reveal a private picture or count');
+        assert.strictEqual((await get(`/api/v1/albums/${album.slug}`, { as: kate })).json().images.length, 1);
         assert.strictEqual((await get(`/i/${img.slug}.png`, { as: kate })).status, 200);
         // The album's own audience carries its pictures.
         assert.strictEqual((await putShare('album', album.id, { audience: 'private' })).status, 200);
         assert.strictEqual((await t.ctx.s.db.maybe('SELECT audience FROM pics_images WHERE id = $1', [img.id])).audience, 'private');
         assert.strictEqual((await t.ctx.s.db.maybe('SELECT audience FROM shares WHERE service = $1 AND kind = $2 AND resource_id = $3', ['mediahub', 'picture', img.id])).audience, 'private');
+    });
+
+    await check('an album member sees its People pictures in page, API and bytes; a stranger sees no album', async () => {
+        const img = await upload();
+        const made = await t.ctx.pics.createAlbum(`user:${kate.subject}`, { title: 'Family', audience: 'people' });
+        assert.strictEqual(made.ok, true);
+        await t.ctx.pics.addToAlbum(made.album, await picsStore.imageBySlug(t.ctx.s, img.slug));
+        assert.strictEqual((await row(img.id)).audience, 'people', 'new album pictures follow the album audience');
+        await putShare('album', made.album.id, { audience: 'people', members: [{ subject: { type: 'user', id: mate.subject }, role: 'viewer' }] });
+        assert.strictEqual((await get(`/a/${made.album.slug}`, { as: mate })).status, 200);
+        assert.strictEqual((await get(`/api/v1/albums/${made.album.slug}`, { as: mate })).json().images.length, 1);
+        assert.strictEqual((await get(`/i/${img.slug}.png`, { as: mate })).status, 200);
+        assert.strictEqual((await get(`/a/${made.album.slug}`, { as: sam })).status, 404);
+        assert.strictEqual((await get(`/api/v1/albums/${made.album.slug}`, { as: sam })).status, 404);
+        assert.strictEqual((await get(`/i/${img.slug}.png`, { as: sam })).status, 404);
     });
 
     await done();

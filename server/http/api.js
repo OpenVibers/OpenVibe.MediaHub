@@ -205,14 +205,14 @@ function createApi(ctx) {
 
     r.get('/share-defaults/:kind', person, async (req, res) => {
         const kind = String(req.params.kind || '');
-        if (kind !== 'download') return problem(req, res, 404, 'share.kind', 'No such share kind.');
+        if (!['download', 'picture', 'album', 'video'].includes(kind)) return problem(req, res, 404, 'share.kind', 'No such share kind.');
         return res.json({ kind, audience: await sharing.defaultAudience(personOf(req), kind) });
     });
 
     r.put('/share-defaults/:kind', person, async (req, res) => {
         const kind = String(req.params.kind || '');
         const audience = String((req.body || {}).audience || '');
-        if (kind !== 'download' || !['public', 'link', 'people', 'private'].includes(audience)) {
+        if (!['download', 'picture', 'album', 'video'].includes(kind) || !['public', 'link', 'people', 'private'].includes(audience)) {
             return problem(req, res, 422, 'share.default_invalid', 'Choose Everyone, Anyone with the link, Specific people, or Only me.');
         }
         const owner = personOf(req);
@@ -238,7 +238,7 @@ function createApi(ctx) {
             folders: folders.map(wireFolder),
             files: rows.map(wireFile),
             usage: await drive.usage(owner),
-            note: q ? 'Search covers every folder; files in the bin are not listed.' : 'Your files only. A file is private until you make a share link for it.',
+            note: q ? 'Search covers every folder; files in the bin are not listed.' : 'Your files only. Each file follows the audience chosen at upload or in Share.',
         });
     });
 
