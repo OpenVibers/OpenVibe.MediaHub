@@ -110,6 +110,16 @@ body:has(> main.ovv-page) .openvibe-navbar.ovnav-top { background-color: var(--b
 .ovv-player-wrap > .ov-player-ambient { top: 24px; }
 /* The player clips itself to the corners, so the wrapper can let the ambient glow (shared player.js) spill around it. */
 .ovv-player-wrap > .ov-player, .ovv-player-wrap > video { border-radius: inherit; overflow: hidden; }
+.ovv-agent-overlay { position: absolute; z-index: 4; left: 12px; right: 12px; bottom: 48px; display: grid; gap: 3px; padding: 10px 13px; border-radius: 10px; background: rgba(7, 13, 26, .86); color: #fff; font-size: 13px; pointer-events: none; }
+.ovv-agent-overlay strong { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #a9c6ff; }
+.ovv-agent-task { font-weight: 650; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ovv-agent-current { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ovv-agent-current::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #60a5fa; }
+.ovv-agent-current[data-status="passed"]::before, .ovv-agent-tick[data-status="passed"] { background: #4ade80; }
+.ovv-agent-current[data-status="failed"]::before, .ovv-agent-tick[data-status="failed"] { background: #fb7185; }
+.ovv-agent-ticks { display: flex; gap: 3px; height: 3px; }
+.ovv-agent-tick { flex: 1; background: #60a5fa; border-radius: 2px; }
+@media (max-width: 600px) { .ovv-agent-overlay { bottom: 40px; padding: 7px 9px; } .ovv-agent-overlay strong, .ovv-agent-task, .ovv-agent-ticks { display: none; } }
 .ovv-player-wrap.ov-player-host { box-shadow: none; border-color: transparent; }
 /* The picture's shape once it plays (video.js followShape: --ovv-ar), eased when a recording turns mid-stream; 16:9
    before that. The height is capped so the title under the player stays on screen. */

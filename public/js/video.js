@@ -22,6 +22,40 @@
         window.history.replaceState(null, '', u.pathname + '?' + u.searchParams.toString());
     }
 
+    function agentOverlay(video) {
+        const box = document.querySelector('[data-ovv-agent]');
+        if (!box || !video) return;
+        let steps;
+        try { steps = JSON.parse(box.getAttribute('data-ovv-agent')); } catch { return; }
+        if (!Array.isArray(steps)) return;
+        const current = box.querySelector('.ovv-agent-current');
+        const timeline = box.querySelector('.ovv-agent-ticks');
+        let shown = -2;
+        function sync() {
+            let index = -1;
+            for (let i = 0; i < steps.length; i++) {
+                if (steps[i].at <= video.currentTime + .25) index = i;
+                else break;
+            }
+            if (index === shown) return;
+            shown = index;
+            const step = index >= 0 ? steps[index] : null;
+            current.textContent = step ? step.title : 'Waiting for the first step';
+            current.setAttribute('data-status', step ? step.status : 'started');
+            timeline.replaceChildren();
+            steps.slice(Math.max(0, index - 11), index + 1).forEach(function (item) {
+                const tick = document.createElement('span');
+                tick.className = 'ovv-agent-tick';
+                tick.setAttribute('data-status', item.status);
+                tick.title = item.title;
+                timeline.appendChild(tick);
+            });
+        }
+        video.addEventListener('timeupdate', sync);
+        video.addEventListener('seeked', sync);
+        sync();
+    }
+
     // Media's segment timeline (HLS) when the recording has one: native where the browser plays HLS (Safari, iOS),
     // otherwise hls.js (self-hosted, loaded only then). The file in src stays the fallback: a playlist that fails
     // falls back to it once, at the same position.
@@ -564,6 +598,7 @@
         const video = document.querySelector('video[data-ovv-video]');
         transcript(video);
         if (!video) return;
+        agentOverlay(video);
         // Keep one local resume point for the app home. The URL and time stay on this device.
         let lastResumeWrite = 0;
         video.addEventListener('timeupdate', function () {

@@ -1345,6 +1345,12 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
         if (!live.isId(id)) return notFoundVtt(req, res);
         const data = await live.vod(id);
         if (!data || !data.vod) return notFoundVtt(req, res);
+        const agent = await settle(live.agentSteps(id));
+        if (agent && Array.isArray(agent.steps)) {
+            const list = agent.steps.filter((s) => s.status === 'started' && Number.isFinite(Number(s.offset_seconds)))
+                .map((s) => ({ offset_seconds: Number(s.offset_seconds), description: s.title }));
+            return list.length ? sendVtt(res, renderChaptersVtt(list, data.vod.duration_seconds)) : notFoundVtt(req, res);
+        }
         let mems = [];
         try {
             const m = await live.vodMemories(id);
@@ -1427,7 +1433,7 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
         // Chapters, comments, chat replay, the playlist form and up next do not depend on each other: asked together
         // (one after another, five services' answers in turn, the page's p95 was 581 ms on 2026-10-17).
         const fail = Symbol('failed');
-        const [m, cm, replay, saveForm, up, hist, more] = await Promise.all([
+        const [m, cm, replay, saveForm, up, hist, more, agent] = await Promise.all([
             // A private recording's moments are Live's answer to its owner only.
             Promise.resolve().then(() => (ownOnly ? asPerson(req, res, (token) => live.vodMemoriesAs(token, id)) : live.vodMemories(id))).catch(() => fail),
             Promise.resolve().then(() => live.comments('vod', id)).catch(() => fail),
@@ -1438,9 +1444,13 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
             // parts (its broadcaster reconnected) the other parts, to move between.
             Promise.resolve().then(() => (live.isId(vod.stream_id) ? live.streamHistory(vod.stream_id) : null)).catch(() => fail),
             moreFromChannel(vod.username, vod.display_name, 'vod', id).catch(() => ''),
+            Promise.resolve().then(() => (ownOnly ? asPerson(req, res, (token) => live.agentStepsAs(token, id)) : live.agentSteps(id))).catch(() => fail),
         ]);
         let mems = [];
         try { if (m !== fail) mems = chapters(moments(m && m.memories), vod.duration_seconds); } catch { mems = []; }
+        const agentSteps = agent !== fail && agent && Array.isArray(agent.steps) ? agent.steps : null;
+        if (agentSteps) mems = agentSteps.filter((s) => s.status === 'started' && Number.isFinite(Number(s.offset_seconds)))
+            .map((s) => ({ offset_seconds: Number(s.offset_seconds), description: String(s.title || '').slice(0, 120) }));
         let threadUrl = null;
         let commentRows = [];
         let commentsOk = false;
@@ -1505,7 +1515,7 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
 <div class="ovv-col ovv-col--main">
 <div class="ovv-stage">
 ${savedNotice(req)}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this recording.', 'info') : ''}
-<div class="ovv-player-wrap"${labelsUi.attrs(labelsUi.inForce(vod), { owner: vod.username, opened: true })}><video class="ovv-player" data-ov-player${miniAttr(vod.title || 'Stream recording', channelName || vod.username, watchPath, fileOf(vod))} controls preload="metadata" playsinline${posterAttr(httpsUrl(vod.thumbnail_url))}${avatarAttr(vod.username, config.networkUrl)}${shapeAttr} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video>${pipsTag(pips)}</div>
+<div class="ovv-player-wrap"${labelsUi.attrs(labelsUi.inForce(vod), { owner: vod.username, opened: true })}><video class="ovv-player" data-ov-player${miniAttr(vod.title || 'Stream recording', channelName || vod.username, watchPath, fileOf(vod))} controls preload="metadata" playsinline${posterAttr(httpsUrl(vod.thumbnail_url))}${avatarAttr(vod.username, config.networkUrl)}${shapeAttr} src="${fileOf(vod) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}>${segs.length ? html`<track kind="captions" label="Transcript (AI)" src="/v/${id}/captions.vtt" default>` : ''}${mems.length && !ownOnly ? html`<track kind="chapters" src="/v/${id}/chapters.vtt">` : ''}</video>${pipsTag(pips)}${agentSteps ? html`<div class="ovv-agent-overlay" data-ovv-agent="${JSON.stringify(agentSteps.map((s) => ({ at: Number(s.offset_seconds), title: s.title, status: s.status, tests: s.tests, cost: s.cost_usd })))}"><strong>AI agent</strong><span class="ovv-agent-task">${agent.task || vod.title}</span><span class="ovv-agent-current" aria-live="polite">Waiting for the first step</span><span class="ovv-agent-ticks" aria-label="Step timeline"></span></div>` : ''}</div>
 <div class="ovv-head">
 ${titleLine('Stream recording', vod.title || 'Stream recording')}
 ${labelsUi.chips(labelsUi.inForce(vod))}
