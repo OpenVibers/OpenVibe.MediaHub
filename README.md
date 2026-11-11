@@ -82,7 +82,13 @@ The service manifest (openvibe-contracts, `manifests/services/media-hub.json`) l
 The two playlist capabilities are registered in `server/http/principal.js` and guarded on the video host's API
 (see **Playlist API**): `video.playlist.read` lets an app, agent or service list and read the playlists it owns and
 any public or unlisted playlist by id, and `video.playlist.manage` lets it create, edit, reorder and delete its own.
-Every other `/api/v1` route still requires a signed-in person, never an app, agent or service token.
+`download.file.read` is for agent tokens only, and reads one file only when its owner created an active grant for that
+agent. A capability never lists the drive or replaces the per-file grant. Every other drive write still requires a
+signed-in person (or that person's scoped sync key).
+
+The signed-in `/files` root and search also show that person's Pics images and ready Video uploads as read-only
+entries. Their bytes and lifecycle remain with Pics and Video; opening an entry goes to its owning service. Those
+source entries are not yet eligible for Download agent grants, which apply to files uploaded into the drive.
 
 On other services it calls:
 
@@ -406,12 +412,15 @@ local copy is gone. It authenticates with a **sync key** made on `/sync` (`OPENV
 | `GET /files`, `POST /files`, `GET /files/:id`, `DELETE /files/:id` | your files |
 | `GET /folders`, `POST /folders` | your folders |
 | `POST /shares`, `DELETE /shares/:slug` | make (`{ file_id \| folder_id, hours, usernames? }`) and revoke share links |
+| `GET /agent-grants`, `POST /agent-grants`, `DELETE /agent-grants/:id` | list, make and revoke a read-only grant for one agent and one file; grants expire after 1–720 hours |
+| `GET /agent/files/:id/content` | agent-only `download.file.read`; streams the granted file with byte-range support |
 | `GET /uploads/:id`, `PUT /uploads/:id/parts/:n`, `POST /uploads/:id/complete`, `DELETE /uploads/:id` | resumable uploads |
 | `GET /usage` | your usage against the limits |
 
 On the video host (openvibe.video), the playlist API accepts a person Bearer token, an app/agent/service token
-with the right capability, or (for public reads) no token — see **Playlist API** below. The drive's `/api/v1`
-routes are unchanged and remain a signed-in person only.
+with the right capability, or (for public reads) no token — see **Playlist API** below. On the drive API, the
+agent file-content route requires both an agent token with `download.file.read` and that agent's active per-file grant.
+Other drive routes remain person-only, except for the owner's scoped sync key.
 
 ## Playlist API
 
