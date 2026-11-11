@@ -70,6 +70,8 @@ function multipart(fields, file) {
             const home = await t.get('/', { headers: PICS });
             assert.strictEqual(home.status, 200);
             assert.ok(home.text.includes('Share pictures.') && home.text.includes('Sign in to upload'));
+            const signedInHome = await t.get('/', { headers: PICS, as: kim });
+            assert.ok(signedInHome.text.includes('data-ov-guide="pics.upload"'), 'the signed-in upload page has the guide target');
             assert.ok(/<script type="application\/ld\+json">[^<]*"@type":"WebSite"/.test(home.text), 'the home says what the site is (JSON-LD)');
             assert.strictEqual((await t.get('/files', { headers: PICS, as: kim })).status, 404, 'no drive pages on the pics host');
             assert.ok((await t.get('/', { headers: { Host: 'openvibe.download' } })).text.indexOf('Share pictures.') === -1, 'the drive host is not Pics');

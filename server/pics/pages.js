@@ -223,7 +223,7 @@ function createPicsRoutes(ctx) {
 <span class="ovp-drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="40" height="40"><path fill="currentColor" d="M19 5v14H5V5h14m0-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm-4.86 8.86-3 3.87L9 13.14 6 17h12l-3.86-5.14Z"/></svg></span>
 <p class="ovp-drop-title">Drop pictures here, paste one, or choose files</p>
 <p class="ovp-drop-hint">JPEG, PNG, GIF, WebP or AVIF, up to ${formatBytes(max)} each. Location and camera details are removed.</p>
-<label class="ovp-btn ovp-btn--primary ovp-file"><input type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif" required data-pics-input> Choose a picture</label>
+<label class="ovp-btn ovp-btn--primary ovp-file" data-ov-guide="pics.upload"><input type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif" required data-pics-input> Choose a picture</label>
 <div class="ovp-drop-fields"><label for="up-title">Title (optional)</label><input id="up-title" name="title" type="text" maxlength="120" placeholder="What is it?"></div>
 <button class="ovp-btn ovp-btn--primary ovp-nojs-submit" type="submit">Upload</button>
 </div>
