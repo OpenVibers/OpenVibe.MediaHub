@@ -386,6 +386,7 @@ ${raw(showcase.network({
         const holding = owner ? await store.albumsHolding(s, row.id) : [];
         const title = row.title || 'Untitled picture';
         const hidden = row.state !== 'active';
+        const commentsAvailable = !hidden && !!(sharing && await sharing.canView({ kind: 'anonymous' }, 'picture', row.id).catch(() => false));
         // ?like=<slug> after an upload: a near-duplicate of one of the person's own pictures (VIS-6). Only a slug of theirs is linked.
         const likeRow = owner && /^[A-Za-z0-9]{4,16}$/.test(String(req.query.like || '')) ? await store.imageBySlug(s, String(req.query.like)) : null;
         const likeSlug = likeRow && likeRow.id !== row.id && likeRow.owner === row.owner ? likeRow.slug : null;
@@ -418,7 +419,7 @@ ${!hidden ? html`<nav class="ovp-pic-make" aria-label="Make something with this 
 ${row.description ? html`<p class="ovp-desc">${row.description}</p>` : ''}
 ${row.ai_caption && row.alt_source === 'ai' ? html`<p class="ovp-ai"><span class="ovp-ai-label">Described by AI</span> ${row.ai_caption}</p>` : ''}
 </article>
-${gallery.isPublic(row) ? html`<section class="ovp-section ovp-comments" aria-labelledby="h-comments"><div class="ovp-comments-head"><h2 id="h-comments">Comments</h2><button type="button" class="ovk-btn ovk-btn--quiet" data-comments="${row.id}">${glyph('chat', 17)}<span>Show the discussion</span></button></div><div class="ovp-comments-list" data-comments-list aria-live="polite"></div></section>` : ''}
+${commentsAvailable ? html`<section class="ovp-section ovp-comments" aria-labelledby="h-comments"><div class="ovp-comments-head"><h2 id="h-comments">Comments</h2><button type="button" class="ovk-btn ovk-btn--quiet" data-comments="${row.slug}">${glyph('chat', 17)}<span>Show the discussion</span></button></div><div class="ovp-comments-list" data-comments-list aria-live="polite"></div></section>` : ''}
 <section class="ovp-share" aria-labelledby="h-share"><h2 id="h-share">Share and embed</h2>
 <p class="ovp-share-lede">These links follow the audience you choose in Share. Private pictures are visible only to you. The direct link is the picture itself, at full size — no page around it.</p>
 <div class="ovp-link-grid">

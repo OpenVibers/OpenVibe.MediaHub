@@ -134,15 +134,15 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
             res = await fetchImpl(`${config.video.liveUrl}${path}`, {
                 method,
                 headers: {
-                    Accept: 'application/json', Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}),
+                    Accept: 'application/json', Authorization: `Bearer ${token}`, ...(body && !(body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
                     // Live limits clip-making per address too; every call from here comes from this server, so the
                     // person's own address is passed (Live reads the first X-Forwarded-For entry).
                     ...(viewerIp ? { 'X-Forwarded-For': viewerIp } : {}),
                 },
-                body: body ? JSON.stringify(body) : undefined,
+                body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
                 credentials: 'omit',
                 cache: 'no-store',
-                signal: AbortSignal.timeout(TIMEOUT_MS * 2),
+                signal: AbortSignal.timeout(body instanceof FormData ? 120_000 : TIMEOUT_MS * 2),
             });
         } catch (err) {
             log.warn('[OpenVibe.Video] Live did not answer an owner call', err && err.name);
@@ -258,6 +258,30 @@ function createLiveClient({ config, fetchImpl = globalThis.fetch, log = console 
         },
         comments(kind, id) {
             return getJson(`/api/comments/${kind}/${id}`);
+        },
+        commentsPage(kind, id, query = {}) {
+            const qs = new URLSearchParams();
+            if (query.sort === 'old') qs.set('sort', 'old');
+            if (query.offset != null) qs.set('offset', String(query.offset));
+            if (query.limit != null) qs.set('limit', String(query.limit));
+            return getJson(`/api/comments/${kind}/${id}${qs.size ? `?${qs}` : ''}`);
+        },
+        commentsPageAs(token, kind, id, query = {}) {
+            const qs = new URLSearchParams();
+            if (query.sort === 'old') qs.set('sort', 'old');
+            if (query.offset != null) qs.set('offset', String(query.offset));
+            if (query.limit != null) qs.set('limit', String(query.limit));
+            return asPerson(token, 'GET', `/api/comments/${kind}/${id}${qs.size ? `?${qs}` : ''}`);
+        },
+        async postCommentAs(token, kind, id, body) {
+            const out = await asPerson(token, 'POST', `/api/comments/${kind}/${id}`, body);
+            for (const key of [...cache.keys()]) if (key.includes(`/api/comments/${kind}/${id}`)) cache.delete(key);
+            return out;
+        },
+        uploadCommentAttachmentAs(token, kind, id, buffer, name, mime) {
+            const form = new FormData();
+            form.set('file', new Blob([buffer], { type: mime || 'application/octet-stream' }), name || 'file');
+            return asPerson(token, 'POST', `/api/comments/${kind}/${id}/attachments`, form);
         },
         isId,
         isUsername: (u) => USERNAME_RE.test(String(u || '')),

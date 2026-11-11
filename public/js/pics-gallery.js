@@ -26,15 +26,25 @@
     if (discussion) discussion.addEventListener('click', async function () {
         var box = document.querySelector('[data-comments-list]'); discussion.disabled = true;
         try {
-            var response = await fetch('https://openvibe.community/api/v1/comments/threads/resolve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ref: { service: 'pics', type: 'picture', id: discussion.dataset.comments } }) });
-            if (!response.ok) throw new Error('Discussion is unavailable. Try again later.');
-            var result = await response.json(), thread = result.thread;
-            if (!thread || !/^cth_[A-Za-z0-9_-]+$/.test(thread.id)) throw new Error('Discussion is unavailable.');
-            var listing = await fetch('https://openvibe.community/api/v1/comments/threads/' + encodeURIComponent(thread.id));
-            if (!listing.ok) throw new Error('Comments could not be loaded.');
-            var data = await listing.json(); box.replaceChildren();
-            (data.comments || []).forEach(function (comment) { var p = document.createElement('p'); p.textContent = comment.message; box.appendChild(p); });
-            var link = document.createElement('a'); link.href = 'https://openvibe.community/c/' + encodeURIComponent(thread.id); link.textContent = 'Join the discussion on Community'; box.appendChild(link);
+            var response = await fetch('/api/v1/images/' + encodeURIComponent(discussion.dataset.comments) + '/comments?sort=old', { credentials: 'same-origin' });
+            if (!response.ok) throw new Error('Comments could not be loaded.');
+            var data = await response.json(); box.replaceChildren();
+            function show(comment, parent) {
+                var item = document.createElement('article');
+                var text = document.createElement('p'); text.textContent = comment.deleted ? 'Comment removed' : comment.message; item.appendChild(text);
+                (comment.attachments || []).forEach(function (file) {
+                    if (!/^med_[0-9A-HJKMNP-TV-Z]{26}$/.test(file.id || '')) return;
+                    var link = document.createElement('a'); link.href = 'https://openvibe.media/o/' + file.id;
+                    link.textContent = file.name || 'Attached file'; link.rel = 'noopener noreferrer'; item.appendChild(link);
+                });
+                (comment.replies || []).forEach(function (reply) { show(reply, item); });
+                parent.appendChild(item);
+            }
+            (data.comments || []).forEach(function (comment) { show(comment, box); });
+            if (data.thread && /^cth_[A-Za-z0-9_-]+$/.test(data.thread.id || '')) {
+                var link = document.createElement('a'); link.href = 'https://openvibe.community/c/' + encodeURIComponent(data.thread.id);
+                link.textContent = 'Join the discussion on Community'; box.appendChild(link);
+            }
         } catch (error) { box.textContent = error.message; }
         finally { discussion.disabled = false; }
     });

@@ -109,7 +109,7 @@ function startLive() {
     // Live's answer since T4 step 5: playback_url is the playlist, file_url the file.
     const hlsFirstVod = { ...secondVod, id: 105, title: 'Playlist first', playback_url: 'https://openvibe.media/o/med_105/master.m3u8',
         hls_url: 'https://openvibe.media/o/med_105/master.m3u8', file_url: 'https://openvibe.media/v/105' };
-    const state = { down: false, chatDown: false };
+    const state = { down: false, chatDown: false, commentPosts: [] };
     const server = http.createServer((req, res) => {
         const url = new URL(req.url, 'http://x');
         const json = (status, body) => {
@@ -219,6 +219,15 @@ function startLive() {
         }
         const comments = /^\/api\/comments\/(vod|clip)\/(\d+)$/.exec(p);
         if (comments) {
+            if (req.method === 'POST') {
+                const chunks = [];
+                req.on('data', (chunk) => chunks.push(chunk));
+                req.on('end', () => {
+                    state.commentPosts.push({ body: JSON.parse(Buffer.concat(chunks).toString('utf8')), authorization: req.headers.authorization });
+                    json(201, { comment: { id: 99, message: 'a reply' } });
+                });
+                return;
+            }
             if (comments[1] === 'vod' && comments[2] === '101') {
                 return json(200, { comments: comments101, total: comments101.length, thread: { id: 'thr_vod_101', url: 'https://openvibe.community/t/vod-101' } });
             }
@@ -239,27 +248,28 @@ function startLive() {
             url: `http://127.0.0.1:${server.address().port}`,
             setDown: (v) => { state.down = v; },
             setChatDown: (v) => { state.chatDown = v; },
+            commentPosts: state.commentPosts,
             close: () => new Promise((r) => server.close(r)),
         }));
     });
 }
 
-function request(base, path, host) {
+function request(base, path, host, { method = 'GET', body = null, headers = {} } = {}) {
     return new Promise((resolve, reject) => {
         const u = new URL(base + path);
         const req = http.request({
             hostname: u.hostname,
             port: u.port,
             path: u.pathname + u.search,
-            method: 'GET',
-            headers: { Host: host },
+            method,
+            headers: { Host: host, ...(body ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } : {}), ...headers },
         }, (res) => {
             const chunks = [];
             res.on('data', (c) => chunks.push(c));
             res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text: Buffer.concat(chunks).toString('utf8') }));
         });
         req.on('error', reject);
-        req.end();
+        req.end(body);
     });
 }
 
@@ -284,6 +294,22 @@ function countOccurrences(haystack, needle) {
     });
     const getVideo = (p) => request(t.base, p, 'openvibe.video');
     const getDownload = (p) => request(t.base, p, 'openvibe.download');
+
+    await check('Video comment API reads the Live thread and requires sign-in for writes', async () => {
+        const read = await getVideo('/api/v1/video/comments/vod/101');
+        assert.strictEqual(read.status, 200, read.text);
+        assert.strictEqual(JSON.parse(read.text).comments[0].message, 'Nice <b>stream</b>!');
+        const write = await request(t.base, '/api/v1/video/comments/vod/101', 'openvibe.video', { method: 'POST', body: JSON.stringify({ message: 'hello' }) });
+        assert.strictEqual(write.status, 401, write.text);
+        const person = t.network.addUser('videocommenter');
+        const posted = await request(t.base, '/api/v1/video/comments/vod/101', 'openvibe.video', {
+            method: 'POST', body: JSON.stringify({ message: 'a reply', parent_id: 4, attachments: [] }),
+            headers: { Cookie: t.signIn(person), Origin: 'https://openvibe.video', 'Sec-Fetch-Site': 'same-origin' },
+        });
+        assert.strictEqual(posted.status, 201, posted.text);
+        assert.deepStrictEqual(live.commentPosts[0].body, { message: 'a reply', parent_id: 4, attachments: [] });
+        assert.match(live.commentPosts[0].authorization, /^Bearer /);
+    });
 
     await check('Live being down renders a 502 page', async () => {
         live.setDown(true);
