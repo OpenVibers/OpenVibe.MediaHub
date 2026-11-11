@@ -119,7 +119,8 @@ body:has(> main.ovv-page) .openvibe-navbar.ovnav-top { background-color: var(--b
 .ovv-agent-current[data-status="failed"]::before, .ovv-agent-tick[data-status="failed"] { background: #fb7185; }
 .ovv-agent-ticks { display: flex; gap: 3px; height: 3px; }
 .ovv-agent-tick { flex: 1; background: #60a5fa; border-radius: 2px; }
-@media (max-width: 600px) { .ovv-agent-overlay { bottom: 40px; padding: 7px 9px; } .ovv-agent-overlay strong, .ovv-agent-task, .ovv-agent-ticks { display: none; } }
+.ovv-agent-meta { color: #b8c6d9; font-size: 11px; }
+@media (max-width: 600px) { .ovv-agent-overlay { bottom: 40px; padding: 7px 9px; } .ovv-agent-overlay strong, .ovv-agent-task, .ovv-agent-ticks, .ovv-agent-meta { display: none; } }
 .ovv-player-wrap.ov-player-host { box-shadow: none; border-color: transparent; }
 /* The picture's shape once it plays (video.js followShape: --ovv-ar), eased when a recording turns mid-stream; 16:9
    before that. The height is capped so the title under the player stays on screen. */
