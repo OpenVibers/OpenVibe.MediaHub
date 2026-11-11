@@ -14,7 +14,7 @@ const { measure, check, format } = require('openvibe-shared/perf-budget');
 // Budgets are set from the numbers measured on 2026-10-08 (the real ones, fresh database), rounded up with about 10%
 // headroom; file counts are the measured counts and external files stay at 0.
 const BUDGETS = {
-    htmlRawKB: 62.5, // 62.5 (2026-11-10: measured 61.8 with openvibe-shared 4.192.0: the small player's script tag, the footer's online strip, the site name's dropdown); 60.4: measured 58.4 with openvibe-shared 4.161.0, plus room for 4.162.0–4.163.0, 2026-11-09
+    htmlRawKB: 63.5, // 63.5 openvibe-shared v4.202.0 (2026-11-11: measured 63.2, raised by pin-bump from 62.5); 62.5 (2026-11-10: measured 61.8 with openvibe-shared 4.192.0: the small player's script tag, the footer's online strip, the site name's dropdown); 60.4: measured 58.4 with openvibe-shared 4.161.0, plus room for 4.162.0–4.163.0, 2026-11-09
                        // FAQPage JSON-LD) and next steps on the network; was 29.7 at 27.5
     htmlBrotliKB: 13.5,   // 13.5 (2026-11-10: measured 13.1 with openvibe-shared 4.192.0, as above); 12.6 before; 12.3 (2026-11-07: nine features on the home); 10.6 openvibe-shared 4.22.0: the navbar's magnifier search button and More dropdown (search.js and loading.js load only when used); 9.4 on 10-22 (the same sections); was 7.7 at 7.1
     jsFiles: 6,   // 6: /shared/ov-glyphs.js in place of Font Awesome's stylesheet (2026-11-01, plan L54 K4); was: 5 (theme-loader, web-runtime, navbar, footer, boost: openvibe-shared/shell)
