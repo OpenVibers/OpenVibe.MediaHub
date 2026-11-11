@@ -30,6 +30,7 @@
         if (!Array.isArray(steps)) return;
         const current = box.querySelector('.ovv-agent-current');
         const timeline = box.querySelector('.ovv-agent-ticks');
+        const meta = box.querySelector('.ovv-agent-meta');
         let shown = -2;
         function sync() {
             let index = -1;
@@ -37,9 +38,15 @@
                 if (steps[i].at <= video.currentTime + .25) index = i;
                 else break;
             }
+            const step = index >= 0 ? steps[index] : null;
+            const parts = [];
+            if (step && step.tests) parts.push(step.tests.passed + ' of ' + (step.tests.passed + step.tests.failed) + ' passing');
+            if (step && Number.isFinite(Number(step.cost))) parts.push('$' + Number(step.cost).toFixed(2));
+            parts.push('worked ' + Math.round(video.currentTime / 60) + ' min');
+            const line = parts.join(' · ');
+            if (meta && meta.textContent !== line) meta.textContent = line;
             if (index === shown) return;
             shown = index;
-            const step = index >= 0 ? steps[index] : null;
             current.textContent = step ? step.title : 'Waiting for the first step';
             current.setAttribute('data-status', step ? step.status : 'started');
             timeline.replaceChildren();
