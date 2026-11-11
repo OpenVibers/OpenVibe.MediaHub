@@ -84,7 +84,8 @@ function createPicsRoutes(ctx) {
         title: status === 410 ? 'Taken down' : 'Not found', cache: cache.htmlHeaders({ private: true }),
         body: status === 410
             ? html`<h1>This picture was taken down</h1><p class="muted">It broke the <a href="/terms">rules</a> or the law and is no longer on OpenVibe.Pics.</p>`
-            : html`<h1>Not found</h1><p class="muted">No picture or page here. <a href="/">Upload one</a>.</p>`,
+            : html`<h1>Not found</h1>${raw(kit.empty({ icon: 'image', title: 'No picture here', text: 'This picture page does not exist, or was taken down.', action: { href: '/', label: 'Upload a picture', icon: 'image' } }))}`,
+        styles: ['kit.css'],
     }, status);
     const mustSignIn = (why) => (req, res, next) => (signedIn(req) ? next() : page(req, res, {
         title: 'Sign in', body: html`<h1>Sign in first</h1><p>${why}</p><p>${signInLink(req.originalUrl)}</p>`,
@@ -221,7 +222,7 @@ function createPicsRoutes(ctx) {
         const labels = labelsUi.inForce(row);
         return labels.length ? html`<div class="ovp-tile-cover"${labelsUi.attrs(labels, { owner: row.owner })}>${tile(row)}</div>` : tile(row);
     };
-    const grid = (rows, empty) => (rows.length ? html`<div class="ovp-grid">${rows.map(thumb)}</div>` : html`<p class="muted">${empty}</p>`);
+    const grid = (rows, empty = { title: 'Nothing here yet', text: 'No picture here yet.' }) => (rows.length ? html`<div class="ovp-grid">${rows.map(thumb)}</div>` : raw(kit.empty({ icon: 'image', ...(typeof empty === 'string' ? { title: empty, text: 'No picture here yet.' } : empty) })));
 
     const audienceOptions = (current) => [['public', 'Everyone'], ['link', 'Anyone with the link'], ['people', 'Specific people'], ['private', 'Only me']]
         .map(([value, label]) => html`<option value="${value}"${value === current ? raw(' selected') : ''}>${label}</option>`);
@@ -648,11 +649,11 @@ ${pics.REASONS.map((r) => html`<label class="ovp-radio"><input type="radio" name
         const use = await store.usageOf(s, owner);
         const pictureDefault = await sharing.defaultAudience(owner, 'picture');
         return page(req, res, {
-            title: 'Your pictures', scripts: ['js/pics.js'],
+            title: 'Your pictures', styles: ['kit.css'], scripts: ['js/pics.js'],
             body: html`<div class="ovp-section-head"><h1>Your pictures</h1><span class="muted">${use.images} picture${use.images === 1 ? '' : 's'} · ${formatBytes(use.bytes)} of ${formatBytes(cfg.quotaBytes)}</span></div>
 ${uploadForm(req, { compact: true, defaultAudience: pictureDefault })}
 <form class="ovp-form" method="post" action="/mine/share-default"><label>New pictures <select name="audience">${audienceOptions(pictureDefault)}</select></label><label><input type="checkbox" name="apply" value="1"> Apply to all my existing pictures</label><button class="ovp-btn" type="submit">Save default</button></form>
-${grid(out.rows, 'Nothing yet. Upload a picture above.')}
+${grid(out.rows, { title: 'No pictures yet', text: 'Upload a picture above and it appears here.', action: { href: '/', label: 'Upload a picture', icon: 'image' } })}
 ${out.next ? html`<p><a class="ovp-btn" href="/mine?before=${out.next}">Older pictures</a></p>` : ''}`,
         });
     });
@@ -677,7 +678,8 @@ ${out.next ? html`<p><a class="ovp-btn" href="/mine?before=${out.next}">Older pi
 <form class="ovp-form ovp-inline" method="post" action="/albums"><label for="a-title">New album</label><input id="a-title" name="title" type="text" maxlength="120" required placeholder="Trip to the coast"><label>Who can open it <select name="audience">${audienceOptions(albumDefault)}</select></label><button class="ovp-btn ovp-btn--primary" type="submit">Create</button></form>
 <form class="ovp-form" method="post" action="/albums/share-default"><label>New albums <select name="audience">${audienceOptions(albumDefault)}</select></label><label><input type="checkbox" name="apply" value="1"> Apply to all my existing albums</label><button class="ovp-btn" type="submit">Save default</button></form>
 ${albums.length ? html`<div class="ovp-albums">${albums.map((a) => html`<a class="ovp-album" href="/a/${a.slug}">${a.cover_slug ? html`<img src="/i/${a.cover_slug}/thumb.webp" alt="" loading="lazy">` : html`<span class="ovp-album-empty" aria-hidden="true"></span>`}<span class="ovp-album-title">${a.title}</span><span class="muted">${a.image_count} picture${Number(a.image_count) === 1 ? '' : 's'}</span></a>`)}</div>`
-        : html`<p class="muted">No albums yet. Create one here, or add a picture to a new album from its page.</p>`}`,
+        : raw(kit.empty({ icon: 'image', title: 'No albums yet', text: 'Create one above, or add a picture to a new album from its page.', action: { href: '#a-title', label: 'Create an album', icon: 'plus' } }))}`,
+            styles: ['kit.css'],
         });
     });
 
@@ -717,13 +719,13 @@ ${albums.length ? html`<div class="ovp-albums">${albums.map((a) => html`<a class
         const images = await store.albumImages(s, album.id, { visibleOnly: !owner });
         const rows = owner ? images : (await Promise.all(images.map(async (image) => await sharing.canView(req.viewer, 'picture', image.id) ? image : null))).filter(Boolean);
         return page(req, res, {
-            title: album.title, noindex: true, scripts: ['js/pics.js'],
+            title: album.title, noindex: true, styles: ['kit.css'], scripts: ['js/pics.js'],
             image: rows[0] ? `${base}/i/${rows[0].slug}.${rows[0].ext}` : undefined,
             body: html`<div class="ovp-section-head"><h1>${album.title}</h1><span class="muted">${rows.length} picture${rows.length === 1 ? '' : 's'}</span></div>
 ${album.description ? html`<p class="ovp-desc">${album.description}</p>` : ''}
 ${copyRow('Link to this album', `${base}/a/${album.slug}`, 'c-album')}
 <p class="ovp-share">${raw(shareButton({ url: `${base}/a/${album.slug}`, title: album.title, text: album.description || `${album.title}: an album on ${SITE_NAME}.`, kind: 'album', id: album.id }))}</p>
-${grid(rows, owner ? 'Empty. Add pictures from their pages.' : 'Nothing to show here.')}
+${grid(rows, owner ? { title: 'No pictures in this album yet', text: 'Add pictures to it from your pictures page.', action: { href: '/mine', label: 'Your pictures', icon: 'image' } } : { title: 'Nothing to show yet', text: 'The owner has not added a picture here yet.' })}
 ${owner ? html`<section class="ovp-section ovp-owner" aria-labelledby="h-manage"><h2 id="h-manage">Manage</h2>
 <form class="ovp-form" method="post" action="/a/${album.slug}/edit"><label for="al-title">Name</label><input id="al-title" name="title" type="text" maxlength="120" value="${album.title}" required>
 <label for="al-desc">Description</label><textarea id="al-desc" name="description" rows="2" maxlength="2000">${album.description}</textarea><p><button class="ovp-btn ovp-btn--primary" type="submit">Save</button></p></form>

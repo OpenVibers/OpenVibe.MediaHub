@@ -31,6 +31,7 @@ const ovServe = require('openvibe-shared/serve');
 const { asyncRouter } = require('../http/router');
 const { sameOrigin } = require('../http/principal');
 const { html, raw, notice, askAgent } = require('../render/html');
+const kit = require('openvibe-shared/kit');
 // A recording's or clip's AI overview comes from Live, which filters it; read through the same filter here too.
 const frame = require('openvibe-shared/frame');
 const { send, asset, assetVersion, SITE_NAME } = require('./layout');
@@ -641,7 +642,11 @@ function clipCard(c) {
     });
 }
 
-const grid = (cards, empty = 'Nothing here yet.') => (cards && cards.length ? html`<div class="ovv-grid">${cards}</div>` : html`<p class="muted">${empty}</p>`);
+const grid = (cards, empty = null) => {
+    if (cards && cards.length) return html`<div class="ovv-grid">${cards}</div>`;
+    const e = empty == null ? { title: 'Nothing here yet', text: 'No video here yet.' } : (typeof empty === 'string' ? { title: empty, text: 'No video here yet.' } : empty);
+    return raw(kit.empty({ icon: 'play', ...e }));
+};
 
 function createVideoRoutes(ctx) {
     const { config, log, playlists } = ctx;
@@ -698,7 +703,8 @@ function createVideoRoutes(ctx) {
     const notFound = (req, res) => page(req, res, {
         title: 'Not found',
         cache: cache.htmlHeaders({ private: true }),
-        body: html`<h1>Not found</h1><p class="muted">No page here. <a href="/">OpenVibe.Video</a>.</p>`,
+        body: html`<h1>Not found</h1>${raw(kit.empty({ icon: 'play', title: 'No page here', text: 'This video page does not exist, or was taken down.', action: { href: '/', label: 'Open OpenVibe.Video', icon: 'play' } }))}`,
+        styles: ['kit.css'],
     }, 404);
     const notFoundVtt = (_req, res) => res.status(404).set('Content-Type', 'text/plain; charset=utf-8').send('Not found');
     const sendVtt = (res, body) => res.set('Content-Type', 'text/vtt; charset=utf-8').set('Cache-Control', cache.htmlHeaders({ maxAge: 300 })).send(body);
@@ -1274,6 +1280,7 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
             .sort((a, b) => String(b.item.created_at || '').localeCompare(String(a.item.created_at || '')));
         return page(req, res, {
             index: true,
+            styles: ['kit.css'],
             scripts: ['js/video-home.js'],
             title: 'OpenVibe.Video: watch streams again and share your videos',
             description,
@@ -1290,7 +1297,7 @@ ${[['all', 'All'], ['streams', 'Streams'], ['clips', 'Clips'], ['uploads', 'Uplo
 </nav>
 <section class="ovv-continue" id="continue-watching" aria-label="Continue watching" hidden></section>
 <section class="ovv-app-feed" aria-labelledby="feed-title"><h2 id="feed-title">${{ all: 'For you', streams: 'Streams', clips: 'Clips', uploads: 'Uploads', following: 'Following' }[feedKind]}</h2>
-${feedKind === 'following' ? html`<p class="muted">See updates from followed channels on <a href="${livePublic}/rundown?following=1">OpenVibe.Live</a>.</p>` : grid(feedEntries.map((entry) => entry.kind === 'upload' ? uploadCard(entry.item) : feedCard(entry.item, { views: true })), 'No videos here yet.')}
+${feedKind === 'following' ? html`<p class="muted">See updates from followed channels on <a href="${livePublic}/rundown?following=1">OpenVibe.Live</a>.</p>` : grid(feedEntries.map((entry) => entry.kind === 'upload' ? uploadCard(entry.item) : feedCard(entry.item, { views: true })), { title: 'No videos here yet', text: 'New recordings, clips and uploads land here as they happen.', action: { href: '/upload', label: 'Upload a video', icon: 'plus' } })}
 </section></div>`,
         });
     });
@@ -1328,13 +1335,14 @@ ${feedKind === 'following' ? html`<p class="muted">See updates from followed cha
         return page(req, res, {
             index: !cursor && items.length >= 4, noindex: Boolean(cursor) || items.length < 4,
             title, description,
+            styles: ['kit.css'],
             crumbs: [{ label: 'Home', href: '/' }, { label: 'Categories', href: '/#categories' }, { label: cat.label }],
             jsonLd: [
                 seo.jsonLd.breadcrumbs([{ name: 'OpenVibe.Video', url: `${base}/` }, { name: cat.label, url: `${base}/category/${slug}` }]),
                 seo.jsonLd.itemList(title, items.map((it) => ({ name: it.title || 'Stream recording', url: `${base}${it.watch_id ? `/watch?v=${it.watch_id}` : `/v/${it.id}`}` })), { url: `${base}/category/${slug}` }),
             ],
             body: html`<header class="ovv-channel-head"><span class="ovv-avatar ovv-avatar--big" aria-hidden="true"><i class="fa-solid ${cat.icon}"></i></span><div><h1>${cat.label}</h1><p class="ovv-meta">${cat.blurb}${count ? ` ${n(count.count)} ${count.count === 1 ? 'recording' : 'recordings'}.` : ''}</p></div></header>
-<section class="ovv-section" aria-label="${title}">${grid(items.map((it) => feedCard(it)), 'Nothing in this category yet.')}</section>
+<section class="ovv-section" aria-label="${title}">${grid(items.map((it) => feedCard(it)), { title: 'Nothing in this category yet', text: 'Recordings of this kind appear here when a streamer goes live.', action: { href: '/', label: 'See the latest recordings', icon: 'play' } })}</section>
 ${pageOf.next ? html`<p class="ovv-pagination"><a class="ovv-btn" href="/category/${slug}?after=${encodeURIComponent(pageOf.next)}" rel="next">Older recordings</a></p>` : ''}
 ${others.length ? html`<section class="ovv-section" aria-labelledby="h-other"><h2 id="h-other">Other categories</h2><ul class="ovv-shelf" role="list">${others.map((c) => html`<li><a class="ovv-shelf-tile" href="/category/${c.slug}"><i class="fa-solid ${c.icon}" aria-hidden="true"></i><span class="ovv-shelf-name">${c.label}</span><span class="ovv-shelf-count">${n(c.count)} ${c.count === 1 ? 'recording' : 'recordings'}</span></a></li>`)}</ul></section>` : ''}`,
         });
@@ -1388,9 +1396,9 @@ ${categories.length ? html`<section class="ovv-section" aria-labelledby="h-cats"
         const chips = vod && (vod.categories.length || category) ? html`<nav class="ovv-chips" aria-label="Recordings by category"><a href="${link({ type: 'vod' })}"${!category ? raw(' aria-current="true"') : ''}>All categories</a>${vod.categories.map((c) => html`<a href="${link({ type: 'vod', category: c.slug })}"${c.slug === category ? raw(' aria-current="true"') : ''}>${c.label} <span>${n(c.count)}</span></a>`)}</nav>` : '';
         const tabs = html`<nav class="ovv-chips" aria-label="What to search"><a href="${link({})}"${!kind ? raw(' aria-current="true"') : ''}>Everything</a>${SEARCH_KINDS.map(([k, label]) => html`<a href="${link({ type: k })}"${k === kind ? raw(' aria-current="true"') : ''}>${label}</a>`)}</nav>`;
         return page(req, res, {
-            title: `Search: ${q}`, noindex: true, crumbs: [{ label: 'Home', href: '/' }, { label: 'Search', href: '/search' }, { label: q }],
+            title: `Search: ${q}`, noindex: true, styles: ['kit.css'], crumbs: [{ label: 'Home', href: '/' }, { label: 'Search', href: '/search' }, { label: q }],
             body: html`<h1>Results for “${q}”</h1>${searchForm(q)}${tabs}
-${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv-section" aria-labelledby="h-${x.kind}"><div class="ovv-section-head"><h2 id="h-${x.kind}">${x.label}</h2>${!kind && x.next ? html`<a href="${link({ type: x.kind })}">More ${x.label.toLowerCase()}</a>` : ''}</div>${x.kind === 'vod' ? chips : ''}${grid(x.cards, 'Nothing matched.')}${kind && x.next ? html`<p class="ovv-pagination"><a class="ovv-btn" href="${link({ type: kind, category, after: x.next })}" rel="next">More results</a></p>` : ''}</section>` : ''))
+${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv-section" aria-labelledby="h-${x.kind}"><div class="ovv-section-head"><h2 id="h-${x.kind}">${x.label}</h2>${!kind && x.next ? html`<a href="${link({ type: x.kind })}">More ${x.label.toLowerCase()}</a>` : ''}</div>${x.kind === 'vod' ? chips : ''}${grid(x.cards, { title: 'Nothing matched', text: 'No recording, clip or upload matches these words.', action: { href: '/', label: 'Browse the latest recordings', icon: 'play' } })}${kind && x.next ? html`<p class="ovv-pagination"><a class="ovv-btn" href="${link({ type: kind, category, after: x.next })}" rel="next">More results</a></p>` : ''}</section>` : ''))
         : html`<p class="muted">Nothing matched “${q}”${category ? ' in that category' : ''}. Try fewer or other words, or <a href="/#categories">browse by category</a>.</p>`}`,
         });
     });
@@ -1886,8 +1894,8 @@ ${more || ''}
             description: `Videos, recordings and clips from @${username} on OpenVibe.Video.`,
             body: html`${req.query.deleted === '1' ? notice('Deleted on OpenVibe.Live.', 'ok') : ''}<header class="ovv-channel-head"><span class="ovv-avatar ovv-avatar--big" aria-hidden="true">${username.slice(0, 1).toUpperCase()}<img src="${config.networkUrl}/avatar/${username}" alt="" loading="lazy"></span><div><h1>@${username}</h1><p class="ovv-meta">Recordings and clips from this channel's streams on OpenVibe.Live.</p>${raw(shareButton({ url: `${base}/@${username}`, title: `@${username}`, text: `Videos, recordings and clips from @${username} on OpenVibe.Video.`, image: `${config.networkUrl}/avatar/${username}` }))}</div><a class="ovv-btn" href="${livePublic}/@${username}"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Channel on OpenVibe.Live</a></header>
 ${uploaded.length ? html`<section class="ovv-section" aria-labelledby="h-uploads"><h2 id="h-uploads">Videos</h2>${grid(uploaded.map(uploadCard))}</section>` : ''}
-<section class="ovv-section" aria-labelledby="h-vods"><h2 id="h-vods">Recordings</h2>${grid(vods.map(vodCard), 'No recordings yet.')}${prevLink || nextLink ? html`<nav class="ovv-pagination" aria-label="Pages">${prevLink ? html`<a href="${prevLink}">← Newer</a>` : ''}${nextLink ? html`<a href="${nextLink}">Older →</a>` : ''}</nav>` : ''}</section>
-${clips.length ? html`<section class="ovv-section" aria-labelledby="h-clips"><h2 id="h-clips">Clips</h2>${grid(clips.map(clipCard), 'No clips yet.')}</section>` : ''}
+<section class="ovv-section" aria-labelledby="h-vods"><h2 id="h-vods">Recordings</h2>${grid(vods.map(vodCard), { title: 'No recordings yet', text: 'Recordings of this channel’s streams appear here.' })}${prevLink || nextLink ? html`<nav class="ovv-pagination" aria-label="Pages">${prevLink ? html`<a href="${prevLink}">← Newer</a>` : ''}${nextLink ? html`<a href="${nextLink}">Older →</a>` : ''}</nav>` : ''}</section>
+${clips.length ? html`<section class="ovv-section" aria-labelledby="h-clips"><h2 id="h-clips">Clips</h2>${grid(clips.map(clipCard), { title: 'No clips yet', text: 'Clips cut from this channel appear here.' })}</section>` : ''}
 ${lists.length ? html`<section class="ovv-section" aria-labelledby="h-lists"><h2 id="h-lists">Playlists</h2><ul class="ovv-playlist-list">${lists.map(publicPlaylistRow)}</ul></section>` : ''}`,
         });
     });
@@ -1898,12 +1906,13 @@ ${lists.length ? html`<section class="ovv-section" aria-labelledby="h-lists"><h2
         if (req.viewer && req.viewer.username) await playlists.refreshOwnerUsername(ownerOf(req), req.viewer.username);
         return page(req, res, {
             title: 'Your playlists',
+            styles: ['kit.css'],
             crumbs: [{ label: 'Home', href: '/' }, { label: 'Playlists' }],
             body: html`<h1>Your playlists</h1>
 <section class="ovv-section" aria-labelledby="h-create"><h2 id="h-create">New playlist</h2>
 <form class="ovv-save-form ovv-panel" method="post" action="/playlists"><label for="new-title">Title</label> <input id="new-title" name="title" type="text" maxlength="${playlists.TITLE_MAX}" required placeholder="Watch later"> <label for="new-vis">Who can see it</label> <select id="new-vis" name="visibility">${playlists.VISIBILITIES.map((v) => html`<option value="${v}"${v === 'private' ? ' selected' : ''}>${visibilityLabel(v)}</option>`)}</select> <button class="ovv-btn ovv-btn--primary" type="submit"><i class="fa-solid fa-plus" aria-hidden="true"></i> Create</button></form></section>
 <section class="ovv-section" aria-labelledby="h-lists"><h2 id="h-lists">Playlists</h2>
-${rows.length ? html`<ul class="ovv-playlist-list">${rows.map(playlistRow)}</ul>` : html`<p class="muted">No playlists yet. Save a recording or clip from its watch page.</p>`}</section>`,
+${rows.length ? html`<ul class="ovv-playlist-list">${rows.map(playlistRow)}</ul>` : raw(kit.empty({ icon: 'list', title: 'No playlists yet', text: 'Save a recording or clip from its watch page.', action: { href: '/', label: 'Find something to watch', icon: 'play' } }))}</section>`,
         });
     });
 

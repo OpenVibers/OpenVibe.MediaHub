@@ -29,7 +29,7 @@ const MB = 1024 * 1024;
     await check('a signed-in person makes a key on /sync; it is shown once and only its hash is kept', async () => {
         assert.strictEqual((await t.get('/sync')).status, 401, 'a guest is asked to sign in');
         const pageBefore = await t.get('/sync', { as: kim });
-        assert.ok(pageBefore.text.includes('No sync keys yet.'));
+        assert.ok(pageBefore.text.includes('No sync keys yet'));
         assert.strictEqual((await t.get('/sync/keys', { as: kim, form: { name: 'laptop' } })).status, 403, 'not from this site');
         const made = await t.get('/sync/keys', { as: kim, form: { name: 'laptop' }, headers: SAME });
         assert.strictEqual(made.status, 200, made.text.slice(0, 300));
