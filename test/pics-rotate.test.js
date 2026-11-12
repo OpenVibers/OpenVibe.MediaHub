@@ -48,6 +48,8 @@ const photo = () => sharp({ create: { width: 300, height: 200, channels: 3, back
             assert.ok(ownerPage.text.includes('>Turn left<') && ownerPage.text.includes('>Turn right<'), 'both directions, plain kit buttons');
             assert.ok(ownerPage.text.includes('class="ovk-btn ovk-btn--quiet"'));
             assert.ok(!(await t.get(`/i/${slug}`, { headers: PICS, as: lee })).text.includes(`/i/${slug}/rotate`), 'a stranger never sees it');
+            const stored = [...t.media.objects.values()].find((o) => o.init);
+            assert.strictEqual(stored.init.metadata.orientation_status, 'orientation applied', 'Pics tells Media the EXIF was already applied, so the detector never turns an upright picture');
         });
 
         await check('a right turn turns the picture and its thumbnail in Media, as the owner', async () => {

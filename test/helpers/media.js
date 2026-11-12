@@ -242,7 +242,7 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
             const obj = {
                 id: ids.newId('media', 1_700_000_000_000 + seq), visibility: body.visibility || 'private',
                 lifecycle_status: 'uploading', mime_type: body.mime_type || null, size_bytes: size,
-                content_hash: null, owner_subject: subject, filename: body.filename || null, bytes: null, x: true,
+                content_hash: null, owner_subject: subject, filename: body.filename || null, bytes: null, x: true, init: body,
                 created_at: new Date().toISOString(),
             };
             objects.set(obj.id, obj);
