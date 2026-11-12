@@ -433,7 +433,7 @@ ${raw(showcase.network({
             scripts: ['js/pics.js', 'js/pics-gallery.js', 'js/comments.js'], styles: ['kit.css', 'thread.css'], sharedScripts: ['kit-web.js'],
             localStyles: ['css/comments.css', ...(owner ? ['css/labels.css'] : [])],
             private: deleteKey ? true : undefined,
-            body: html`${message ? notice(message, tone) : ''}${fresh || req.query.new ? notice('Uploaded. Copy a link below to share it.', 'ok') : ''}${owner && req.query.again ? notice('You had already uploaded this picture: here it is. Nothing was stored twice.', 'info') : ''}${owner && req.query.new && likeSlug ? notice(html`It looks like a picture you uploaded before: <a href="/i/${likeSlug}">that one</a>. If you meant to keep only one, delete the other.`, 'info') : ''}
+            body: html`${message ? notice(message, tone) : ''}${fresh || req.query.new ? notice('Uploaded. Copy a link below to share it.', 'ok') : ''}${owner && req.query.turned ? notice('Turned a quarter. Every size of the picture follows.', 'ok') : ''}${owner && req.query.again ? notice('You had already uploaded this picture: here it is. Nothing was stored twice.', 'info') : ''}${owner && req.query.new && likeSlug ? notice(html`It looks like a picture you uploaded before: <a href="/i/${likeSlug}">that one</a>. If you meant to keep only one, delete the other.`, 'info') : ''}
 ${deleteKey ? html`<div class="notice warn" role="status"><b>Keep this delete link.</b> It is the only way to delete this picture, and it is shown only now:<br><code class="ovp-key">${base}/i/${row.slug}/delete?key=${deleteKey}</code></div>` : ''}
 ${hidden ? notice(row.state === 'hidden' ? 'This picture is hidden while staff look at reports about it. Only you and staff can see it.' : 'This picture was taken down.', 'warn') : ''}
 <article class="ovp-picture">
@@ -471,6 +471,7 @@ ${!hidden && variants.widthsFor(row).length ? html`<section class="ovp-section o
 ${[['webp', 'WebP'], ['avif', 'AVIF'], ['jpg', 'JPEG'], ['png', 'PNG']].map(([fmt, label]) => html`<tr><th scope="row">${label}</th>${variants.widthsFor(row).map((w) => html`<td><a href="/i/${row.slug}/w/${w}.${fmt}" rel="nofollow">${w}</a></td>`)}</tr>`)}
 </tbody></table></section>` : ''}
 ${owner ? html`<section class="ovp-section ovp-owner" aria-labelledby="h-yours"><h2 id="h-yours">Yours</h2>
+<form class="ovp-form ovp-inline" method="post" action="/i/${row.slug}/rotate"><span>Which way is up?</span> <button class="ovk-btn ovk-btn--quiet" name="direction" value="left" type="submit">Turn left</button> <button class="ovk-btn ovk-btn--quiet" name="direction" value="right" type="submit">Turn right</button> <span class="muted">A quarter turn at a time; every size follows, and the original is kept.</span></form>
 <form class="ovp-form" method="post" action="/i/${row.slug}/publication"><label for="p-tags">Tags (comma separated)</label><input id="p-tags" name="tags" maxlength="330" value="${gallery.tags(row).join(', ')}"><p>Publishing makes this picture visible to everyone, lists it in the gallery, enables public counts, and lets search engines index it.</p><button class="ovp-btn" name="listed" value="${!row.listed}">${row.listed ? 'Remove from gallery' : 'Publish to gallery'}</button><p>Removing from the gallery keeps your sharing setting. Use Share to make it private again.</p></form>
 <form class="ovp-form" method="post" action="/i/${row.slug}/edit">
 <label for="e-title">Title</label><input id="e-title" name="title" type="text" maxlength="120" value="${row.title}">
@@ -605,6 +606,19 @@ ${pics.REASONS.map((r) => html`<label class="ovp-radio"><input type="radio" name
         const added = await pics.addToAlbum(album, row);
         if (!added.ok) return picturePage(req, res, row, { message: added.detail });
         return res.redirect(303, `/a/${album.slug}`);
+    });
+
+    // A quarter turn by the person who uploaded the picture: plain kit buttons in the owner's section, a POST and a
+    // redirect, so it works without JavaScript. The picture and its thumbnail both turn; every size follows.
+    r.post('/i/:slug/rotate', budgeted('pics.image.write'), async (req, res) => {
+        if (!sameSite(req, res, `/i/${req.params.slug}`)) return undefined;
+        const { row } = await picture(req, res);
+        if (!row) return notFound(req, res);
+        if (!pics.isOwner(row, whoOf(req))) return picturePage(req, res, row, { message: 'Only the person who uploaded this picture can turn it.', tone: 'warn' }, 403);
+        const degrees = String(req.body.direction || '') === 'left' ? 270 : 90;
+        const out = await pics.rotate(row, degrees, whoOf(req));
+        if (!out.ok) return picturePage(req, res, row, { message: out.detail || 'The picture could not be turned.', tone: 'warn' }, out.status || 422);
+        return res.redirect(303, `/i/${row.slug}?turned=1`);
     });
 
     r.post('/i/:slug/delete', budgeted('pics.image.write'), async (req, res) => {

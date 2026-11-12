@@ -66,7 +66,10 @@ function createPics({ s, media, config, log = console, events = null, sharing = 
     const isOwner = (row, viewer) => Boolean(row && row.owner && viewer && viewer.requester && row.owner === viewer.requester);
 
     async function putObject(buf, { mime, name, owner, anonymous }) {
-        const init = await media.init({ size: buf.length, contentType: mime, name, ownerSubject: owner, visibility: 'private', ownerless: anonymous });
+        // `images.prepare` already applied the EXIF orientation and dropped the details: Media must not offer this
+        // picture to its model detector again, or an upright picture could be turned by a confident wrong answer.
+        const init = await media.init({ size: buf.length, contentType: mime, name, ownerSubject: owner, visibility: 'private', ownerless: anonymous,
+            metadata: { orientation_status: 'orientation applied', orientation_source: 'exif' } });
         if (!init.ok) return init;
         const id = init.data && (init.data.id || (init.data.object && init.data.object.id));
         const put = await media.putContent(id, buf);
@@ -259,6 +262,32 @@ function createPics({ s, media, config, log = console, events = null, sharing = 
         return { ok: true };
     }
 
+    /**
+     * Turn a picture a quarter at a time. Only its owner may; the picture and its stored 640 px thumbnail both turn,
+     * so the page, every size link and the embeds follow. The Media object keeps its original beside the turned copy.
+     */
+    async function rotate(row, degrees, who) {
+        if (!isOwner(row, who)) return { ok: false, status: 403, code: 'pics.forbidden', detail: 'Only the person who uploaded this picture can turn it.' };
+        if (!row || row.state === 'removed') return { ok: false, status: 409, code: 'pics.not_active', detail: 'This picture is not here any more.' };
+        const turn = ((Number(degrees) % 360) + 360) % 360;
+        if (![90, 180, 270].includes(turn)) return { ok: false, status: 422, code: 'pics.rotate', detail: 'A turn is a quarter or half: 90, 180 or 270 degrees.' };
+        const main = await media.rotate(row.object_id, { subject: row.owner, degrees: turn });
+        if (!main.ok) return main;
+        if (row.thumb_object_id) {
+            const thumb = await media.rotate(row.thumb_object_id, { subject: row.owner, degrees: turn });
+            if (!thumb.ok) return thumb;
+        }
+        const turned = main.data || {};
+        const swap = turn % 180 !== 0;
+        const saved = await store.recordRotation(s, row.id, {
+            width: swap ? Number(row.height) : Number(row.width),
+            height: swap ? Number(row.width) : Number(row.height),
+            bytes: Number(turned.size_bytes) || Number(row.bytes),
+            sha256: turned.content_hash || row.sha256,
+        });
+        return { ok: true, row: saved, rotation: turned.rotation == null ? turn : turned.rotation };
+    }
+
     /** The public links of a picture: its page, the direct file, the thumbnail and the embed snippets. */
     function links(row) {
         const base = cfg.url;
@@ -287,7 +316,7 @@ function createPics({ s, media, config, log = console, events = null, sharing = 
 
     return {
         cfg, REASONS, REASON_TEXT, LIMITS, SLUG_RE, isSlug: (v) => SLUG_RE.test(String(v || '')),
-        addressId, canSee, isOwner, upload, edit, remove, deleteKeyMatches, report, moderate, viewed, sweep,
+        addressId, canSee, isOwner, upload, edit, remove, rotate, deleteKeyMatches, report, moderate, viewed, sweep,
         createAlbum, addToAlbum, links, toWire, isStaff, altOf, tagsOf,
     };
 }

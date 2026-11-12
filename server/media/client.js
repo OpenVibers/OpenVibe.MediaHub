@@ -133,7 +133,7 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
         },
 
         /** Start an object. Media gives it back `uploading` until its bytes arrive and it is completed. */
-        async init({ size, contentType, name, ownerSubject, multipart = false, partSize = null, visibility = 'private', ownerless = false }) {
+        async init({ size, contentType, name, ownerSubject, multipart = false, partSize = null, visibility = 'private', ownerless = false, metadata = null }) {
             // A drive file always belongs to a person. A picture uploaded signed out (Pics, `ownerless`) is the
             // service's own object, with no subject on it.
             const subject = subjectHeader(ownerSubject);
@@ -146,6 +146,7 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
                     // Media only needs a label: the real name (any script) is MediaHub's, and Media's own download
                     // header takes a filename as is, so it gets the printable-ASCII rendering.
                     mime_type: contentType || null, filename: headerSafeName(name), multipart: multipart === true,
+                    ...(metadata && typeof metadata === 'object' ? { metadata } : {}),
                     ...(multipart && partSize ? { part_size: partSize } : {}),
                 },
             });
@@ -176,6 +177,13 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
         abortMultipart: (objectId, uploadId) => call(`/${encodeURIComponent(objectId)}/multipart/${encodeURIComponent(uploadId)}`, { method: 'DELETE' }),
 
         get: (objectId) => call(`/${encodeURIComponent(objectId)}`),
+
+        /** Turn a stored picture a quarter (or half) clockwise, as the person who owns it. */
+        rotate: (objectId, { subject, degrees = 90 } = {}) => call(`/${encodeURIComponent(objectId)}/rotate`, {
+            method: 'POST',
+            headers: subjectHeader(subject) ? { 'X-OV-Subject': subjectHeader(subject) } : {},
+            json: { degrees },
+        }),
 
         remove: (objectId) => call(`/${encodeURIComponent(objectId)}`, { method: 'DELETE' }),
 

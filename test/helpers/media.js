@@ -12,6 +12,7 @@
  *   POST   /api/v2/:app/objects/:id/multipart/:uid/complete   assemble into the object
  *   DELETE /api/v2/:app/objects/:id/multipart/:uid       abort
  *   GET    /api/v2/:app/objects/:id                      metadata
+ *   POST   /api/v2/:app/objects/:id/rotate               a quarter turn by the owner (x-ov-subject)
  *   GET    /api/v2/:app/objects/:id/download             a short-lived signed URL (host-independent signature)
  *   DELETE /api/v2/:app/objects/:id                      soft delete
  *   GET    /o/:id?exp&sig                                the bytes, with the signature checked
@@ -241,7 +242,7 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
             const obj = {
                 id: ids.newId('media', 1_700_000_000_000 + seq), visibility: body.visibility || 'private',
                 lifecycle_status: 'uploading', mime_type: body.mime_type || null, size_bytes: size,
-                content_hash: null, owner_subject: subject, filename: body.filename || null, bytes: null, x: true,
+                content_hash: null, owner_subject: subject, filename: body.filename || null, bytes: null, x: true, init: body,
                 created_at: new Date().toISOString(),
             };
             objects.set(obj.id, obj);
@@ -325,6 +326,17 @@ async function startMedia({ maxSingle = 256 * 1024 * 1024 } = {}) {
             if (obj.lifecycle_status !== 'ready') return problem(res, 409, 'media.object.not_ready', `Object is ${obj.lifecycle_status}`);
             const exp = Math.floor(Date.now() / 1000) + 300;
             return json(res, 200, { url: `https://media.test/o/${encodeURIComponent(obj.id)}?exp=${exp}&sig=${sign(obj.id, exp)}`, expires_at: new Date(exp * 1000).toISOString(), public: false });
+        }
+        // POST /objects/:id/rotate
+        if (sub.length === 1 && sub[0] === 'rotate' && req.method === 'POST') {
+            if (!obj.owner_subject || req.headers['x-ov-subject'] !== obj.owner_subject) return problem(res, 403, 'media.rotate.forbidden', "Only the picture's owner can turn it");
+            let body = {};
+            try { body = JSON.parse(raw.toString() || '{}'); } catch { body = {}; }
+            const degrees = Number(body.degrees);
+            if (![90, 180, 270].includes(degrees)) return problem(res, 422, 'media.rotate.invalid', 'a turn is 90, 180 or 270 degrees');
+            obj.rotation = ((Number(obj.rotation) || 0) + degrees) % 360;
+            obj.content_hash = sha256(Buffer.concat([obj.bytes || Buffer.alloc(0), Buffer.from(String(obj.rotation))]));
+            return json(res, 200, { ...publicObject(obj), rotation: obj.rotation, content_hash: obj.content_hash });
         }
         // DELETE /objects/:id
         if (!sub.length && req.method === 'DELETE') {
