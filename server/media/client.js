@@ -177,6 +177,13 @@ function createMediaClient({ config, fetchImpl = globalThis.fetch, log = console
 
         get: (objectId) => call(`/${encodeURIComponent(objectId)}`),
 
+        /** Turn a stored picture a quarter (or half) clockwise, as the person who owns it. */
+        rotate: (objectId, { subject, degrees = 90 } = {}) => call(`/${encodeURIComponent(objectId)}/rotate`, {
+            method: 'POST',
+            headers: subjectHeader(subject) ? { 'X-OV-Subject': subjectHeader(subject) } : {},
+            json: { degrees },
+        }),
+
         remove: (objectId) => call(`/${encodeURIComponent(objectId)}`, { method: 'DELETE' }),
 
         /**

@@ -30,6 +30,12 @@ async function updateImage(s, id, patch) {
 
 const deleteImage = (s, id) => s.db.exec('DELETE FROM pics_images WHERE id = $1', [id]);
 
+/** A turn changes what is served: the file's dimensions, size and hash move with it (the title and audience do not). */
+async function recordRotation(s, id, { width, height, bytes, sha256 }) {
+    await s.db.query('UPDATE pics_images SET width = $3, height = $4, bytes = $5, sha256 = $6, updated_at = $2 WHERE id = $1', [id, s.iso(), width, height, bytes, sha256]);
+    return imageById(s, id);
+}
+
 /** A person's pictures, newest first, a page at a time by id cursor. */
 async function imagesOf(s, owner, { limit = 48, before = null } = {}) {
     const rows = await s.db.many(
@@ -128,7 +134,7 @@ const removeFromAlbum = (s, albumId, imageId) => s.db.exec('DELETE FROM pics_alb
 const albumsHolding = (s, imageId) => s.db.many('SELECT a.* FROM pics_album_images ai JOIN pics_albums a ON a.id = ai.album_id WHERE ai.image_id = $1 ORDER BY a.title', [imageId]);
 
 module.exports = {
-    imageBySlug, imageById, insertImage, updateImage, deleteImage, imagesOf, ownHashes, ownedByHash, usageOf, countUpload, uploadsToday,
+    imageBySlug, imageById, insertImage, updateImage, deleteImage, recordRotation, imagesOf, ownHashes, ownedByHash, usageOf, countUpload, uploadsToday,
     blockedSha, blockedDhashes, block, addReport, reportsFor, staffQueue, staffCounts, idleAnonymous,
     albumBySlug, albumsOf, albumCount, insertAlbum, updateAlbum, deleteAlbum, albumImages, albumImageCount, addToAlbum, removeFromAlbum, albumsHolding,
 };
