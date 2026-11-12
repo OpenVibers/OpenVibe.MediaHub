@@ -66,7 +66,10 @@ function createPics({ s, media, config, log = console, events = null, sharing = 
     const isOwner = (row, viewer) => Boolean(row && row.owner && viewer && viewer.requester && row.owner === viewer.requester);
 
     async function putObject(buf, { mime, name, owner, anonymous }) {
-        const init = await media.init({ size: buf.length, contentType: mime, name, ownerSubject: owner, visibility: 'private', ownerless: anonymous });
+        // `images.prepare` already applied the EXIF orientation and dropped the details: Media must not offer this
+        // picture to its model detector again, or an upright picture could be turned by a confident wrong answer.
+        const init = await media.init({ size: buf.length, contentType: mime, name, ownerSubject: owner, visibility: 'private', ownerless: anonymous,
+            metadata: { orientation_status: 'orientation applied', orientation_source: 'exif' } });
         if (!init.ok) return init;
         const id = init.data && (init.data.id || (init.data.object && init.data.object.id));
         const put = await media.putContent(id, buf);
