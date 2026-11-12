@@ -12,10 +12,11 @@ async function readCommentForm(req) {
     const request = new Request('http://localhost/comment', { method: 'POST', headers: { 'content-type': req.get('content-type') }, body: req.body });
     const form = await request.formData();
     const message = String(form.get('message') || '').trim();
-    if (!message || message.length > 2000) throw new Error('A comment is 1 to 2,000 characters');
+    const files = form.getAll('files').filter((f) => f && typeof f.arrayBuffer === 'function' && f.size);
+    // A picture alone is a comment, as on any social app (the owner, 11-12): words are optional with a file attached.
+    if ((!message && !files.length) || message.length > 2000) throw new Error('Write something or attach a picture (up to 2,000 characters)');
     const parent = String(form.get('parent_id') || '');
     if (parent && !ID.test(parent)) throw new Error('That reply target is not valid');
-    const files = form.getAll('files').filter((f) => f && typeof f.arrayBuffer === 'function' && f.size);
     if (files.length > 4) throw new Error('Attach up to four files');
     for (const file of files) {
         if (file.size > MAX_FILE) throw new Error('A file can be up to 16 MB');
