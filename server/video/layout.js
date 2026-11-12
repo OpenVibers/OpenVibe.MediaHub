@@ -34,10 +34,10 @@ function assetVersion(rel) {
 }
 const asset = (rel) => `/${rel}?v=${assetVersion(rel)}`;
 // This hash pins the Cam PR's recorder until its next reviewed release.
-// Cam's kit, pinned by hash (Cam #116, 11-09). The query names the version, so Cloudflare never hands this check an
-// older copy cached under the plain URL. A Cam release that changes the kit ships with this pin.
-const CAM_KIT_SRI = 'sha384-yqqjh1FiP7a4l9uelJHaryd8Y5IwnHVbqjt1d0AXbgCcytI9Z5MMmItFqbwB4YZG';
-const CAM_KIT_URL = 'https://openvibe.cam/embed/cam-kit.js?v=yqqjh1FiP7a4';
+// Cam's kit, pinned by hash (Cam #116, 11-09; re-pinned for Cam #157, 11-12). The query names the version, so
+// Cloudflare never hands this check an older copy cached under the plain URL. A Cam release that changes the kit ships with this pin.
+const CAM_KIT_SRI = 'sha384-6D72Zg6MS9RCQAiXgnP8R8iz/criDdCCgY48Jb87HRjzkVTvCDCCCmDs0E0RLE3s';
+const CAM_KIT_URL = 'https://openvibe.cam/embed/cam-kit.js?v=6D72Zg6MS9RC';
 
 // The pages with a Markdown twin (openvibe-shared/agent-layer): the home and the watch pages of a
 // recording and a clip. The others (search, categories, an account's playlists) have none.
