@@ -121,4 +121,4 @@ function send(res, status, o) {
     res.status(status).type('html').send(renderPage({ ...o, status }));
 }
 
-module.exports = { renderPage, send, asset, assetVersion, SITE_NAME, TAGLINE, raw, html };
+module.exports = { renderPage, send, asset, assetVersion, SITE_NAME, TAGLINE, raw, html, NAV_LINKS };

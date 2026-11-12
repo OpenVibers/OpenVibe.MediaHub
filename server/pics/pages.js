@@ -35,7 +35,7 @@ const { formatBytes } = require('../drive/rules');
 const { html, raw, notice, time, shareButton } = require('../render/html');
 const labelsUi = require('../render/labels-ui');
 const { ACCESS_COOKIE, REFRESH_COOKIE } = require('../auth/sso');
-const { send, assetVersion, SITE_NAME } = require('./layout');
+const { send, assetVersion, SITE_NAME, NAV_LINKS } = require('./layout');
 const store = require('./store');
 const { createPicsApi } = require('./api');
 const { createCommentsClient } = require('./comments-client');
@@ -873,7 +873,14 @@ ${row.state === 'hidden' ? html`<button class="ovp-btn" name="action" value="res
         body: raw(frame.updatesBody({ service: 'media-hub', siteName: SITE_NAME }) + `<script src="${ovServe.url('shipped.js')}" defer></script>`),
     }));
     const legal = require('openvibe-shared/legal');
-    r.get(legal.PATHS, legal.handler({ id: 'media-hub', service: 'media-hub', host, name: SITE_NAME, profile: 'ugc' }));
+    // Shared's legal template starts the navbar without links, so /terms and /privacy showed its fallback
+    // (Home, My Account, Themes) instead of Pics' own pages. Add Pics' list to that init call.
+    const navLinks = JSON.stringify(NAV_LINKS);
+    r.get(legal.PATHS, (req, res, next) => {
+        const sendLegal = res.send.bind(res);
+        res.send = (body) => sendLegal(String(body).replace('try{OpenVibeNavbar.init({service:', `try{OpenVibeNavbar.init({links:${navLinks},service:`));
+        next();
+    }, legal.handler({ id: 'media-hub', service: 'media-hub', host, name: SITE_NAME, profile: 'ugc' }));
 
     r.use((req, res) => notFound(req, res));
     // eslint-disable-next-line no-unused-vars
