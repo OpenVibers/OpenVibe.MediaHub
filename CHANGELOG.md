@@ -4,6 +4,14 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
 
 ## Unreleased
 
+- openvibe.pics' home icons and "Choose a picture" (2026-11-13, the owner's phone). The "What you get", "The links a
+  picture gets" and "What we promise, in writing" cards gave the shared showcase bare glyph names, which it drew as
+  Font Awesome placeholders with no font and no mapping: every icon was an empty 40 px square. They are now the glyph
+  registry's SVG, drawn on the server. The upload button lost its pink to the shared presence sheet's later `.ovp-btn`
+  rule, leaving near-black text on the dark card; Pics' buttons are scoped to `.ovp-page`, 44 px tall, and the label
+  carries the upload glyph. Tests: `test/pics.test.js` checks every feature icon is inline SVG, and
+  `test/pics-browser.test.js` opens the home at 390 and 1280 px in dark and light and fails on an unpainted icon, a
+  zero-size glyph, or button text that is invisible against what is behind it.
 - YouTube-shaped watch addresses (2026-11-07, the owner: "on openvibe.video we should copy the style of YouTube… /watch,
   and then like the actual video ID"). Every recording, clip and upload now has a short, stable, unguessable watch id —
   11 characters of URL-safe base64, minted once by OpenVibe.Media (one id space across VODs and clips) — and its page is
