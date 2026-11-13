@@ -62,7 +62,10 @@ const get = (base, p) => new Promise((resolve, reject) => {
         assert.deepStrictEqual(pips.map((p) => [p.file, p.hls, p.from, p.to, p.offset, p.x, p.w, p.muted, p.href]), [
             ['https://openvibe.media/v/801', 'https://openvibe.media/o/med_801/master.m3u8', 20, 120, 0, 0.73, 0.25, true, '/v/801'],
             ['https://openvibe.media/v/802', null, 60, 300, 42.5, 0.02, 0.18, false, '/v/802?t=42'],
-        ], "a PIP whose VOD Live does not answer, a bad id and a backwards window are left out; a playlist on another origin than the file is not used");
+            [null, null, 10, 20, 0, 0.72, 0.25, true, '/v/803'],
+        ], "a PIP whose VOD Live no longer answers stays as missing; a bad id and a backwards window are left out; a playlist on another origin than the file is not used");
+        assert.strictEqual(pips[2].missing, true, 'the missing span is marked, so the player can say so once');
+        assert.deepStrictEqual(pips.map((p) => p.vod_id), [801, 802, 803], 'each span names its own VOD');
         assert.strictEqual(pips[1].title, 'Co-host </script><b>', 'the title arrives as it is');
         assert.ok(!m[1].includes('</script>') && m[1].includes('\\u003c/script>'), 'and never closes the data block early');
     });
@@ -73,23 +76,23 @@ const get = (base, p) => new Promise((resolve, reject) => {
         assert.ok(!r.text.includes('data-ovv-pips'));
     });
 
-    await check('video.js plays each PIP over the player, synced to it, and lets a viewer move, resize, mute and hide it', async () => {
+    await check('the watch page loads OVFloat and vod-pip.js, and video.js hands the PIPs to it', async () => {
+        const r = await get(t.base, '/v/800');
+        assert.ok(/\/shared\/ov-float\.js\?v=/.test(r.text), 'the shared float system is on the page');
+        assert.ok(r.text.indexOf('/js/vod-pip.js?v=') < r.text.indexOf('/js/video.js?v='), 'the PIP engine loads before the page script');
         const js = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'video.js'), 'utf8');
-        assert.ok(/if \(t != null\) seek\(video, t\);\n\s+pips\(video\);/.test(js), 'started once the main video has its source');
-        assert.ok(js.includes("const root = video.closest('.ov-player') || video.parentNode;"), 'inside the shared player (full screen with it)');
-        assert.ok(js.includes('const on = t >= p.from && t < p.to && !it.g.hidden;') && js.includes('const want = p.offset + (t - p.from);'), 'shown in its window at offset + (t - from)');
-        assert.ok(js.includes("video.addEventListener('seeked', function () { sync(true); });"), 'a seek moves it');
-        assert.ok(js.includes('if (t >= p.from - 15 && t < p.to) load(it);'), 'its file loads only when its moment comes near');
-        assert.ok(js.includes('attachSource(it.v);'), 'its playlist plays the way the main one does');
-        assert.ok(js.includes("box.addEventListener('click', function (e) { e.stopPropagation(); });"), 'a click on it never plays or pauses the video');
-        assert.ok(js.includes("const key = 'ovv-pip-' + window.location.pathname;"), 'where a viewer put it is remembered for this recording');
+        assert.ok(js.includes('if (window.VodPip) window.VodPip.attach(video, { attachSource: attachSource });'), 'started once the main video has its source');
+        const pip = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'vod-pip.js'), 'utf8');
+        assert.ok(pip.includes('window.OVFloat.attach(it.box'), 'the box uses the shared float system');
+        assert.ok(pip.includes("main.addEventListener('seeked'") && pip.includes('sync(true)'), 'a seek on the main seeks the PIP');
+        assert.ok(pip.includes('driftCorrection(actual, expected, base)'), 'drift is corrected from the main timeline');
+        assert.ok(pip.includes('state.bufferHold'), 'a wait on either side pauses the other');
+        assert.ok(pip.includes('function swap(it)') && pip.includes('pointerup'), 'a tap (or Enter) swaps it with the main view');
+        assert.ok(pip.includes("'ovv-pip-' + pageKey()"), 'where a viewer put it is remembered for this recording');
         const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'video.css'), 'utf8');
-        assert.ok(/\.ovv-pip \{ position: absolute; z-index: 2;/.test(css), 'above the picture, under the controls (3)');
-        // Its own shape (2026-11-07: a portrait camera was cut to 16:9): the box follows the video, the video is contained.
-        assert.ok(/\.ovv-pip-video \{[^}]*object-fit: contain/.test(css) && !/\.ovv-pip-video \{[^}]*object-fit: cover/.test(css), 'the recording is shown whole, never cropped');
-        assert.ok(js.includes("v.addEventListener('loadedmetadata', readShape);") && js.includes("v.addEventListener('resize', readShape);"), 'the shape comes from the video, and follows a turned phone');
-        assert.ok(js.includes('box.style.aspectRatio = String(b.a);'), 'the box takes that shape');
-        assert.ok(js.includes('0.85 * r.height'), 'never taller than 85% of the player');
+        assert.ok(/\.ovv-pip \{[^}]*z-index: 2;/.test(css), 'above the picture, under the controls (3)');
+        assert.ok(/\.ovv-pip-video \{[^}]*object-fit: contain/.test(css), 'the recording is shown whole, never cropped');
+        assert.ok(/\.ovv-pip-note \{/.test(css), 'the one quiet line for a missing PIP has its style');
     });
 
     await t.close();

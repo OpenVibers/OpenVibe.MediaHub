@@ -106,6 +106,8 @@
     }
 
     function attachSource(video) {
+        // A video can be given a new source (a PIP swapped with the main view): the old hls.js instance must stop.
+        if (video._ovvHls) { try { video._ovvHls.destroy(); } catch (_) { /* already gone */ } video._ovvHls = null; }
         const hlsUrl = video.getAttribute('data-ovv-hls');
         const fileUrl = video.getAttribute('src');
         if (!hlsUrl || !fileUrl) return Promise.resolve('file');
@@ -131,12 +133,14 @@
         return loadScript(video.getAttribute('data-ovv-hls-lib')).then(function () {
             if (typeof window.Hls === 'undefined' || !window.Hls.isSupported()) return 'file';
             const hls = new window.Hls({ enableWorker: true, backBufferLength: 60 });
+            video._ovvHls = hls;
             let failed = false;
             hls.on(window.Hls.Events.ERROR, function (_event, data) {
                 if (!data || !data.fatal || failed) return;
                 failed = true;
                 const at = video.currentTime || 0;
                 hls.destroy();
+                video._ovvHls = null;
                 video.src = fileUrl;
                 if (at > 0) seek(video, at);
             });
@@ -406,188 +410,6 @@
         });
     }
 
-    // ── Picture-in-picture over a recording (pages.js pipsOf; OpenVibe.Live streaming/pip-history.js) ──
-    // The streams that were drawn over this one while it was live play over it again, each its own recording, shown
-    // while from <= t < to at offset + (t - from), following the main video's seeks, pauses and speed. Each starts where
-    // the streamer put it; a viewer moves it, resizes it from its corner, turns its sound on or hides it, and this
-    // browser remembers that for this recording. A PIP's file loads only when its moment comes near. They sit inside the
-    // shared player, above the picture and under its controls, and go full screen with it.
-    function pips(video) {
-        const data = video.parentNode && video.parentNode.querySelector('[data-ovv-pips]')
-            || document.querySelector('[data-ovv-pips]');
-        let list = [];
-        try { list = JSON.parse(data ? data.textContent : '[]') || []; } catch { list = []; }
-        if (!list.length) return;
-        const root = video.closest('.ov-player') || video.parentNode;
-        const key = 'ovv-pip-' + window.location.pathname;
-        let saved = {};
-        try { saved = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { saved = {}; }
-        const save = function () { try { localStorage.setItem(key, JSON.stringify(saved)); } catch { /* private window */ } };
-        const clamp = function (v, lo, hi) { return Math.min(hi, Math.max(lo, v)); };
-        // A PIP takes its recording's own shape (2026-11-07: a portrait camera was cut to 16:9). `w` is the width of a
-        // 16:9 PIP; any other shape keeps that area, never more than 85% of the player's height, and on a phone-sized
-        // player never less than a 150 px wide 16:9 box. Dropped near an edge it snaps to a 12 px margin.
-        const BASE = 16 / 9;
-        const boxOf = function (g, aspect) {
-            const a = aspect || BASE;
-            const r = root.getBoundingClientRect();
-            const w0 = r.width && r.width < 640 ? Math.max(g.w, Math.min(0.6, 150 / r.width)) : g.w;
-            let wf = w0 * Math.sqrt(a / BASE);
-            if (r.width && r.height && (wf * r.width) / a > 0.85 * r.height) wf = (0.85 * r.height * a) / r.width;
-            wf = Math.min(wf, 1);
-            return { a: a, wf: wf, hf: r.width && r.height ? (wf * r.width) / a / r.height : wf / a, rw: r.width, rh: r.height };
-        };
-        const items = list.map(function (p, i) {
-            const id = p.href.split('?')[0] + '#' + i;
-            const g = Object.assign({ x: p.x, y: p.y, w: p.w, muted: p.muted, hidden: false }, saved[id] || {});
-            const box = document.createElement('div');
-            box.className = 'ovv-pip';
-            box.hidden = true;
-            const v = document.createElement('video');
-            v.className = 'ovv-pip-video';
-            v.playsInline = true;
-            v.preload = 'none';
-            v.muted = true;
-            const bar = document.createElement('div');
-            bar.className = 'ovv-pip-bar';
-            const name = document.createElement('a');
-            name.className = 'ovv-pip-name';
-            name.href = p.href;
-            name.textContent = p.title;
-            const mute = document.createElement('button');
-            mute.type = 'button';
-            const hide = document.createElement('button');
-            hide.type = 'button';
-            hide.innerHTML = '<i class="ovg-fill" data-ov-icon="eye-off" aria-hidden="true"></i>';
-            hide.title = 'Hide ' + p.title;
-            hide.setAttribute('aria-label', hide.title);
-            const grip = document.createElement('span');
-            grip.className = 'ovv-pip-grip';
-            grip.title = 'Drag to resize';
-            bar.append(name, mute, hide);
-            box.append(v, bar, grip);
-            // The shared player plays and pauses on a click anywhere in it: a click on a PIP is the PIP's.
-            box.addEventListener('click', function (e) { e.stopPropagation(); });
-            root.appendChild(box);
-            const item = { p: p, id: id, g: g, box: box, v: v, loaded: false, aspect: null };
-            const paintMute = function () {
-                mute.innerHTML = '<i class="ovg-fill" data-ov-icon="' + (g.muted ? 'mute' : 'volume') + '" aria-hidden="true"></i>';
-                mute.title = g.muted ? 'Turn on ' + p.title + "'s sound" : 'Mute ' + p.title;
-                mute.setAttribute('aria-label', mute.title);
-                v.muted = g.muted || video.muted;
-            };
-            const place = function () {
-                const b = boxOf(g, item.aspect);
-                box.style.left = (clamp(g.x, 0, Math.max(0, 1 - b.wf)) * 100) + '%';
-                box.style.top = (clamp(g.y, 0, Math.max(0, 1 - b.hf)) * 100) + '%';
-                box.style.width = (b.wf * 100) + '%';
-                box.style.aspectRatio = String(b.a);
-                box.classList.toggle('is-portrait', b.a < 1);
-            };
-            const settle = function () {
-                const b = boxOf(g, item.aspect);
-                const maxX = Math.max(0, 1 - b.wf), maxY = Math.max(0, 1 - b.hf);
-                const mx = b.rw ? 12 / b.rw : 0, my = b.rh ? 12 / b.rh : 0;
-                g.x = clamp(g.x, 0, maxX); g.y = clamp(g.y, 0, maxY);
-                if (g.x < 0.04) g.x = Math.min(mx, maxX); else if (g.x > maxX - 0.04) g.x = Math.max(0, maxX - mx);
-                if (g.y < 0.04) g.y = Math.min(my, maxY); else if (g.y > maxY - 0.04) g.y = Math.max(0, maxY - my);
-            };
-            const readShape = function () {
-                if (!v.videoWidth || !v.videoHeight) return;
-                const a = v.videoWidth / v.videoHeight;
-                if (item.aspect && Math.abs(item.aspect - a) < 0.01) return;
-                item.aspect = a;
-                place();
-            };
-            v.addEventListener('loadedmetadata', readShape);
-            v.addEventListener('resize', readShape);
-            item.place = place;
-            const keep = function () { saved[id] = g; save(); };
-            mute.addEventListener('click', function () { g.muted = !g.muted; paintMute(); keep(); if (!g.muted) v.play().catch(function () {}); });
-            hide.addEventListener('click', function () { g.hidden = true; keep(); sync(); restoreBar(); });
-            // Move by its body, resize by its corner; both stay inside the player.
-            let drag = null;
-            box.addEventListener('pointerdown', function (e) {
-                if (e.target.closest('button, a')) return;
-                const r = root.getBoundingClientRect();
-                drag = { px: e.clientX, py: e.clientY, x: g.x, y: g.y, w: g.w, rw: r.width, rh: r.height, resize: e.target === grip };
-                box.setPointerCapture(e.pointerId);
-                box.classList.add('is-moving');
-                e.preventDefault();
-            });
-            box.addEventListener('pointermove', function (e) {
-                if (!drag) return;
-                const k = Math.sqrt((item.aspect || BASE) / BASE) || 1;
-                if (drag.resize) g.w = clamp(drag.w + (e.clientX - drag.px) / drag.rw / k, 0.08, 0.6);
-                else {
-                    const b = boxOf(g, item.aspect);
-                    g.x = clamp(drag.x + (e.clientX - drag.px) / drag.rw, 0, Math.max(0, 1 - b.wf));
-                    g.y = clamp(drag.y + (e.clientY - drag.py) / drag.rh, 0, Math.max(0, 1 - b.hf));
-                }
-                place();
-            });
-            const end = function () { if (!drag) return; drag = null; box.classList.remove('is-moving'); settle(); place(); keep(); };
-            box.addEventListener('pointerup', end);
-            box.addEventListener('pointercancel', end);
-            paintMute();
-            place();
-            return item;
-        });
-        // The player changes size (a window, full screen, a phone turned): each PIP's height cap follows.
-        if (typeof ResizeObserver === 'function') new ResizeObserver(function () { items.forEach(function (it) { if (it.place) it.place(); }); }).observe(root);
-        // The "Show …" buttons of hidden PIPs, under the player's top-left corner.
-        let pills = null;
-        function restoreBar() {
-            if (pills) pills.remove();
-            const hidden = items.filter(function (it) { return it.g.hidden; });
-            if (!hidden.length) { pills = null; return; }
-            pills = document.createElement('div');
-            pills.className = 'ovv-pip-pills';
-            hidden.forEach(function (it) {
-                const b = document.createElement('button');
-                b.type = 'button';
-                b.textContent = 'Show ' + it.p.title;
-                b.addEventListener('click', function () { it.g.hidden = false; saved[it.id] = it.g; save(); restoreBar(); sync(); });
-                pills.appendChild(b);
-            });
-            pills.addEventListener('click', function (e) { e.stopPropagation(); });
-            root.appendChild(pills);
-        }
-        function load(it) {
-            if (it.loaded) return;
-            it.loaded = true;
-            it.v.preload = 'auto';
-            it.v.setAttribute('src', it.p.file);
-            if (it.p.hls) {
-                it.v.setAttribute('data-ovv-hls', it.p.hls);
-                it.v.setAttribute('data-ovv-hls-lib', video.getAttribute('data-ovv-hls-lib') || '');
-                attachSource(it.v);
-            }
-        }
-        function sync(forced) {
-            const t = video.currentTime || 0;
-            items.forEach(function (it) {
-                const p = it.p;
-                if (t >= p.from - 15 && t < p.to) load(it);
-                const on = t >= p.from && t < p.to && !it.g.hidden;
-                it.box.hidden = !on;
-                if (!on) { if (!it.v.paused) it.v.pause(); return; }
-                const want = p.offset + (t - p.from);
-                if (forced || Math.abs((it.v.currentTime || 0) - want) > 0.75) {
-                    if (it.v.readyState >= 1) it.v.currentTime = want;
-                    else it.v.addEventListener('loadedmetadata', function () { it.v.currentTime = p.offset + ((video.currentTime || 0) - p.from); }, { once: true });
-                }
-                it.v.playbackRate = video.playbackRate || 1;
-                it.v.muted = it.g.muted || video.muted;
-                if (video.paused) { if (!it.v.paused) it.v.pause(); } else if (it.v.paused) it.v.play().catch(function () {});
-            });
-        }
-        ['timeupdate', 'play', 'pause', 'ratechange', 'volumechange'].forEach(function (ev) { video.addEventListener(ev, function () { sync(false); }); });
-        video.addEventListener('seeked', function () { sync(true); });
-        restoreBar();
-        sync(true);
-    }
-
     document.addEventListener('DOMContentLoaded', function () {
         // A clip still being cut: look again in a few seconds (the server answers once it is ready).
         const cutting = document.querySelector('[data-ovv-reload]');
@@ -661,7 +483,8 @@
         attachSource(video).then(function (source) {
             video.setAttribute('data-ovv-source', source);
             if (t != null) seek(video, t);
-            pips(video);
+            // The PIPs the recording's stream had on screen play over it, in sync (public/js/vod-pip.js).
+            if (window.VodPip) window.VodPip.attach(video, { attachSource: attachSource });
         });
 
         // A view counts on OpenVibe.Live once playback starts, from this browser (so the viewer's own address is the
