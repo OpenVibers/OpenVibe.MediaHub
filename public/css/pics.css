@@ -18,12 +18,15 @@
 .ovp-page h2 { font-size: 1.15rem; margin: 0 0 .75rem; }
 
 /* Buttons */
-.ovp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 7px 14px; border-radius: 10px; border: 1px solid var(--ovp-line-strong); background: var(--bg-tertiary, #16223a); color: var(--text-primary, #e6edf7) !important; font: inherit; font-size: .9rem; font-weight: 700; text-decoration: none; cursor: pointer; }
-.ovp-btn:hover, .ovp-btn:focus-visible { border-color: var(--ovp-pink); }
-.ovp-btn--primary { background: var(--ovp-pink); border-color: var(--ovp-pink); color: var(--ovp-on-pink) !important; }
-.ovp-btn--primary:hover, .ovp-btn--primary:focus-visible { background: var(--ovp-pink-soft); border-color: var(--ovp-pink-soft); }
-.ovp-btn--danger { background: transparent; border-color: color-mix(in srgb, var(--error, #ef4444) 55%, transparent); color: var(--error-text, var(--error, #ef4444)) !important; }
-.ovp-btn--danger:hover, .ovp-btn--danger:focus-visible { background: color-mix(in srgb, var(--error, #ef4444) 12%, transparent); border-color: var(--error, #ef4444); }
+/* The shared presence sheet (loaded by the navbar for a signed-in person) also writes `.ovp-btn` — transparent
+   background, colour inherit. Scoped to `.ovp-page` so a later plain `.ovp-btn` can never repaint Pics' primary
+   button: the owner's 11-13 phone shot showed a dark label on the dark card with the pink gone. */
+.ovp-page .ovp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 7px 14px; border-radius: 10px; border: 1px solid var(--ovp-line-strong); background: var(--bg-tertiary, #16223a); color: var(--text-primary, #e6edf7) !important; font: inherit; font-size: .9rem; font-weight: 700; text-decoration: none; cursor: pointer; }
+.ovp-page .ovp-btn:hover, .ovp-page .ovp-btn:focus-visible { border-color: var(--ovp-pink); }
+.ovp-page .ovp-btn--primary { background: var(--ovp-pink); border-color: var(--ovp-pink); color: var(--ovp-on-pink) !important; }
+.ovp-page .ovp-btn--primary:hover, .ovp-page .ovp-btn--primary:focus-visible { background: var(--ovp-pink-soft); border-color: var(--ovp-pink-soft); }
+.ovp-page .ovp-btn--danger { background: transparent; border-color: color-mix(in srgb, var(--error, #ef4444) 55%, transparent); color: var(--error-text, var(--error, #ef4444)) !important; }
+.ovp-page .ovp-btn--danger:hover, .ovp-page .ovp-btn--danger:focus-visible { background: color-mix(in srgb, var(--error, #ef4444) 12%, transparent); border-color: var(--error, #ef4444); }
 
 /* Home */
 .ovp-hero { padding: 12px 0 18px; }
@@ -112,7 +115,7 @@
 .ovp-copy label { font-size: .8rem; font-weight: 700; color: var(--ovp-dim); }
 .ovp-copy-row { display: flex; gap: 6px; min-width: 0; }
 .ovp-copy-row input { flex: 1; min-width: 0; font: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--ovp-line-strong); background: var(--bg-secondary, #0f1729); color: var(--text-primary, #e6edf7); }
-.ovp-copy-row .ovp-btn { min-width: 74px; }
+.ovp-page .ovp-copy-row .ovp-btn { min-width: 74px; }
 .ovp-page > .ovp-copy { max-width: 640px; margin: 0 0 14px; }
 .ovp-key { display: inline-block; margin-top: 6px; overflow-wrap: anywhere; }
 .ovp-confirm-thumb { max-width: 240px; border-radius: 12px; }
@@ -270,7 +273,6 @@ html[data-ov-motion=off] .ovp-gallery-card:hover .ovp-gc-pic img{transform: none
 .ovp-drop--compact .ovp-drop-inner p { margin: 0; }
 .ovp-drop--signin.ovp-drop--compact .ovp-drop-title { display: none; }
 .ovp-drop--signin.ovp-drop--compact .ovp-drop-hint { display: block; flex: 1; }
-.ovp-btn { min-height: 44px; }
 
 /* The picture's action bar (owner's design pass, 11-09): who published it and how many saw it on the left, Like (a heart
    that fills in Pics pink, with its count) and Share on the right; under it, quiet buttons to make something with the

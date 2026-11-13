@@ -9,4 +9,9 @@ const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'pics.cs
 assert.match(css, /--ovp-accent-text: color-mix\(in srgb, var\(--ovp-pink\) 60%, var\(--text-primary, #e6edf7\)\);/);
 assert.match(css, /\.ovp-size-table thead th \{[^}]*color: var\(--ovp-faint\);/);
 assert.ok(!/var\(--text-faint/.test(css), 'no colour names --text-faint');
+// The shared presence sheet also writes `.ovp-btn` (transparent background, colour inherit). Every Pics button rule
+// is scoped to the page, so a later plain `.ovp-btn` cannot repaint the pink primary button (the 11-13 phone shot).
+assert.ok(!/(^|\n)\.ovp-btn(?=[\s,:{])/m.test(css), 'no unscoped .ovp-btn selector competes with the shared sheet');
+assert.match(css, /\.ovp-page \.ovp-btn \{[^}]*min-height: 44px;/);
+assert.match(css, /\.ovp-page \.ovp-btn--primary \{[^}]*background: var\(--ovp-pink\);/);
 console.log('pics contrast: all checks passed');
