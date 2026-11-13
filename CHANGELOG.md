@@ -4,6 +4,17 @@ What changed in OpenVibe.MediaHub, newest first. Each site also publishes its pa
 
 ## Unreleased
 
+- A recording's picture-in-picture plays in sync with it (2026-11-13, Maticus: "the robot PiP freezes on VODs"). The
+  streams a Live recording drew over itself now each plays its own VOD over the watch page: while the main video is
+  inside a span the PiP is at `offset + (main - from)`, outside it the PiP hides. It follows the main's play, pause,
+  seeks and speed (a seek on one seeks the other, a wait on either pauses both), drift over 0.3 s is nudged with a
+  playbackRate factor between 0.95 and 1.05, and over 2 s seeks. The box is openvibe-shared's OVFloat (drag, tuck,
+  pinch/grip size, its place kept per device); a tap (or Enter) swaps it with the main view, sources and times both
+  ways. Several spans work, and a span whose PiP VOD is gone hides with one quiet line. The server keeps those
+  missing spans in `vod.pips` (`missing: true`) and gives each its `vod_id`. Tests: `test/vod-pip-core.test.js` (the
+  time mapping and the drift decision), `test/vod-pip-chrome.test.js` (two local videos: seeks on the main move the
+  PiP, pause/rate/drift follow, a tap swaps) and `test/video-pips.test.js` (the page hands the player each span).
+
 - YouTube-shaped watch addresses (2026-11-07, the owner: "on openvibe.video we should copy the style of YouTube… /watch,
   and then like the actual video ID"). Every recording, clip and upload now has a short, stable, unguessable watch id —
   11 characters of URL-safe base64, minted once by OpenVibe.Media (one id space across VODs and clips) — and its page is
