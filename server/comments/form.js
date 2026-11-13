@@ -1,7 +1,7 @@
 'use strict';
 
 const express = require('express');
-const { ID } = require('./inline');
+const ID = /^\d{1,15}$/;   // the comment service's ids (the thread renderer carries the same rule)
 
 const ACCEPT = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain']);
 const MAX_FILE = 16 * 1024 * 1024;
