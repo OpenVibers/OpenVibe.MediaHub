@@ -129,12 +129,12 @@ ${render(o.body)}
 // (Shared 4.22). Search is the navbar's magnifier, which offers this site's own search first; the page without
 // JavaScript keeps its Search link.
 const NAV_LINKS = [
-    { label: 'Videos', href: '/', icon: 'fa-play' },
-    { label: 'Search', href: '/search', icon: 'fa-magnifying-glass', noscriptOnly: true },
-    { label: 'Upload', href: '/upload', icon: 'fa-upload' },
-    { label: 'Record', href: '/record', icon: 'fa-video' },
-    { label: 'Your videos', href: '/me/videos', icon: 'fa-photo-film' },
-    { label: 'Playlists', href: '/playlists', icon: 'fa-list-check', more: true },
+    { label: 'Videos', href: '/', icon: 'play' },
+    { label: 'Search', href: '/search', icon: 'search', noscriptOnly: true },
+    { label: 'Upload', href: '/upload', icon: 'upload' },
+    { label: 'Record', href: '/record', icon: 'video' },
+    { label: 'Your videos', href: '/me/videos', icon: 'film' },
+    { label: 'Playlists', href: '/playlists', icon: 'steps', more: true },
 ];
 
 // A signed-out copy is never reused without asking: Cloudflare drops `Vary` (it keeps only Accept-Encoding), so a

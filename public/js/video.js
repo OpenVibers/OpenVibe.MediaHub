@@ -281,7 +281,7 @@
             if (wrap) wrap.hidden = false;
             const label = b.innerHTML;
             const say = function (title, hint) {
-                b.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i><span><b></b><small></small></span>';
+                b.innerHTML = '<i class="ovg-fill" data-ov-icon="check" aria-hidden="true"></i><span><b></b><small></small></span>';
                 b.querySelector('b').textContent = title;
                 b.querySelector('small').textContent = hint;
                 setTimeout(function () { b.innerHTML = label; }, 2200);
@@ -458,7 +458,7 @@
             mute.type = 'button';
             const hide = document.createElement('button');
             hide.type = 'button';
-            hide.innerHTML = '<i class="fa-solid fa-eye-slash" aria-hidden="true"></i>';
+            hide.innerHTML = '<i class="ovg-fill" data-ov-icon="eye-off" aria-hidden="true"></i>';
             hide.title = 'Hide ' + p.title;
             hide.setAttribute('aria-label', hide.title);
             const grip = document.createElement('span');
@@ -471,7 +471,7 @@
             root.appendChild(box);
             const item = { p: p, id: id, g: g, box: box, v: v, loaded: false, aspect: null };
             const paintMute = function () {
-                mute.innerHTML = '<i class="fa-solid ' + (g.muted ? 'fa-volume-xmark' : 'fa-volume-high') + '" aria-hidden="true"></i>';
+                mute.innerHTML = '<i class="ovg-fill" data-ov-icon="' + (g.muted ? 'mute' : 'volume') + '" aria-hidden="true"></i>';
                 mute.title = g.muted ? 'Turn on ' + p.title + "'s sound" : 'Mute ' + p.title;
                 mute.setAttribute('aria-label', mute.title);
                 v.muted = g.muted || video.muted;

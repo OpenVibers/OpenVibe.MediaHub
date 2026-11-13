@@ -416,7 +416,7 @@ function commentItem(c, depth = 0) {
 <p class="ovv-comment-text">${text}</p>
 ${files.length ? html`<ul>${files.map((file) => html`<li><a href="https://openvibe.media/o/${file.id}" rel="noopener noreferrer">${file.name || 'Attached file'}</a></li>`)}</ul>` : ''}
 ${shownReplies.map((reply) => commentItem(reply, 1))}
-${replies > 0 ? html`<p class="ovv-comment-replies"><i class="fa-regular fa-comments" aria-hidden="true"></i> ${replies} ${replies === 1 ? 'reply' : 'replies'}${replies > shownReplies.length ? html` · ${replies - shownReplies.length} more` : ''}</p>` : ''}
+${replies > 0 ? html`<p class="ovv-comment-replies"><i data-ov-icon="chat" aria-hidden="true"></i> ${replies} ${replies === 1 ? 'reply' : 'replies'}${replies > shownReplies.length ? html` · ${replies - shownReplies.length} more` : ''}</p>` : ''}
 </article>`;
 }
 
@@ -569,12 +569,12 @@ function cardPlaceholder(o, icon) {
         const face = `${faceBase}/avatar/${name}?s=160`;
         return html`<span class="ovv-card-placeholder ovv-card-who"><img class="ovv-who-bg" src="${face}" alt="" loading="lazy" decoding="async"><img class="ovv-who-face" src="${face}" alt="" loading="lazy" decoding="async"></span>`;
     }
-    return html`<span class="ovv-card-placeholder"><i class="fa-solid ${icon}"></i></span>`;
+    return html`<span class="ovv-card-placeholder"><i class="ovg-fill" data-ov-icon="${icon}"></i></span>`;
 }
 
 function card(o) {
     const channel = o.channel ? html`<a href="${o.channelHref}">@${o.channel}</a>` : null;
-    const icon = o.live ? 'fa-tower-broadcast' : (o.kind === 'clip' ? 'fa-scissors' : 'fa-video');
+    const icon = o.live ? 'live' : (o.kind === 'clip' ? 'scissors' : 'video');
     const labels = o.labels || [];
     const media = html`<a class="ovv-card-media" href="${o.href}" tabindex="-1" aria-hidden="true">${o.thumb ? thumbImg(o.thumb, CARD_SIZES) : cardPlaceholder(o, icon)}${o.duration ? html`<span class="ovv-dur">${o.duration}</span>` : ''}${o.badge ? html`<span class="ovv-tag${o.live ? ' ovv-tag--live' : ''}">${o.badge}</span>` : ''}</a>`;
     return html`<article class="ovv-card"${labelsUi.attrs(labels, { owner: o.owner || o.channel })}>
@@ -689,7 +689,7 @@ function createVideoRoutes(ctx) {
     const partyLink = (path, title, item) => {
         const file = item ? fileOf(item) : null;
         if (!file) return '';
-        return html`<a class="ovv-btn" href="https://openvibe.party/new?media=${encodeURIComponent(file)}&source_url=${encodeURIComponent(`${base}${path}`)}&title=${encodeURIComponent(String(title || 'Watch party'))}"><i class="fa-solid fa-users" aria-hidden="true"></i> Watch together</a>`;
+        return html`<a class="ovv-btn" href="https://openvibe.party/new?media=${encodeURIComponent(file)}&source_url=${encodeURIComponent(`${base}${path}`)}&title=${encodeURIComponent(String(title || 'Watch party'))}"><i class="ovg-fill" data-ov-icon="members" aria-hidden="true"></i> Watch together</a>`;
     };
 
     const hasSessionCookie = (req) => Boolean(req.cookies && (req.cookies[ACCESS_COOKIE] || req.cookies[REFRESH_COOKIE]));
@@ -793,24 +793,24 @@ function createVideoRoutes(ctx) {
     // Who can see it, as three choices with what each means (owner, 2026-10-27: the page had no clear way to make a
     // recording private or unlisted). Radios, so the form works without JavaScript.
     const VISIBILITY_LOOK = {
-        public: ['fa-solid fa-earth-americas', 'Listed and searchable'],
-        unlisted: ['fa-solid fa-link', 'Only people with the link'],
-        private: ['fa-solid fa-lock', 'Only you (and staff)'],
+        public: ['globe', 'Listed and searchable'],
+        unlisted: ['link', 'Only people with the link'],
+        private: ['lock', 'Only you (and staff)'],
     };
-    const visibilityChoices = (current) => html`<fieldset class="ovv-vis"><legend>Who can see it</legend>${VISIBILITIES.map((v) => html`<label class="ovv-vis-opt"><input type="radio" name="visibility" value="${v}"${v === current ? ' checked' : ''}><span class="ovv-vis-card"><i class="${VISIBILITY_LOOK[v][0]}" aria-hidden="true"></i><b>${visibilityLabel(v)}</b><small>${VISIBILITY_LOOK[v][1]}</small></span></label>`)}</fieldset>`;
+    const visibilityChoices = (current) => html`<fieldset class="ovv-vis"><legend>Who can see it</legend>${VISIBILITIES.map((v) => html`<label class="ovv-vis-opt"><input type="radio" name="visibility" value="${v}"${v === current ? ' checked' : ''}><span class="ovv-vis-card"><i class="ovg-fill" data-ov-icon="${VISIBILITY_LOOK[v][0]}" aria-hidden="true"></i><b>${visibilityLabel(v)}</b><small>${VISIBILITY_LOOK[v][1]}</small></span></label>`)}</fieldset>`;
     /** The owner's badge in the meta line: who can see it now. */
-    const visibilityBadge = (v) => html`<span class="ovv-vis-badge ovv-vis-badge--${VISIBILITIES.includes(v) ? v : 'public'}"><i class="${(VISIBILITY_LOOK[v] || VISIBILITY_LOOK.public)[0]}" aria-hidden="true"></i> ${visibilityLabel(v || 'public')}</span>`;
+    const visibilityBadge = (v) => html`<span class="ovv-vis-badge ovv-vis-badge--${VISIBILITIES.includes(v) ? v : 'public'}"><i class="ovg-fill" data-ov-icon="${(VISIBILITY_LOOK[v] || VISIBILITY_LOOK.public)[0]}" aria-hidden="true"></i> ${visibilityLabel(v || 'public')}</span>`;
     /** The owner's Edit link in More opens the panel under the player. */
-    const editButton = (what) => html`<a class="ovv-btn ovv-btn--edit" href="#manage" data-ovv-open="manage" title="Edit this ${what}: title, description, who can see it"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit</a>`;
+    const editButton = (what) => html`<a class="ovv-btn ovv-btn--edit" href="#manage" data-ovv-open="manage" title="Edit this ${what}: title, description, who can see it"><i class="ovg-fill" data-ov-icon="pencil" aria-hidden="true"></i> Edit</a>`;
     const titleLine = (kind, title) => html`<div class="ovv-title-line"><span class="ovv-kind">${kind}</span><h1 class="ovv-title">${title}</h1></div>`;
-    const likeButton = (state, kind, id) => html`<button class="ovv-btn ovv-like" type="button" data-ovv-like="${kind}:${id}" aria-pressed="${state.liked ? 'true' : 'false'}" title="Like this ${kind === 'clip' ? 'clip' : 'recording'}"><i class="fa-regular fa-heart" aria-hidden="true"></i> Like <span class="ovv-like-count">${state.count}</span></button>`;
+    const likeButton = (state, kind, id) => html`<button class="ovv-btn ovv-like" type="button" data-ovv-like="${kind}:${id}" aria-pressed="${state.liked ? 'true' : 'false'}" title="Like this ${kind === 'clip' ? 'clip' : 'recording'}"><i data-ov-icon="heart" aria-hidden="true"></i> Like <span class="ovv-like-count">${state.count}</span></button>`;
     const channelRow = (username, name, followers) => {
         if (!username) return '';
         const channel = `${livePublic}/@${username}`;
         const count = Number(followers);
-        return html`<div class="ovv-byline"><a class="ovv-avatar" href="${channel}" aria-hidden="true" tabindex="-1">${String(name || username).slice(0, 1).toUpperCase()}${live.isUsername(String(username)) ? html`<img src="${config.networkUrl}/avatar/${username}" alt="" loading="lazy">` : ''}</a><div class="ovv-byline-text"><a class="ovv-channel-name" href="${channel}">@${username}</a>${Number.isSafeInteger(count) && count >= 0 ? html`<span class="ovv-meta">${count.toLocaleString('en-US')} ${count === 1 ? 'follower' : 'followers'}</span>` : ''}</div><a class="ovv-btn ovv-follow" href="${channel}" title="Follow ${name || username} on OpenVibe.Live"><i class="fa-solid fa-plus" aria-hidden="true"></i> Follow</a></div>`;
+        return html`<div class="ovv-byline"><a class="ovv-avatar" href="${channel}" aria-hidden="true" tabindex="-1">${String(name || username).slice(0, 1).toUpperCase()}${live.isUsername(String(username)) ? html`<img src="${config.networkUrl}/avatar/${username}" alt="" loading="lazy">` : ''}</a><div class="ovv-byline-text"><a class="ovv-channel-name" href="${channel}">@${username}</a>${Number.isSafeInteger(count) && count >= 0 ? html`<span class="ovv-meta">${count.toLocaleString('en-US')} ${count === 1 ? 'follower' : 'followers'}</span>` : ''}</div><a class="ovv-btn ovv-follow" href="${channel}" title="Follow ${name || username} on OpenVibe.Live"><i class="ovg-fill" data-ov-icon="plus" aria-hidden="true"></i> Follow</a></div>`;
     };
-    const watchMore = ({ path, manageable, kind, id, items }) => actionMenu({ icon: 'fa-solid fa-ellipsis', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: html`<div class="ovv-more-actions"><button type="button" data-ovv-copy-time="${base}${path}"><i class="fa-regular fa-copy" aria-hidden="true"></i> Copy link at time</button><button type="button" data-ovv-pip hidden><i class="fa-regular fa-window-restore" aria-hidden="true"></i> Picture in picture</button><a href="mailto:report@openvibe.network?subject=${encodeURIComponent(`Report ${kind} ${base}${path}`)}"><i class="fa-regular fa-flag" aria-hidden="true"></i> Report</a>${manageable ? html`${editButton(kind === 'clip' ? 'clip' : 'recording')}${deleteAction({ action: `/${kind === 'clip' ? 'c' : 'v'}/${id}`, what: kind === 'clip' ? 'clip' : 'recording' })}` : ''}${menuLinks(items)}</div>` });
+    const watchMore = ({ path, manageable, kind, id, items }) => actionMenu({ icon: 'more', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: html`<div class="ovv-more-actions"><button type="button" data-ovv-copy-time="${base}${path}"><i data-ov-icon="copy" aria-hidden="true"></i> Copy link at time</button><button type="button" data-ovv-pip hidden><i data-ov-icon="window-restore" aria-hidden="true"></i> Picture in picture</button><a href="mailto:report@openvibe.network?subject=${encodeURIComponent(`Report ${kind} ${base}${path}`)}"><i data-ov-icon="flag" aria-hidden="true"></i> Report</a>${manageable ? html`${editButton(kind === 'clip' ? 'clip' : 'recording')}${deleteAction({ action: `/${kind === 'clip' ? 'c' : 'v'}/${id}`, what: kind === 'clip' ? 'clip' : 'recording' })}` : ''}${menuLinks(items)}</div>` });
     const watchFacts = (views, date, duration, visibility) => {
         const count = Math.max(0, Number(views) || 0);
         const stamp = date instanceof Date ? date.getTime() : Date.parse(String(date || ''));
@@ -841,12 +841,12 @@ ${ai ? html`<p class="ovv-about-text"><span class="ovv-ai-chip">AI summary</span
     function clipAction(req, id, vod) {
         if (vod.is_recording) return '';
         if (!signedIn(req)) {
-            return html`<a class="ovv-btn" href="/auth/login?next=${encodeURIComponent(req.originalUrl)}" title="Sign in to make a clip of up to ${CLIP_MAX_SECONDS} seconds"><i class="fa-solid fa-scissors" aria-hidden="true"></i> Clip</a>`;
+            return html`<a class="ovv-btn" href="/auth/login?next=${encodeURIComponent(req.originalUrl)}" title="Sign in to make a clip of up to ${CLIP_MAX_SECONDS} seconds"><i class="ovg-fill" data-ov-icon="scissors" aria-hidden="true"></i> Clip</a>`;
         }
         const dur = Math.floor(Number(vod.duration_seconds) || 0);
         // The whole video of a stream recorded in parts: its times are the video's, and a clip may cross a join.
         const whole = !!(vod.recording && vod.recording.joined && String(vod.recording.vod_id) === String(id));
-        return actionMenu({ icon: 'fa-solid fa-scissors', label: 'Clip', title: `Make a clip of up to ${CLIP_MAX_SECONDS} seconds`, cls: 'ovv-clipper', body: html`<p class="ovv-pop-title">Make a clip</p>
+        return actionMenu({ icon: 'scissors', label: 'Clip', title: `Make a clip of up to ${CLIP_MAX_SECONDS} seconds`, cls: 'ovv-clipper', body: html`<p class="ovv-pop-title">Make a clip</p>
 <form class="ovv-owner-form" method="post" action="/v/${id}/clip">
 ${whole ? html`<input type="hidden" name="recording_time" value="1">` : ''}
 <div class="ovv-clip-times">
@@ -864,7 +864,7 @@ ${whole ? html`<input type="hidden" name="recording_time" value="1">` : ''}
     function ownerPanel(kind, id, item) {
         const what = kind === 'vod' ? 'recording' : 'clip';
         const action = `/${kind === 'vod' ? 'v' : 'c'}/${id}`;
-        return html`<details class="ovv-panel ovv-owner" id="manage"><summary><h2 id="h-owner"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit this ${what}</h2><span class="ovv-fine">Title, ${kind === 'vod' ? 'description, ' : ''}who can see it, labels</span></summary>
+        return html`<details class="ovv-panel ovv-owner" id="manage"><summary><h2 id="h-owner"><i class="ovg-fill" data-ov-icon="pencil" aria-hidden="true"></i> Edit this ${what}</h2><span class="ovv-fine">Title, ${kind === 'vod' ? 'description, ' : ''}who can see it, labels</span></summary>
 <form class="ovv-owner-form" method="post" action="${action}/manage">
 <label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="200" value="${item.title || ''}" required></label>
 ${kind === 'vod' ? html`<label class="ovv-field"><span>Description</span><textarea name="description" rows="3" maxlength="2000">${item.description || ''}</textarea></label>` : ''}
@@ -1064,10 +1064,10 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
     // ── Playlist page pieces ───────────────────────────────
     async function playlistForm(req, kind, id) {
         if (!signedIn(req)) {
-            return html`<a class="ovv-btn" href="/auth/login?next=${encodeURIComponent(req.originalUrl)}" title="Sign in to save it to a playlist"><i class="fa-solid fa-plus" aria-hidden="true"></i> Save</a>`;
+            return html`<a class="ovv-btn" href="/auth/login?next=${encodeURIComponent(req.originalUrl)}" title="Sign in to save it to a playlist"><i class="ovg-fill" data-ov-icon="plus" aria-hidden="true"></i> Save</a>`;
         }
         const lists = await playlists.list(ownerOf(req));
-        return html`<details class="ovv-save ovv-pop" data-ovv-menu><summary class="ovv-btn" title="Save to a playlist"><i class="fa-solid fa-plus" aria-hidden="true"></i> Save</summary>
+        return html`<details class="ovv-save ovv-pop" data-ovv-menu><summary class="ovv-btn" title="Save to a playlist"><i class="ovg-fill" data-ov-icon="plus" aria-hidden="true"></i> Save</summary>
 <form class="ovv-save-form ovv-pop-panel" method="post" action="/playlists/add">
 <input type="hidden" name="kind" value="${kind}">
 <input type="hidden" name="id" value="${id}">
@@ -1086,7 +1086,7 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
         if (kind === 'upload') {
             const row = await ctx.videoUploads.bySeq(itemId);
             if (!row || row.status !== 'ready' || row.state !== 'active' || row.visibility === 'private') return null;
-            return { href: watchHref('upload', row.id, row.watch_id), title: row.title, thumb: httpsUrl(row.thumbnail_url), channel: row.owner_username || null, duration: row.duration_seconds, icon: 'fa-film' };
+            return { href: watchHref('upload', row.id, row.watch_id), title: row.title, thumb: httpsUrl(row.thumbnail_url), channel: row.owner_username || null, duration: row.duration_seconds, icon: 'film' };
         }
         let info = null;
         try {
@@ -1100,7 +1100,7 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
             thumb: httpsUrl(info.thumbnail_url),
             channel: info.username || info.display_name || null,
             duration: info.duration_seconds != null ? info.duration_seconds : info.duration,
-            icon: kind === 'clip' ? 'fa-scissors' : 'fa-video',
+            icon: kind === 'clip' ? 'scissors' : 'video',
         };
     }
 
@@ -1153,7 +1153,7 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
         const info = await itemInfo(next.kind, nextId);
         const label = (info && info.title) || `${next.kind === 'vod' ? 'VOD' : next.kind === 'clip' ? 'Clip' : 'Video'} ${nextId}`;
         return {
-            html: html`<section class="ovv-panel ovv-upnext" aria-label="Up next"><p class="ovv-upnext-in">Up next in <a href="/playlists/${pl.id}">${pl.title}</a></p><a class="ovv-upnext-link" href="${nextUrl}"><i class="fa-solid fa-play" aria-hidden="true"></i> <span>${label}</span></a><p class="ovv-fine">Plays on its own when this one ends.</p></section>`,
+            html: html`<section class="ovv-panel ovv-upnext" aria-label="Up next"><p class="ovv-upnext-in">Up next in <a href="/playlists/${pl.id}">${pl.title}</a></p><a class="ovv-upnext-link" href="${nextUrl}"><i class="ovg-fill" data-ov-icon="play" aria-hidden="true"></i> <span>${label}</span></a><p class="ovv-fine">Plays on its own when this one ends.</p></section>`,
             nextUrl,
         };
     }
@@ -1169,7 +1169,7 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
         return html`<li class="ovv-playlist-row">
 <div class="ovv-playlist-main"><a class="ovv-playlist-title" href="/playlists/${p.id}">${p.title}</a>
 <span class="ovv-meta">${visibilityLabel(p.visibility)} · ${n} item${n === 1 ? '' : 's'} · updated ${dateLabel(p.updated_at)}</span></div>
-<details class="ovv-pl-edit"><summary class="ovv-btn"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit</summary>
+<details class="ovv-pl-edit"><summary class="ovv-btn"><i class="ovg-fill" data-ov-icon="pencil" aria-hidden="true"></i> Edit</summary>
 <div class="ovv-playlist-actions">
 <form class="ovv-inline" method="post" action="/playlists/${p.id}/rename"><input name="title" type="text" maxlength="${playlists.TITLE_MAX}" value="${p.title}" aria-label="New title" required> <button class="ovv-btn" type="submit">Rename</button></form>
 <form class="ovv-inline" method="post" action="/playlists/${p.id}/visibility"><select name="visibility" aria-label="Visibility">${playlists.VISIBILITIES.map((v) => html`<option value="${v}"${v === p.visibility ? ' selected' : ''}>${visibilityLabel(v)}</option>`)}</select> <button class="ovv-btn" type="submit">Change</button></form>
@@ -1341,10 +1341,10 @@ ${feedKind === 'following' ? html`<p class="muted">See updates from followed cha
                 seo.jsonLd.breadcrumbs([{ name: 'OpenVibe.Video', url: `${base}/` }, { name: cat.label, url: `${base}/category/${slug}` }]),
                 seo.jsonLd.itemList(title, items.map((it) => ({ name: it.title || 'Stream recording', url: `${base}${it.watch_id ? `/watch?v=${it.watch_id}` : `/v/${it.id}`}` })), { url: `${base}/category/${slug}` }),
             ],
-            body: html`<header class="ovv-channel-head"><span class="ovv-avatar ovv-avatar--big" aria-hidden="true"><i class="fa-solid ${cat.icon}"></i></span><div><h1>${cat.label}</h1><p class="ovv-meta">${cat.blurb}${count ? ` ${n(count.count)} ${count.count === 1 ? 'recording' : 'recordings'}.` : ''}</p></div></header>
+            body: html`<header class="ovv-channel-head"><span class="ovv-avatar ovv-avatar--big" aria-hidden="true"><i class="ovg-fill" data-ov-icon="${cat.icon}"></i></span><div><h1>${cat.label}</h1><p class="ovv-meta">${cat.blurb}${count ? ` ${n(count.count)} ${count.count === 1 ? 'recording' : 'recordings'}.` : ''}</p></div></header>
 <section class="ovv-section" aria-label="${title}">${grid(items.map((it) => feedCard(it)), { title: 'Nothing in this category yet', text: 'Recordings of this kind appear here when a streamer goes live.', action: { href: '/', label: 'See the latest recordings', icon: 'play' } })}</section>
 ${pageOf.next ? html`<p class="ovv-pagination"><a class="ovv-btn" href="/category/${slug}?after=${encodeURIComponent(pageOf.next)}" rel="next">Older recordings</a></p>` : ''}
-${others.length ? html`<section class="ovv-section" aria-labelledby="h-other"><h2 id="h-other">Other categories</h2><ul class="ovv-shelf" role="list">${others.map((c) => html`<li><a class="ovv-shelf-tile" href="/category/${c.slug}"><i class="fa-solid ${c.icon}" aria-hidden="true"></i><span class="ovv-shelf-name">${c.label}</span><span class="ovv-shelf-count">${n(c.count)} ${c.count === 1 ? 'recording' : 'recordings'}</span></a></li>`)}</ul></section>` : ''}`,
+${others.length ? html`<section class="ovv-section" aria-labelledby="h-other"><h2 id="h-other">Other categories</h2><ul class="ovv-shelf" role="list">${others.map((c) => html`<li><a class="ovv-shelf-tile" href="/category/${c.slug}"><i class="ovg-fill" data-ov-icon="${c.icon}" aria-hidden="true"></i><span class="ovv-shelf-name">${c.label}</span><span class="ovv-shelf-count">${n(c.count)} ${c.count === 1 ? 'recording' : 'recordings'}</span></a></li>`)}</ul></section>` : ''}`,
         });
     });
 
@@ -1352,7 +1352,7 @@ ${others.length ? html`<section class="ovv-section" aria-labelledby="h-other"><h
     // Without ?type the three kinds show their best eight each; ?type=vod|clip|video pages one kind (24 at a time, Search's
     // cursor), and recordings filter by category. Results are noindex; the empty search page is not.
     const SEARCH_KINDS = [['vod', 'Stream recordings'], ['clip', 'Clips'], ['video', 'Uploads']];
-    const searchForm = (q = '') => html`<form class="ovv-search" method="get" action="/search" role="search"><label class="sr-only" for="ovv-q">Search videos</label><input id="ovv-q" name="q" type="search" value="${q}" maxlength="200" placeholder="Search recordings, clips and uploads" required><button class="ovv-btn ovv-btn--primary" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> Search</button></form>`;
+    const searchForm = (q = '') => html`<form class="ovv-search" method="get" action="/search" role="search"><label class="sr-only" for="ovv-q">Search videos</label><input id="ovv-q" name="q" type="search" value="${q}" maxlength="200" placeholder="Search recordings, clips and uploads" required><button class="ovv-btn ovv-btn--primary" type="submit"><i class="ovg-fill" data-ov-icon="search" aria-hidden="true"></i> Search</button></form>`;
     async function searchCards(kind, items) {
         if (kind === 'video') {
             const rows = await Promise.all(items.map((x) => settle(ctx.videoUploads.byId(x.id))));
@@ -1374,7 +1374,7 @@ ${others.length ? html`<section class="ovv-section" aria-labelledby="h-other"><h
                 index: true, title: 'Search OpenVibe.Video', description: 'Search stream recordings and clips from OpenVibe.Live and videos people uploaded to OpenVibe.Video.',
                 crumbs: [{ label: 'Home', href: '/' }, { label: 'Search' }],
                 body: html`<h1>Search videos</h1>${searchForm()}
-${categories.length ? html`<section class="ovv-section" aria-labelledby="h-cats"><h2 id="h-cats">Or browse by category</h2><ul class="ovv-shelf" role="list">${categories.map((c) => html`<li><a class="ovv-shelf-tile" href="/category/${c.slug}"><i class="fa-solid ${c.icon}" aria-hidden="true"></i><span class="ovv-shelf-name">${c.label}</span><span class="ovv-shelf-count">${n(c.count)} ${c.count === 1 ? 'recording' : 'recordings'}</span></a></li>`)}</ul></section>` : ''}`,
+${categories.length ? html`<section class="ovv-section" aria-labelledby="h-cats"><h2 id="h-cats">Or browse by category</h2><ul class="ovv-shelf" role="list">${categories.map((c) => html`<li><a class="ovv-shelf-tile" href="/category/${c.slug}"><i class="ovg-fill" data-ov-icon="${c.icon}" aria-hidden="true"></i><span class="ovv-shelf-name">${c.label}</span><span class="ovv-shelf-count">${n(c.count)} ${c.count === 1 ? 'recording' : 'recordings'}</span></a></li>`)}</ul></section>` : ''}`,
             });
         }
         const kinds = kind ? [kind] : SEARCH_KINDS.map(([k]) => k);
@@ -1563,13 +1563,13 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
         // ("Part 1 (this one) · Part 2 · Part 1", 2026-10-27).
         const seenParts = new Set();
         const parts = vod.part && hist && hist !== fail && Array.isArray(hist.parts) ? hist.parts.filter((p) => p && live.isId(p.vod_id) && !seenParts.has(String(p.vod_id)) && seenParts.add(String(p.vod_id))) : [];
-        const partNav = parts.length > 1 ? html`<p class="ovv-about-parts"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> The stream was recorded in ${parts.length} parts: ${parts.map((p, i) => [i ? ' · ' : '', String(p.vod_id) === id ? html`<b>Part ${i + 1} (this one)</b>` : html`<a href="/v/${p.vod_id}">Part ${i + 1}</a>`])}</p>` : '';
+        const partNav = parts.length > 1 ? html`<p class="ovv-about-parts"><i class="ovg-fill" data-ov-icon="layers" aria-hidden="true"></i> The stream was recorded in ${parts.length} parts: ${parts.map((p, i) => [i ? ' · ' : '', String(p.vod_id) === id ? html`<b>Part ${i + 1} (this one)</b>` : html`<a href="/v/${p.vod_id}">Part ${i + 1}</a>`])}</p>` : '';
         const ar = hist && hist !== fail ? startAspect(hist, vod) : null;
         const shapeAttr = ar ? html` style="--ovv-ar: ${String(ar)}" data-ovv-ar="${String(ar)}"` : '';
         // The More menu: where else this lives, and the owner's tools.
         const moreItems = [];
-        if (channelName) moreItems.push({ href: liveChannel, icon: 'fa-solid fa-tower-broadcast', label: 'Channel on OpenVibe.Live', hint: 'Live streams and chat' });
-        if (threadUrl) moreItems.push({ href: threadUrl, icon: 'fa-regular fa-comments', label: 'Discuss on OpenVibe.Community' });
+        if (channelName) moreItems.push({ href: liveChannel, icon: 'live', label: 'Channel on OpenVibe.Live', hint: 'Live streams and chat' });
+        if (threadUrl) moreItems.push({ href: threadUrl, icon: 'chat', label: 'Discuss on OpenVibe.Community' });
         // Chat replay, chapters and the transcript, beside the player.
         const side = companion({ kind: 'vod', id, watchId: vod.watch_id || null, chat: chatRows, chapters: mems, transcript: segs, long: Number(vod.duration_seconds) >= 3600 });
         const likes = await likesOf(req, 'vod', id);
@@ -1600,7 +1600,7 @@ ${labelsUi.chips(labelsUi.inForce(vod))}
 ${channelRow(vod.username, channelName, vod.follower_count)}
 <div class="ovv-actions-shell"><div class="ovv-actions">${likeButton(likes, 'vod', id)}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: vod.title || 'Stream recording', text: about, image: httpsUrl(vod.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${saveForm}${downloadMenu({ kind: 'vod', id, item: vod, has: { transcript: segs.length, chat: chatRows ? chatRows.rows.length + chatRows.leftOut : 0, chapters: mems.length } })}${partyLink(watchPath, vod.title || 'Stream recording', vod)}${raw(askAgent({ text: `About the video “${vod.title || 'Stream recording'}” on OpenVibe.Video (${base}${watchPath}): ` }))}${ownOnly ? '' : clipAction(req, id, vod)}${watchMore({ path: watchPath, manageable, kind: 'vod', id, items: moreItems })}</div></div>
 </div>
-${vod.is_recording ? html`<p class="ovv-recording" role="status"><i class="fa-solid fa-circle" aria-hidden="true"></i> This recording is still in progress. <a href="${liveChannel}">Watch the live channel</a>.</p>` : ''}
+${vod.is_recording ? html`<p class="ovv-recording" role="status"><i class="ovg-fill" data-ov-icon="circle" aria-hidden="true"></i> This recording is still in progress. <a href="${liveChannel}">Watch the live channel</a>.</p>` : ''}
 </div>
 </div>
 ${manageable ? ownerPanel('vod', id, vod) : ''}
@@ -1681,9 +1681,9 @@ ${more || ''}
         const clipAt = clip.start_time != null ? clock(Number(clip.start_time)) : null;
         const clipCredit = !clip.vod_id ? ''
             : sourceVod === 'down'
-                ? html`<p class="ovv-source"><i class="fa-solid fa-film" aria-hidden="true"></i> Cut from a stream recording. OpenVibe.Live did not answer just now, so its title is not shown.</p>`
+                ? html`<p class="ovv-source"><i class="ovg-fill" data-ov-icon="film" aria-hidden="true"></i> Cut from a stream recording. OpenVibe.Live did not answer just now, so its title is not shown.</p>`
                 : !sourceVod
-                    ? html`<p class="ovv-source"><i class="fa-solid fa-film" aria-hidden="true"></i> Cut from a stream recording that is not public any more.</p>`
+                    ? html`<p class="ovv-source"><i class="ovg-fill" data-ov-icon="film" aria-hidden="true"></i> Cut from a stream recording that is not public any more.</p>`
                     : html`<p class="ovv-source">Cut from <a href="${fullRecording}">${sourceTitle || 'the recording it came from'}</a>${clipAt ? html` at ${clipAt}` : ''}${sourceWho ? html` · ${sourceWho}'s stream` : ''}</p>`;
         const facts = watchFacts(clip.view_count, clip.created_at, clip.duration_seconds != null ? clip.duration_seconds : clip.duration, clip.visibility);
 
@@ -1692,8 +1692,8 @@ ${more || ''}
         const hlsAttr = hlsAttrs(clip);
         const segs = transcriptSegments(clip);
         const moreItems = [];
-        if (clip.source_streamer_username) moreItems.push({ href: `${livePublic}/@${clip.source_streamer_username}`, icon: 'fa-solid fa-tower-broadcast', label: 'Channel on OpenVibe.Live', hint: 'Live streams and chat' });
-        if (threadUrl) moreItems.push({ href: threadUrl, icon: 'fa-regular fa-comments', label: 'Discuss on OpenVibe.Community' });
+        if (clip.source_streamer_username) moreItems.push({ href: `${livePublic}/@${clip.source_streamer_username}`, icon: 'live', label: 'Channel on OpenVibe.Live', hint: 'Live streams and chat' });
+        if (threadUrl) moreItems.push({ href: threadUrl, icon: 'chat', label: 'Discuss on OpenVibe.Community' });
         // A clip's transcript, when it has one, beside the player as on a recording.
         const side = companion({ kind: 'clip', id, watchId: clip.watch_id || null, chat: null, chapters: [], transcript: segs, long: false });
         const likes = await likesOf(req, 'clip', id);
@@ -1717,14 +1717,14 @@ ${more || ''}
 <div class="ovv-col ovv-col--main">
 <div class="ovv-stage">
 ${savedNotice(req)}${req.query.made === '1' ? notice('Your clip was made. It is credited to you on OpenVibe.Live and here.', 'ok') : ''}${ownOnly ? notice('Private: only you (and OpenVibe staff) can see this clip.', 'info') : ''}
-${cutting ? html`<div class="ovv-player-wrap ovv-cutting" role="status" data-ovv-reload="8"><p><i class="fa-solid fa-scissors" aria-hidden="true"></i> This clip is being cut. It plays here in a moment; the page checks again by itself.</p></div>`
+${cutting ? html`<div class="ovv-player-wrap ovv-cutting" role="status" data-ovv-reload="8"><p><i class="ovg-fill" data-ov-icon="scissors" aria-hidden="true"></i> This clip is being cut. It plays here in a moment; the page checks again by itself.</p></div>`
         : html`<div class="ovv-player-wrap"${labelsUi.attrs(labelsUi.inForce(clip), { owner: clip.username, opened: true })}><video class="ovv-player" data-ov-player${miniAttr(clip.title || 'Clip', clip.source_streamer_display_name || clip.display_name || clip.username, watchPath, fileOf(clip))} controls preload="metadata" playsinline${avatarAttr(clip.username, config.networkUrl)}${posterAttr(httpsUrl(clip.thumbnail_url))} src="${fileOf(clip) || ''}" data-ovv-video${nextAttr}${viewAttr}${hlsAttr}></video></div>`}
 <div class="ovv-head">
 ${titleLine(aiClip ? 'AI clip' : 'Clip', clip.title || 'Clip')}
 ${labelsUi.chips(labelsUi.inForce(clip))}
 <div class="ovv-head-row">
 ${channelRow(clip.source_streamer_username || clip.username, clip.source_streamer_display_name || clip.display_name || clip.username, clip.follower_count)}
-<div class="ovv-actions-shell"><div class="ovv-actions">${likeButton(likes, 'clip', id)}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: clip.title || 'Clip', text: clip.ai_overview || attribution, image: httpsUrl(clip.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${saveForm}${cutting ? '' : downloadMenu({ kind: 'clip', id, item: clip, has: { transcript: segs.length } })}${cutting ? '' : partyLink(watchPath, clip.title || 'Clip', clip)}${raw(askAgent({ text: `About the clip “${clip.title || 'Clip'}” on OpenVibe.Video (${base}${watchPath}): ` }))}${fullRecording ? html`<a class="ovv-btn" href="${fullRecording}" title="Watch the recording it was cut from, from this moment"><i class="fa-solid fa-film" aria-hidden="true"></i> Full recording</a>` : ''}${watchMore({ path: watchPath, manageable, kind: 'clip', id, items: moreItems })}</div></div>
+<div class="ovv-actions-shell"><div class="ovv-actions">${likeButton(likes, 'clip', id)}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: clip.title || 'Clip', text: clip.ai_overview || attribution, image: httpsUrl(clip.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${saveForm}${cutting ? '' : downloadMenu({ kind: 'clip', id, item: clip, has: { transcript: segs.length } })}${cutting ? '' : partyLink(watchPath, clip.title || 'Clip', clip)}${raw(askAgent({ text: `About the clip “${clip.title || 'Clip'}” on OpenVibe.Video (${base}${watchPath}): ` }))}${fullRecording ? html`<a class="ovv-btn" href="${fullRecording}" title="Watch the recording it was cut from, from this moment"><i class="ovg-fill" data-ov-icon="film" aria-hidden="true"></i> Full recording</a>` : ''}${watchMore({ path: watchPath, manageable, kind: 'clip', id, items: moreItems })}</div></div>
 </div>
 </div>
 </div>
@@ -1892,7 +1892,7 @@ ${more || ''}
             title: `@${username}`,
             styles: ['kit.css'],
             description: `Videos, recordings and clips from @${username} on OpenVibe.Video.`,
-            body: html`${req.query.deleted === '1' ? notice('Deleted on OpenVibe.Live.', 'ok') : ''}<header class="ovv-channel-head"><span class="ovv-avatar ovv-avatar--big" aria-hidden="true">${username.slice(0, 1).toUpperCase()}<img src="${config.networkUrl}/avatar/${username}" alt="" loading="lazy"></span><div><h1>@${username}</h1><p class="ovv-meta">Recordings and clips from this channel's streams on OpenVibe.Live.</p>${raw(shareButton({ url: `${base}/@${username}`, title: `@${username}`, text: `Videos, recordings and clips from @${username} on OpenVibe.Video.`, image: `${config.networkUrl}/avatar/${username}` }))}</div><a class="ovv-btn" href="${livePublic}/@${username}"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Channel on OpenVibe.Live</a></header>
+            body: html`${req.query.deleted === '1' ? notice('Deleted on OpenVibe.Live.', 'ok') : ''}<header class="ovv-channel-head"><span class="ovv-avatar ovv-avatar--big" aria-hidden="true">${username.slice(0, 1).toUpperCase()}<img src="${config.networkUrl}/avatar/${username}" alt="" loading="lazy"></span><div><h1>@${username}</h1><p class="ovv-meta">Recordings and clips from this channel's streams on OpenVibe.Live.</p>${raw(shareButton({ url: `${base}/@${username}`, title: `@${username}`, text: `Videos, recordings and clips from @${username} on OpenVibe.Video.`, image: `${config.networkUrl}/avatar/${username}` }))}</div><a class="ovv-btn" href="${livePublic}/@${username}"><i class="ovg-fill" data-ov-icon="live" aria-hidden="true"></i> Channel on OpenVibe.Live</a></header>
 ${uploaded.length ? html`<section class="ovv-section" aria-labelledby="h-uploads"><h2 id="h-uploads">Videos</h2>${grid(uploaded.map(uploadCard))}</section>` : ''}
 <section class="ovv-section" aria-labelledby="h-vods"><h2 id="h-vods">Recordings</h2>${grid(vods.map(vodCard), { title: 'No recordings yet', text: 'Recordings of this channel’s streams appear here.' })}${prevLink || nextLink ? html`<nav class="ovv-pagination" aria-label="Pages">${prevLink ? html`<a href="${prevLink}">← Newer</a>` : ''}${nextLink ? html`<a href="${nextLink}">Older →</a>` : ''}</nav>` : ''}</section>
 ${clips.length ? html`<section class="ovv-section" aria-labelledby="h-clips"><h2 id="h-clips">Clips</h2>${grid(clips.map(clipCard), { title: 'No clips yet', text: 'Clips cut from this channel appear here.' })}</section>` : ''}
@@ -1910,7 +1910,7 @@ ${lists.length ? html`<section class="ovv-section" aria-labelledby="h-lists"><h2
             crumbs: [{ label: 'Home', href: '/' }, { label: 'Playlists' }],
             body: html`<h1>Your playlists</h1>
 <section class="ovv-section" aria-labelledby="h-create"><h2 id="h-create">New playlist</h2>
-<form class="ovv-save-form ovv-panel" method="post" action="/playlists"><label for="new-title">Title</label> <input id="new-title" name="title" type="text" maxlength="${playlists.TITLE_MAX}" required placeholder="Watch later"> <label for="new-vis">Who can see it</label> <select id="new-vis" name="visibility">${playlists.VISIBILITIES.map((v) => html`<option value="${v}"${v === 'private' ? ' selected' : ''}>${visibilityLabel(v)}</option>`)}</select> <button class="ovv-btn ovv-btn--primary" type="submit"><i class="fa-solid fa-plus" aria-hidden="true"></i> Create</button></form></section>
+<form class="ovv-save-form ovv-panel" method="post" action="/playlists"><label for="new-title">Title</label> <input id="new-title" name="title" type="text" maxlength="${playlists.TITLE_MAX}" required placeholder="Watch later"> <label for="new-vis">Who can see it</label> <select id="new-vis" name="visibility">${playlists.VISIBILITIES.map((v) => html`<option value="${v}"${v === 'private' ? ' selected' : ''}>${visibilityLabel(v)}</option>`)}</select> <button class="ovv-btn ovv-btn--primary" type="submit"><i class="ovg-fill" data-ov-icon="plus" aria-hidden="true"></i> Create</button></form></section>
 <section class="ovv-section" aria-labelledby="h-lists"><h2 id="h-lists">Playlists</h2>
 ${rows.length ? html`<ul class="ovv-playlist-list">${rows.map(playlistRow)}</ul>` : raw(kit.empty({ icon: 'list', title: 'No playlists yet', text: 'Save a recording or clip from its watch page.', action: { href: '/', label: 'Find something to watch', icon: 'play' } }))}</section>`,
         });
@@ -1994,7 +1994,7 @@ ${rows.length ? html`<ul class="ovv-playlist-list">${rows.map(playlistRow)}</ul>
             const { href, thumb, title, channel, duration: dur } = info;
             listLd.push({ '@type': 'ListItem', position: listLd.length + 1, url: `${base}${href}`, name: String(title).slice(0, 110) });
             rows.push(html`<li class="ovv-item-row">
-<a class="ovv-item-media" href="${href}" tabindex="-1" aria-hidden="true">${thumb ? thumbImg(thumb, '132px') : html`<span class="ovv-card-placeholder"><i class="fa-solid ${info.icon}"></i></span>`}${dur != null ? html`<span class="ovv-dur">${durationLabel(dur)}</span>` : ''}</a>
+<a class="ovv-item-media" href="${href}" tabindex="-1" aria-hidden="true">${thumb ? thumbImg(thumb, '132px') : html`<span class="ovv-card-placeholder"><i class="ovg-fill" data-ov-icon="${info.icon}"></i></span>`}${dur != null ? html`<span class="ovv-dur">${durationLabel(dur)}</span>` : ''}</a>
 <div class="ovv-playlist-main"><a class="ovv-item-title" href="${href}">${title}</a>${channel ? html`<span class="ovv-meta">@${channel}</span>` : ''}</div>
 ${isOwner ? itemControls(pl.id, it) : ''}
 </li>`);
@@ -2015,7 +2015,7 @@ ${isOwner ? itemControls(pl.id, it) : ''}
 ${pl.description ? html`<p class="ovv-lede">${pl.description}</p>` : ''}
 <p class="ovv-meta">${visibilityLabel(pl.visibility)} · ${items.length} item${items.length === 1 ? '' : 's'} · updated ${dateLabel(pl.updated_at)}</p>
 <p class="ovv-meta">Curated by ${ownerBy}</p>
-${playAllHref ? html`<p><a class="ovv-btn ovv-btn--primary" href="${playAllHref}"><i class="fa-solid fa-play" aria-hidden="true"></i> Play all</a></p>` : ''}</header>
+${playAllHref ? html`<p><a class="ovv-btn ovv-btn--primary" href="${playAllHref}"><i class="ovg-fill" data-ov-icon="play" aria-hidden="true"></i> Play all</a></p>` : ''}</header>
 ${items.length ? html`<ol class="ovv-item-list">${rows}</ol>` : html`<p class="muted">This playlist is empty.</p>`}
 ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down buttons, or remove them. <a href="/playlists">Back to your playlists</a>.</p>` : ''}`,
         });

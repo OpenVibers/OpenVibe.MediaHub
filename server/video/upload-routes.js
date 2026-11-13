@@ -201,7 +201,7 @@ function mountUploadPages(r, h) {
         const done = Number(row.parts_received) * Number(row.part_size);
         const total = Number(row.size_bytes);
         return html`<li class="ovv-myrow" data-state="${state}">
-<a class="ovv-mythumb" href="${watch}" tabindex="-1" aria-hidden="true">${row.thumbnail_url ? html`<img src="${row.thumbnail_url}" alt="" loading="lazy">` : html`<i class="fa-solid fa-film"></i>`}</a>
+<a class="ovv-mythumb" href="${watch}" tabindex="-1" aria-hidden="true">${row.thumbnail_url ? html`<img src="${row.thumbnail_url}" alt="" loading="lazy">` : html`<i class="ovg-fill" data-ov-icon="film"></i>`}</a>
 <div class="ovv-mybody">
 <div class="ovv-mytitleline"><a class="ovv-mytitle" href="${watch}">${row.title}</a><span class="ovv-mystate">${statusText(row)}</span></div>
 <p class="ovv-mymeta">${meta}</p>
@@ -312,9 +312,9 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
 <div class="ovv-my-head"><p class="ovv-lede">${fresh.length
         ? `${fresh.length} video${fresh.length === 1 ? '' : 's'}, newest first. A processing video finishes in the background, so you can close the page.`
         : 'Everything you upload to OpenVibe.Video appears here, with its state and who can see it.'}</p>
-<a class="ovv-btn ovv-btn--primary" href="/upload"><i class="fa-solid fa-upload" aria-hidden="true"></i> Upload a video</a></div>
+<a class="ovv-btn ovv-btn--primary" href="/upload"><i class="ovg-fill" data-ov-icon="upload" aria-hidden="true"></i> Upload a video</a></div>
 <form class="ovv-panel" method="post" action="/me/videos/share-default"><label>New videos <select name="audience">${audienceOptions(defaultAudience)}</select></label> <label><input type="checkbox" name="apply" value="1"> Apply to all my existing videos</label> <button class="ovv-btn" type="submit">Save default</button></form>
-${fresh.length ? html`<ul class="ovv-mylist">${fresh.map(myVideoRow)}</ul>` : html`<div class="ovv-my-empty"><i class="fa-solid fa-film" aria-hidden="true"></i><h2>No videos yet</h2><p>Choose a video and the upload starts while you fill in the title.</p><a class="ovv-btn ovv-btn--primary" href="/upload">Upload your first video</a></div>`}
+${fresh.length ? html`<ul class="ovv-mylist">${fresh.map(myVideoRow)}</ul>` : html`<div class="ovv-my-empty"><i class="ovg-fill" data-ov-icon="film" aria-hidden="true"></i><h2>No videos yet</h2><p>Choose a video and the upload starts while you fill in the title.</p><a class="ovv-btn ovv-btn--primary" href="/upload">Upload your first video</a></div>`}
 <dialog class="ovv-rules" data-delete-sheet aria-label="Delete this video">
 <h2>Delete this video?</h2>
 <p data-delete-message>Its file is removed from OpenVibe.Media too. This cannot be undone.</p>
@@ -505,7 +505,7 @@ ${what}
 ${channel ? html`<a class="ovv-avatar" href="/@${channel}" aria-hidden="true" tabindex="-1">${channel.slice(0, 1).toUpperCase()}${/^[A-Za-z0-9_]{1,32}$/.test(channel) ? html`<img src="${ctx.config.networkUrl}/avatar/${channel}" alt="" loading="lazy">` : ''}</a>` : ''}
 <div class="ovv-byline-text">${channel ? html`<a class="ovv-channel-name" href="/@${channel}">@${channel}</a>` : ''}
 </div>
-<div class="ovv-byline-actions">${saveForm}${ready && vod && fileOf(vod) ? html`<a class="ovv-btn" href="https://openvibe.party/new?media=${encodeURIComponent(fileOf(vod))}&source_url=${encodeURIComponent(`${String(ctx.config.video.url).replace(/\/+$/, '')}${watchPath}`)}&title=${encodeURIComponent(String(row.title || 'Watch party'))}"><i class="fa-solid fa-users" aria-hidden="true"></i> Watch together</a>` : ''}${own && ready && row.state === 'active' && studioVideoEdit ? html`<a class="ovk-btn ovk-btn--quiet" href="${studioEditUrl(row)}">Edit in Studio</a>` : ''}${raw(shareButton({ cls: 'ovv-btn', url: `${ctx.config.video.url}${watchPath}`, title: row.title, text: about, image: thumb || '', timeFrom: ready && vod ? '.ovv-player' : null, kind: 'video', id: row.id }))}${raw(askAgent({ text: `About the video “${row.title}” on OpenVibe.Video (${ctx.config.video.url}${watchPath}): ` }))}</div>
+<div class="ovv-byline-actions">${saveForm}${ready && vod && fileOf(vod) ? html`<a class="ovv-btn" href="https://openvibe.party/new?media=${encodeURIComponent(fileOf(vod))}&source_url=${encodeURIComponent(`${String(ctx.config.video.url).replace(/\/+$/, '')}${watchPath}`)}&title=${encodeURIComponent(String(row.title || 'Watch party'))}"><i class="ovg-fill" data-ov-icon="members" aria-hidden="true"></i> Watch together</a>` : ''}${own && ready && row.state === 'active' && studioVideoEdit ? html`<a class="ovk-btn ovk-btn--quiet" href="${studioEditUrl(row)}">Edit in Studio</a>` : ''}${raw(shareButton({ cls: 'ovv-btn', url: `${ctx.config.video.url}${watchPath}`, title: row.title, text: about, image: thumb || '', timeFrom: ready && vod ? '.ovv-player' : null, kind: 'video', id: row.id }))}${raw(askAgent({ text: `About the video “${row.title}” on OpenVibe.Video (${ctx.config.video.url}${watchPath}): ` }))}</div>
 </div>
 ${row.description ? html`<section class="ovv-panel ovv-description"><p>${row.description}</p></section>` : ''}
 ${aiDone && ai.overview ? html`<section class="ovv-panel" aria-labelledby="h-ai"><h2 id="h-ai">About this video</h2><p>${ai.overview}</p><p class="ovv-fine">Written by AI from the video's sound and pictures (OpenVibe.AI, run on OpenVibe's own servers).</p>
