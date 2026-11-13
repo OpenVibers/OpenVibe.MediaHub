@@ -32,7 +32,7 @@ const { asyncRouter } = require('../http/router');
 const { sameOrigin } = require('../http/principal');
 const { boundaryOf, readFormData } = require('../http/form-upload');
 const { formatBytes } = require('../drive/rules');
-const { html, raw, notice, time, shareButton } = require('../render/html');
+const { html, raw, esc, notice, time, shareButton } = require('../render/html');
 const labelsUi = require('../render/labels-ui');
 const { ACCESS_COOKIE, REFRESH_COOKIE } = require('../auth/sso');
 const { send, assetVersion, SITE_NAME, NAV_LINKS } = require('./layout');
@@ -49,6 +49,20 @@ const glyphs = require('openvibe-shared/glyphs');
 /** A line glyph from Shared's set, decorative (its button says what it does). */
 const glyph = (name, size = 16) => raw(`<span class="ovp-glyph" aria-hidden="true">${glyphs.svg(name, { size })}</span>`);
 const showcase = require('openvibe-shared/showcase');
+
+/**
+ * What the product does, as the shared showcase's feature grid, with every icon drawn from the glyph registry on the
+ * server. It used to be showcase.features() with bare names ('link', 'shield'), which the shared kit treats as Font
+ * Awesome classes: the placeholder it drew had no font and no glyph name for the browser drop-in to map, so the slot
+ * stayed an empty 40 px square (the owner, 11-13). Names here are registry names, rendered as SVG in the HTML.
+ */
+function featureCards({ title, lede, items }) {
+    const slug = String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'section';
+    return `<section class="sc-sec" aria-labelledby="sc-${slug}"><h2 id="sc-${slug}"><span class="sc-h-ic" aria-hidden="true">${glyphs.svg('grid', { size: 18 })}</span><span>${esc(title)}</span></h2>${lede ? `<p class="sc-lede">${esc(lede)}</p>` : ''}<div class="sc-grid">${items.map((f) => {
+        const inner = `<span class="sc-ic" aria-hidden="true">${glyphs.svg(f.icon, { size: 22 })}</span><span><b>${esc(f.title)}</b>${f.text ? `<small>${esc(f.text)}</small>` : ''}</span>`;
+        return f.href ? `<a class="sc-card" href="${esc(f.href)}">${inner}</a>` : `<div class="sc-card">${inner}</div>`;
+    }).join('')}</div></section>`;
+}
 const { PATHS: POLICY_PATHS, policyPage } = require('./policy');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
@@ -233,7 +247,7 @@ function createPicsRoutes(ctx) {
 <span class="ovp-drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="40" height="40"><path fill="currentColor" d="M19 5v14H5V5h14m0-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm-4.86 8.86-3 3.87L9 13.14 6 17h12l-3.86-5.14Z"/></svg></span>
 <p class="ovp-drop-title">Drop pictures here, paste one, or choose files</p>
 <p class="ovp-drop-hint">JPEG, PNG, GIF, WebP or AVIF, up to ${formatBytes(max)} each. Location and camera details are removed.</p>
-<label class="ovp-btn ovp-btn--primary ovp-file" data-ov-guide="pics.upload"><input type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif" required data-pics-input> Choose a picture</label>
+<label class="ovp-btn ovp-btn--primary ovp-file" data-ov-guide="pics.upload"><input type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif" required data-pics-input>${glyph('upload', 18)}<span>Choose a picture</span></label>
 <div class="ovp-drop-fields"><label for="up-title">Title (optional)</label><input id="up-title" name="title" type="text" maxlength="120" placeholder="What is it?"></div>
 ${signedIn(req) ? html`<label>Who can open it <select name="audience">${audienceOptions(defaultAudience)}</select></label>` : ''}
 <button class="ovp-btn ovp-btn--primary ovp-nojs-submit" type="submit">Upload</button>
@@ -304,7 +318,7 @@ ${raw(showcase.steps({
         { title: 'Use it anywhere', text: 'Post it in a forum or a chat, embed it on your site, or put it in an album. Delete it whenever you like.' },
     ],
 }))}
-${raw(showcase.features({
+${raw(featureCards({
     title: 'What you get',
     items: [
         { icon: 'link', title: 'Links that work everywhere', text: 'A page to share, a direct link for an img tag, and Markdown, BBCode and HTML ready to copy.' },
@@ -315,7 +329,7 @@ ${raw(showcase.features({
         { icon: 'text', title: 'Alt text', text: 'Say what a picture shows for people who cannot see it, or let AI draft it when you ask. It goes into every embed snippet.' },
     ],
 }))}
-${raw(showcase.features({
+${raw(featureCards({
     title: 'The links a picture gets',
     lede: 'Each picture has a short name of eight letters and digits. These are the links it answers at:',
     items: [
@@ -332,7 +346,7 @@ ${raw(showcase.code({
 }))}
 ${raw(showcase.limits({ title: 'What a free account gets', columns: limitColumns, rows: limitRows }))}
 ${raw(showcase.faq({ title: 'Questions', items: faq.map((f) => [f.q, f.a]) }))}
-${raw(showcase.features({
+${raw(featureCards({
     title: 'What we promise, in writing',
     items: [
         { icon: 'shield', title: 'What happens to your picture', href: '/exif', text: 'The metadata — the GPS position, the camera, the time it was taken — is taken out by us before anyone sees the picture, and the file you uploaded is not kept.' },

@@ -72,6 +72,7 @@ function multipart(fields, file) {
             assert.ok(home.text.includes('Share pictures.') && home.text.includes('Sign in to upload'));
             const signedInHome = await t.get('/', { headers: PICS, as: kim });
             assert.ok(signedInHome.text.includes('data-ov-guide="pics.upload"'), 'the signed-in upload page has the guide target');
+            assert.ok(/class="[^"]*\bovp-file\b[^"]*"[\s\S]*?class="ovp-glyph"[\s\S]*?<span>Choose a picture<\/span>/.test(signedInHome.text), 'the upload trigger carries its glyph and its words');
             assert.ok(/<script type="application\/ld\+json">[^<]*"@type":"WebSite"/.test(home.text), 'the home says what the site is (JSON-LD)');
             assert.strictEqual((await t.get('/files', { headers: PICS, as: kim })).status, 404, 'no drive pages on the pics host');
             assert.ok((await t.get('/', { headers: { Host: 'openvibe.download' } })).text.indexOf('Share pictures.') === -1, 'the drive host is not Pics');
@@ -91,6 +92,12 @@ function multipart(fields, file) {
             assert.deepStrictEqual(sections.filter((h) => !home.includes(`${h}</span></h2>`)), [], 'every section is there');
             assert.ok(/<td[^>]*>20 MB<\/td>/.test(home) && /<td[^>]*>200<\/td>/.test(home) && /<td[^>]*>5 GB<\/td>/.test(home), 'the limits are the configured ones');
             assert.ok(home.includes('/api/v1/images \\\n  -H &quot;Authorization: Bearer $OPENVIBE_TOKEN&quot; \\\n'), 'the curl sample keeps its line breaks');
+            // Every "What you get" card draws its glyph on the server: a bare name used to become <i class="fa-solid link">,
+            // an empty <i> with no font and no mapping (the owner's 11-13 phone shot).
+            const iconSlots = (home.match(/<span class="sc-ic"/g) || []).length;
+            assert.strictEqual(iconSlots, 13, 'every feature card has its icon slot');
+            assert.strictEqual((home.match(/<span class="sc-ic"[^>]*><svg /g) || []).length, iconSlots, 'every feature icon is drawn in the HTML');
+            assert.ok(!/class="[^"]*fa-/.test(home), 'no Font Awesome placeholder is left in the home');
             const ld = [...home.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap((m) => [].concat(JSON.parse(m[1])));
             const faq = ld.find((x) => x['@type'] === 'FAQPage');
             // The questions section's own disclosures: the shared footer's "More from OpenVibe" is one too (openvibe-shared 4.15).
