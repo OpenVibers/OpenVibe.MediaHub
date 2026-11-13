@@ -18,15 +18,15 @@ const PAGE = 24;
 
 // Live's stream categories (OpenVibe.Live server/ai/ai-analysis.js CATEGORIES), as people read them, with an icon each.
 const CATEGORIES = {
-    gaming: { label: 'Gaming', icon: 'fa-gamepad', blurb: 'Games played live, from battle royales to sports games.' },
-    irl: { label: 'IRL and chatting', icon: 'fa-comments', blurb: 'Talking, cooking and everyday life, on camera.' },
-    desktop: { label: 'Desktop and tech', icon: 'fa-desktop', blurb: 'Screens shared live: coding, building software and tech.' },
-    robot: { label: 'Robots', icon: 'fa-robot', blurb: 'Robots driven, built and tested live.' },
-    outdoors: { label: 'Outdoors', icon: 'fa-mountain-sun', blurb: 'Streams from outside: walks, hikes and time in the open air.' },
-    travel: { label: 'Travel and driving', icon: 'fa-route', blurb: 'On the road, in the air and out exploring.' },
-    building: { label: 'Making and crafts', icon: 'fa-hammer', blurb: 'Building, fixing and making things by hand.' },
-    music: { label: 'Music', icon: 'fa-music', blurb: 'Playing, mixing and making music live.' },
-    other: { label: 'Everything else', icon: 'fa-shapes', blurb: 'Streams that fit no other shelf.' },
+    gaming: { label: 'Gaming', icon: 'game', blurb: 'Games played live, from battle royales to sports games.' },
+    irl: { label: 'IRL and chatting', icon: 'chat', blurb: 'Talking, cooking and everyday life, on camera.' },
+    desktop: { label: 'Desktop and tech', icon: 'computer', blurb: 'Screens shared live: coding, building software and tech.' },
+    robot: { label: 'Robots', icon: 'robot', blurb: 'Robots driven, built and tested live.' },
+    outdoors: { label: 'Outdoors', icon: 'mountain', blurb: 'Streams from outside: walks, hikes and time in the open air.' },
+    travel: { label: 'Travel and driving', icon: 'route', blurb: 'On the road, in the air and out exploring.' },
+    building: { label: 'Making and crafts', icon: 'hammer', blurb: 'Building, fixing and making things by hand.' },
+    music: { label: 'Music', icon: 'music', blurb: 'Playing, mixing and making music live.' },
+    other: { label: 'Everything else', icon: 'shapes', blurb: 'Streams that fit no other shelf.' },
 };
 const isCategory = (v) => Object.prototype.hasOwnProperty.call(CATEGORIES, String(v || ''));
 const USERNAME_RE = /^[A-Za-z0-9_]{1,32}$/;

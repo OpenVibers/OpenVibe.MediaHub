@@ -26,9 +26,9 @@ const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 // The product's own places: the main ones carry an icon (phones get them as the bottom tab bar), the rest fold into
 // the navbar's More (Shared 4.22). Search is the navbar's magnifier and What shipped is the footer's.
 const NAV = [
-    { label: 'Your files', href: '/files', icon: 'fa-file-lines' },
-    { label: 'Backups', href: '/sync', icon: 'fa-clock-rotate-left' },
-    { label: 'Safety', href: '/safety', icon: 'fa-shield-halved', more: true },
+    { label: 'Your files', href: '/files', icon: 'file' },
+    { label: 'Backups', href: '/sync', icon: 'history' },
+    { label: 'Safety', href: '/safety', icon: 'shield', more: true },
 ];
 
 const hashes = new Map();

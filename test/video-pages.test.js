@@ -625,7 +625,7 @@ function countOccurrences(haystack, needle) {
     // (this site's search first); the page without JavaScript keeps its Search link.
     await check('the navbar names the site\'s places: Videos, Upload, Record, Your videos, and Playlists under More; Search is the magnifier', async () => {
         const home = (await getVideo('/')).text;
-        assert.match(home, /"links":\[\{"label":"Videos","href":"\/","icon":"fa-play","active":true\},\{"label":"Search","href":"\/search","icon":"fa-magnifying-glass","hidden":true,"active":false\},\{"label":"Upload","href":"\/upload","icon":"fa-upload","active":false\},\{"label":"Record","href":"\/record","icon":"fa-video","active":false\},\{"label":"Your videos","href":"\/me\/videos","icon":"fa-photo-film","active":false\},\{"label":"Playlists","href":"\/playlists","icon":"fa-list-check","more":true,"active":false\}\]/);
+        assert.match(home, /"links":\[\{"label":"Videos","href":"\/","icon":"play","active":true\},\{"label":"Search","href":"\/search","icon":"search","hidden":true,"active":false\},\{"label":"Upload","href":"\/upload","icon":"upload","active":false\},\{"label":"Record","href":"\/record","icon":"video","active":false\},\{"label":"Your videos","href":"\/me\/videos","icon":"film","active":false\},\{"label":"Playlists","href":"\/playlists","icon":"steps","more":true,"active":false\}\]/);
         assert.ok(/"appBar":true/.test(home) && /"search":\{"page":"\/search","label":"OpenVibe.Video"\}/.test(home), 'the app bar, and the magnifier offers Video\'s search first');
         assert.ok(home.includes('data-ov-server-nav="true"') && home.includes('href="/playlists"') && home.includes('href="/search"'), 'the no-JS server nav links Playlists and Search too');
     });

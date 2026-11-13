@@ -116,7 +116,7 @@ endpoints `/api/health`, `/api/ready`, `/release.json`, `/metrics` are loopback 
 - Never render a file's bytes into a page; escape every owner-supplied name with the `html` template.
 - CSP: add every external origin to the `helmet` directives in [server/app.js](server/app.js) (Media images, Live HLS,
   Community, Events, Search). Do not widen `frameAncestors`/`objectSrc`. The HLS player is vendored on purpose.
-- **No Font Awesome** — use `openvibe-shared/glyphs` and `openvibe-shared/brands`; [test/no-font-awesome.test.js](test/no-font-awesome.test.js)
+- **No Font Awesome** — use `openvibe-shared/glyphs` and `openvibe-shared/brands`; the no-FA guard
   checks every page and stylesheet, and a new `fa-` name must be one the glyphs/brands draw.
 - **No looks filter** — `openvibe-sdk/no-looks` is gone; AI text may describe people. Only sex acts/porn stay gated
   ([test/no-looks-guard.test.js](test/no-looks-guard.test.js)).
@@ -150,7 +150,7 @@ endpoints `/api/health`, `/api/ready`, `/release.json`, `/metrics` are loopback 
 
 `npm test` runs each file in its own process on PGlite with Network/Media stand-ins. The suite covers drive
 upload/share/download/range, sync keys, agent grants, drops, video upload/record/playlists/AI/cut/trim/search/comments,
-pics upload/gallery/album/labels/policy/sharing/rotate, radio, sharing, account data, host routing, no-Font-Awesome,
+pics upload/gallery/album/labels/policy/sharing/rotate, radio, sharing, account data, host routing, no Font Awesome,
 no-looks, empty states, phone/contrast, secret-leak/redirect and size budgets. Run the narrowest file first, then the
 suite; `npm run test:pg` for the PostgreSQL path. Always `node --check` changed files.
 
