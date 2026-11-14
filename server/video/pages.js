@@ -1176,8 +1176,8 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
     }
 
     const itemControls = (plId, it) => html`<div class="ovv-item-controls">
-<form class="ovv-inline" method="post" action="/playlists/${plId}/items/${it.kind}/${Number(it.item_id)}/up"><button class="ovv-btn" type="submit" aria-label="Move up">↑</button></form>
-<form class="ovv-inline" method="post" action="/playlists/${plId}/items/${it.kind}/${Number(it.item_id)}/down"><button class="ovv-btn" type="submit" aria-label="Move down">↓</button></form>
+<form class="ovv-inline" method="post" action="/playlists/${plId}/items/${it.kind}/${Number(it.item_id)}/up"><button class="ovv-btn" type="submit" aria-label="Move up"><i data-ov-icon="arrow-up" aria-hidden="true"></i></button></form>
+<form class="ovv-inline" method="post" action="/playlists/${plId}/items/${it.kind}/${Number(it.item_id)}/down"><button class="ovv-btn" type="submit" aria-label="Move down"><i data-ov-icon="arrow-down" aria-hidden="true"></i></button></form>
 <form class="ovv-inline" method="post" action="/playlists/${plId}/items/${it.kind}/${Number(it.item_id)}/remove"><button class="ovv-btn" type="submit">Remove</button></form>
 </div>`;
 
@@ -1912,7 +1912,7 @@ ${more || ''}
             description: `Videos, recordings and clips from @${username} on OpenVibe.Video.`,
             body: html`${req.query.deleted === '1' ? notice('Deleted on OpenVibe.Live.', 'ok') : ''}<header class="ovv-channel-head"><span class="ovv-avatar ovv-avatar--big" aria-hidden="true">${username.slice(0, 1).toUpperCase()}<img src="${config.networkUrl}/avatar/${username}" alt="" loading="lazy"></span><div><h1>@${username}</h1><p class="ovv-meta">Recordings and clips from this channel's streams on OpenVibe.Live.</p>${raw(shareButton({ url: `${base}/@${username}`, title: `@${username}`, text: `Videos, recordings and clips from @${username} on OpenVibe.Video.`, image: `${config.networkUrl}/avatar/${username}` }))}</div><a class="ovv-btn" href="${livePublic}/@${username}"><i class="ovg-fill" data-ov-icon="live" aria-hidden="true"></i> Channel on OpenVibe.Live</a></header>
 ${uploaded.length ? html`<section class="ovv-section" aria-labelledby="h-uploads"><h2 id="h-uploads">Videos</h2>${grid(uploaded.map(uploadCard))}</section>` : ''}
-<section class="ovv-section" aria-labelledby="h-vods"><h2 id="h-vods">Recordings</h2>${grid(vods.map(vodCard), { title: 'No recordings yet', text: 'Recordings of this channel’s streams appear here.' })}${prevLink || nextLink ? html`<nav class="ovv-pagination" aria-label="Pages">${prevLink ? html`<a href="${prevLink}">← Newer</a>` : ''}${nextLink ? html`<a href="${nextLink}">Older →</a>` : ''}</nav>` : ''}</section>
+<section class="ovv-section" aria-labelledby="h-vods"><h2 id="h-vods">Recordings</h2>${grid(vods.map(vodCard), { title: 'No recordings yet', text: 'Recordings of this channel’s streams appear here.' })}${prevLink || nextLink ? html`<nav class="ovv-pagination" aria-label="Pages">${prevLink ? html`<a href="${prevLink}"><i data-ov-icon="arrow-left" aria-hidden="true"></i> Newer</a>` : ''}${nextLink ? html`<a href="${nextLink}">Older <i data-ov-icon="arrow-right" aria-hidden="true"></i></a>` : ''}</nav>` : ''}</section>
 ${clips.length ? html`<section class="ovv-section" aria-labelledby="h-clips"><h2 id="h-clips">Clips</h2>${grid(clips.map(clipCard), { title: 'No clips yet', text: 'Clips cut from this channel appear here.' })}</section>` : ''}
 ${lists.length ? html`<section class="ovv-section" aria-labelledby="h-lists"><h2 id="h-lists">Playlists</h2><ul class="ovv-playlist-list">${lists.map(publicPlaylistRow)}</ul></section>` : ''}`,
         });

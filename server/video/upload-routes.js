@@ -221,7 +221,7 @@ ${state === 'processing' || state === 'hidden' || state === 'failed' ? html`<a c
     function cutLine(c) {
         const what = html`<b>${CUT_LABEL[c.mode] || c.mode}</b>`;
         if (c.status === 'done') {
-            const shorter = c.source_seconds && c.kept_seconds ? html` · ${durationLabel(c.source_seconds)} → ${durationLabel(c.kept_seconds)}` : '';
+            const shorter = c.source_seconds && c.kept_seconds ? html` · ${durationLabel(c.source_seconds)} cut to ${durationLabel(c.kept_seconds)}` : '';
             const count = c.removed_count ? html` · ${c.removed_count} pause${c.removed_count === 1 ? '' : 's'} out` : '';
             return html`<li>${what}${shorter}${count} · ${c.result_upload_id ? html`<a href="${c.result_watch_id ? `/watch?v=${c.result_watch_id}` : `/u/${c.result_upload_id}`}">open the copy</a>` : 'done'}</li>`;
         }
