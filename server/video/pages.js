@@ -1622,7 +1622,7 @@ ${vod.is_recording ? html`<p class="ovv-recording" role="status"><i class="ovg-f
 </div>
 </div>
 ${manageable ? ownerPanel('vod', id, vod) : ''}
-${watchAbout({ facts, description: vod.description || about, ai: vod.ai_overview, parts: partNav, chapters: mems, path: watchPath, tags: Array.isArray(vod.tags) ? vod.tags : [], from: channelName ? html`<p class="ovv-about-from">Streamed live on <a href="${liveChannel}">${channelName}'s OpenVibe.Live channel</a>${vod.stream_category ? html`, in ${String(vod.stream_category).charAt(0).toUpperCase()}${String(vod.stream_category).slice(1)}` : ''}.</p>` : '' })}
+${watchAbout({ facts, description: vod.description || about, ai: vod.ai_overview, parts: partNav, chapters: side && mems && mems.length ? [] : mems, path: watchPath, tags: Array.isArray(vod.tags) ? vod.tags : [], from: channelName ? html`<p class="ovv-about-from">Streamed live on <a href="${liveChannel}">${channelName}'s OpenVibe.Live channel</a>${vod.stream_category ? html`, in ${String(vod.stream_category).charAt(0).toUpperCase()}${String(vod.stream_category).slice(1)}` : ''}.</p>` : '' })}
 <section class="ovv-panel ovv-comments">${commentsHtml}</section>
 </div>
 <aside class="ovv-col ovv-col--side">

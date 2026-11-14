@@ -299,6 +299,30 @@
         });
     }
 
+    // 11-14 (the owner on a phone: "More from moosely, maybe it should be in a tab … think about how YouTube does it"): on a
+    // phone or a tablet, More from the channel and the stream's clips move into a More tab beside the chapters and the
+    // transcript; on a computer they stay the column beside the player.
+    function moreTab() {
+        if (!window.matchMedia || !window.matchMedia('(max-width: 1000px)').matches) return;
+        const box = document.querySelector('.ovv-watch [data-ovv-tabs]');
+        const list = box && box.querySelector('[data-ovv-tablist]');
+        const moved = Array.prototype.slice.call(document.querySelectorAll('.ovv-watch .ovv-also, .ovv-watch .ovv-clips'));
+        if (!box || !list || !moved.length || box.querySelector('[data-ovv-tp="more"]')) return;
+        const count = moved.reduce(function (n, s) { return n + s.querySelectorAll('.ovv-card').length; }, 0);
+        const b = document.createElement('button');
+        b.type = 'button'; b.setAttribute('role', 'tab'); b.id = 'ovv-tab-more'; b.setAttribute('aria-controls', 'ovv-tp-more');
+        b.setAttribute('aria-selected', 'false'); b.tabIndex = -1; b.setAttribute('data-ovv-tab', 'more');
+        b.append('More ');
+        const n = document.createElement('span'); n.className = 'ovv-tab-count'; n.textContent = String(count); b.append(n);
+        const panel = document.createElement('section');
+        panel.className = 'ovv-tp ovv-tp--more'; panel.id = 'ovv-tp-more'; panel.setAttribute('role', 'tabpanel');
+        panel.setAttribute('aria-labelledby', 'ovv-tab-more'); panel.setAttribute('data-ovv-tp', 'more'); panel.hidden = true;
+        const body = document.createElement('div'); body.className = 'ovv-tp-body ovv-more-body';
+        moved.forEach(function (s) { body.appendChild(s); });
+        panel.appendChild(body);
+        list.appendChild(b); box.appendChild(panel);
+    }
+
     // Chat replay, chapters and the transcript as tabs (the server lists them one after another). The tab chosen last
     // opens first on the next page.
     function tabs() {
@@ -421,6 +445,7 @@
         menus();
         watchActions();
         copyButtons();
+        moreTab();
         tabs();
         openers();
 
