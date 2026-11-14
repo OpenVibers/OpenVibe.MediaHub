@@ -880,3 +880,13 @@ html[data-ov-motion=off] .ovv-stat:hover{transform: none}
   /* The lists are the page's own here, not boxes in it. */
   .ovv-watch :is(.ovv-also, .ovv-clips) { padding: 6px 0 0; border: 0; border-radius: 0; background: none; }
 }
+
+/* 11-14: the More tab (video.js moreTab) on a phone: the channel's videos and the stream's clips, as rows. */
+.ovv-tp--more .ovv-more-body { display: grid; gap: 14px; padding: 10px 12px 14px; overflow-y: auto; }
+.ovv-tp--more .ovv-also, .ovv-tp--more .ovv-clips { padding: 0; border: 0; border-radius: 0; background: none; }
+.ovv-tp--more .ovv-panel-head h2, .ovv-tp--more .ovv-clips > h2 { font-size: .95rem; margin: 0 0 8px; }
+.ovv-tp--more .ovv-grid--side { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+/* The action chips scroll sideways: room above and below so a lifted or ringed chip keeps its top (11-14). */
+@media (max-width: 1099px) { .ovv-watch .ovv-actions-shell { padding-block: 6px; margin-block: -6px; } }
+/* Nothing on a watch page reaches past the screen's side (the player's glow did, 11-14). */
+.ovv-page:has(.ovv-watch) { overflow-x: clip; }
