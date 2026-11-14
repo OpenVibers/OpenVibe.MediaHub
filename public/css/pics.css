@@ -13,7 +13,7 @@
   --ovp-dim: var(--text-secondary, #96a7c2);
   --ovp-faint: var(--text-muted, #7386a3);
   max-width: 1120px;
-  padding: 24px 24px 72px;
+  padding: 12px 24px 72px;
 }
 .ovp-page h2 { font-size: 1.15rem; margin: 0 0 .75rem; }
 
@@ -306,3 +306,7 @@ html[data-ov-motion=off] .ovp-gallery-card:hover .ovp-gc-pic img{transform: none
   .ovp-pic-acts > * { flex: 1; justify-content: center; }
   .ovp-pic-make .ovk-btn { flex: 1 1 auto; justify-content: center; }
 }
+/* Design rule 201: the intro is one line on a computer, at most two on a phone. */
+@media (max-width: 640px) { .ovp-lede, .ovp-share-lede, .ovp-section-lede { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; } }
+/* Design rule 201 (the owner, 11-14): a page starts within 12 px of the bar, 8 px on a phone. */
+@media (max-width: 640px) { .ovp-page { padding-top: 8px; } }
