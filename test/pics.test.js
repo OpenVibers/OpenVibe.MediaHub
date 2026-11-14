@@ -102,7 +102,7 @@ function multipart(fields, file) {
             const faq = ld.find((x) => x['@type'] === 'FAQPage');
             // The questions section's own disclosures: the shared footer's "More from OpenVibe" is one too (openvibe-shared 4.15).
             const questions = home.slice(home.indexOf('Questions</span></h2>'), home.indexOf('More on OpenVibe</span></h2>'));
-            const shown = [...questions.matchAll(/<summary>([^<]*)<\/summary>/g)].map((m) => m[1].replace(/&#39;/g, "'"));
+            const shown = [...questions.matchAll(/<summary>(?:<span class="sc-q-ic"[^>]*>[\s\S]*?<\/span>)?(?:<span>)?([^<]+)(?:<\/span>)?<\/summary>/g)].map((m) => m[1].replace(/&#39;/g, "'"));
             assert.deepStrictEqual(faq.mainEntity.map((q) => q.name), shown, 'every question in the FAQPage is on the page');
             const map = (await t.get('/sitemap.xml', { headers: PICS })).text;
             assert.ok(map.includes('<loc>https://openvibe.pics/</loc>') && map.includes('<loc>https://openvibe.pics/dmca</loc>'), 'the sitemap lists the home and the rules');
