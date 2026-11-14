@@ -46,7 +46,7 @@ const BOOST = /<script src="\/shared\/boost\.js\?v=[0-9a-f]{12}" data-main="#mai
         assert.deepStrictEqual(ld, ['WebSite', 'WebApplication', 'WebPage', 'FAQPage', 'Organization'], 'the home JSON-LD');
         // FAQPage only for questions shown on the page: every question in it is a <summary> in the body.
         const faq = [...head.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])).find((x) => x['@type'] === 'FAQPage');
-        const shown = [...r.text.matchAll(/<summary>([^<]*)<\/summary>/g)].map((m) => m[1].replace(/&#39;/g, "'"));
+        const shown = [...r.text.matchAll(/<summary>(?:<span class="sc-q-ic"[^>]*>[\s\S]*?<\/span>)?(?:<span>)?([^<]+)(?:<\/span>)?<\/summary>/g)].map((m) => m[1].replace(/&#39;/g, "'"));
         assert.deepStrictEqual(faq.mainEntity.map((q) => q.name), shown, 'the questions on the page');
         assert.ok(r.text.includes('openvibe-download sync ~/Documents --to Backups/laptop'), 'the backup command, as the Backups page gives it');
         assert.ok(!r.text.includes('2.0 GB'), 'sizes as people write them');
