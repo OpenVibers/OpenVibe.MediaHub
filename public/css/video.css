@@ -764,8 +764,9 @@ html[data-ov-motion=off] .ovv-stat:hover{transform: none}
 .ovv-watch .ovv-head .ovv-byline { flex: 0 0 auto; gap: 9px; min-width: 0; }
 .ovv-watch .ovv-byline-text { flex: 0 1 auto; min-width: 0; }
 .ovv-watch .ovv-avatar { width: 40px; height: 40px; }
-.ovv-watch .ovv-follow { min-height: 40px; margin-left: 6px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--live-red, #ef4444); color: #fff !important; }
-.ovv-watch .ovv-follow:hover { filter: brightness(1.08); background: var(--live-red, #ef4444); }
+/* White on the live red itself is 3.8:1; a fifth darker it reads at 5:1 or more (browser check 11-15). */
+.ovv-watch .ovv-follow { min-height: 40px; margin-left: 6px; padding: 0 16px; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--live-red, #ef4444), #000 20%); color: #fff !important; }
+.ovv-watch .ovv-follow:hover { filter: brightness(1.08); background: color-mix(in srgb, var(--live-red, #ef4444), #000 20%); }
 .ovv-watch .ovv-actions-shell { position: relative; flex: 1 1 100%; min-width: 0; }
 .ovv-watch .ovv-actions { display: flex; flex-wrap: nowrap; align-items: center; width: max-content; gap: 8px; }
 .ovv-watch .ovv-actions > * { flex: none; }
