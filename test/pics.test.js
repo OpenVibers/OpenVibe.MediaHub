@@ -144,9 +144,10 @@ function multipart(fields, file) {
             assert.strictEqual((await t.get(`/i/${slug}.png`, { headers: PICS })).status, 404, 'only its own extension');
         });
 
-        await check('what is not a JPEG, PNG, GIF, WebP or AVIF picture is refused', async () => {
+        await check('what is not a JPEG, PNG, GIF, WebP, AVIF or SVG picture is refused', async () => {
             assert.strictEqual((await up(kim, Buffer.from('<?php system($_GET[1]); ?>'.repeat(20)))).json().code, 'pics.not_an_image');
-            assert.strictEqual((await up(kim, Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="9" height="9"><script>alert(1)</script></svg>'), { type: 'image/svg+xml' })).json().code, 'pics.unsupported');
+            // 2026-11-16: an SVG is a picture too (images.js prepareSvg); a script in it never runs (the sandbox policy).
+            assert.notStrictEqual((await up(kim, Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="9" height="9"><script>alert(1)</script></svg>'), { type: 'image/svg+xml' })).json().code, 'pics.unsupported');
             assert.strictEqual((await up(kim, jpegWithSecrets.subarray(0, 4000))).json().code, 'pics.not_an_image', 'a truncated file');
             const notImage = await t.get('/api/v1/images', { as: kim, method: 'POST', body: Buffer.from('hello'), headers: { ...SAME, 'content-type': 'text/plain' } });
             assert.strictEqual(notImage.status, 415);

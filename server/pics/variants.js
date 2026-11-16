@@ -34,8 +34,10 @@ function createPicVariants({ media, sharp = require('sharp'), maxBytes = 64 * 10
         }
     };
 
-    /** The widths this picture can be had at (the ladder up to its own width). */
-    const widthsFor = (row) => LADDER.filter((w) => w <= Number(row.width));
+    // A drawing (SVG, 2026-11-16) has no pixel size of its own: every rung, drawn at the density that rung needs.
+    const isDrawing = (row) => /^image\/svg/i.test(String(row.mime_type || ''));
+    /** The widths this picture can be had at (the ladder up to its own width; all of it for a drawing). */
+    const widthsFor = (row) => (isDrawing(row) ? LADDER.slice() : LADDER.filter((w) => w <= Number(row.width)));
 
     async function make(row, w, fmt) {
         const got = await media.bytes(row.object_id);
@@ -43,15 +45,17 @@ function createPicVariants({ media, sharp = require('sharp'), maxBytes = 64 * 10
         const source = Buffer.from(await got.res.arrayBuffer());
         if (source.length > maxSourceBytes) return { status: 413 };
         const animated = Boolean(row.animated) && fmt === 'webp';
-        const img = sharp(source, { animated, failOn: 'error', limitInputPixels: 100_000_000 })
-            .resize({ width: w, withoutEnlargement: true });
+        // A drawing is drawn from its bytes (never a path) at a density that makes this width sharp.
+        const density = isDrawing(row) ? Math.min(1200, Math.max(72, Math.ceil(72 * w / Math.max(1, Number(row.width) || w)))) : undefined;
+        const img = sharp(source, { animated, failOn: 'error', limitInputPixels: 100_000_000, ...(density ? { density } : {}) })
+            .resize({ width: w, withoutEnlargement: !density });
         const buffer = await FORMATS[fmt].apply(img).toBuffer();
         return { status: 200, type: FORMATS[fmt].type, buffer };
     }
 
     /** → { status, type, buffer } for an active picture; 400 for a width or format off the ladder. */
     async function get(row, w, fmt) {
-        if (!FORMATS[fmt] || !LADDER.includes(w) || w > Number(row.width)) return { status: 400 };
+        if (!FORMATS[fmt] || !LADDER.includes(w) || (w > Number(row.width) && !isDrawing(row))) return { status: 400 };
         const key = `${row.id}:${w}:${fmt}`;
         const hit = cache.get(key);
         if (hit) {

@@ -41,6 +41,7 @@ const { SAME, bytes, sha256, upload, share } = require('./helpers/drive');
             assert.match(dl.headers.get('content-disposition'), /^attachment; filename=/, name);
             assert.ok(!/inline/i.test(dl.headers.get('content-disposition')), `${name} must never be inline`);
             assert.strictEqual(dl.headers.get('x-content-type-options'), 'nosniff', name);
+            assert.match(dl.headers.get('content-security-policy') || '', /default-src 'none'.*sandbox/, `${name}: runs nothing`);
             assert.strictEqual(dl.headers.get('x-robots-tag'), 'noindex', name);
             assert.match(dl.headers.get('cache-control'), /private/, name);
             assert.strictEqual(sha256(dl.buffer), sha256(bytes(64, name)), `${name}: the bytes are the ones uploaded`);

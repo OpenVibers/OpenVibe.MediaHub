@@ -3,8 +3,12 @@
 /**
  * What happens to a picture before anyone sees it (sharp, libvips):
  *
- *   - It must decode as JPEG, PNG, GIF, WebP or AVIF, within MEDIAHUB_PICS_MAX_PIXELS. Anything else — a script
- *     renamed .png, an SVG, a truncated or malformed file — is refused. Nothing is served as it was uploaded.
+ *   - It must decode as JPEG, PNG, GIF, WebP, AVIF or (2026-11-16, the owner: "Media should support svg and all
+ *     other file formats") SVG, within MEDIAHUB_PICS_MAX_PIXELS. Anything else (a script renamed .png, a truncated or
+ *     malformed file) is refused. A raster picture is never served as it was uploaded.
+ *   - An SVG is a drawing: kept as drawn (it has no camera metadata to drop), at most SVG_MAX_BYTES, and served only
+ *     under the sandbox policy (pages.js, Media), where a script in it never runs. Its thumbnail and difference hash
+ *     are drawn to pixels from its bytes, never a path, so it cannot pull in another file.
  *   - It is re-encoded in its own format: the orientation is applied, and every metadata block (EXIF with its GPS
  *     position and camera serial, XMP, IPTC, comments) is dropped. An animated GIF or WebP keeps its frames.
  *     A colour profile is converted to sRGB rather than kept.
@@ -30,7 +34,9 @@ const FORMATS = {
     webp: { mime: 'image/webp', ext: 'webp' },
     heif: { mime: 'image/avif', ext: 'avif' },   // sharp reports AVIF as heif; only the AV1 kind decodes
 };
-const EXTS = Object.values(FORMATS).map((f) => f.ext);
+const SVG = { mime: 'image/svg+xml', ext: 'svg' };
+const SVG_MAX_BYTES = 5 * 1024 * 1024;
+const EXTS = [...Object.values(FORMATS).map((f) => f.ext), SVG.ext];
 const THUMB = 640;
 
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
@@ -64,11 +70,12 @@ async function prepare(input, { maxPixels = 100_000_000 } = {}) {
         const tooBig = /pixel limit/i.test(String(err && err.message));
         return tooBig
             ? { ok: false, code: 'pics.too_many_pixels', detail: `That picture has more than ${Number((maxPixels / 1e6).toPrecision(3))} megapixels.` }
-            : { ok: false, code: 'pics.not_an_image', detail: 'That file is not a JPEG, PNG, GIF, WebP or AVIF picture we can read.' };
+            : { ok: false, code: 'pics.not_an_image', detail: 'That file is not a JPEG, PNG, GIF, WebP, AVIF or SVG picture we can read.' };
     }
+    if (meta.format === 'svg') return prepareSvg(input, meta, { maxPixels });
     const format = FORMATS[meta.format];
     if (!format || (meta.format === 'heif' && meta.compression !== 'av1')) {
-        return { ok: false, code: 'pics.unsupported', detail: 'Pictures can be JPEG, PNG, GIF, WebP or AVIF.' };
+        return { ok: false, code: 'pics.unsupported', detail: 'Pictures can be JPEG, PNG, GIF, WebP, AVIF or SVG.' };
     }
     const pages = Number(meta.pages) || 1;
     const animated = pages > 1 && (meta.format === 'gif' || meta.format === 'webp');
@@ -103,4 +110,28 @@ async function prepare(input, { maxPixels = 100_000_000 } = {}) {
     }
 }
 
-module.exports = { prepare, dhashOf, distance, sha256, EXTS, FORMATS, THUMB };
+/** An SVG: kept as drawn; its thumbnail and hash drawn to pixels from its bytes (density for a sharp 640 px). */
+async function prepareSvg(input, meta, { maxPixels }) {
+    if (input.length > SVG_MAX_BYTES) return { ok: false, code: 'pics.too_large', detail: `A drawing can be at most ${SVG_MAX_BYTES / 1024 / 1024} MB.` };
+    try {
+        const w = Number(meta.width) || 0, h = Number(meta.height) || 0;
+        const density = Math.min(1200, Math.max(72, Math.ceil(72 * THUMB / Math.max(1, w, h))));
+        const raster = await sharp(input, { density, limitInputPixels: maxPixels, failOn: 'error' }).png().toBuffer({ resolveWithObject: true });
+        const thumb = await sharp(raster.data, { failOn: 'error' })
+            .resize(THUMB, THUMB, { fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: 76, effort: 4 })
+            .toBuffer({ resolveWithObject: true });
+        return {
+            ok: true,
+            image: { buffer: input, mime: SVG.mime, ext: SVG.ext, width: w || raster.info.width, height: h || raster.info.height, animated: false },
+            thumb: { buffer: thumb.data, mime: 'image/webp', width: thumb.info.width, height: thumb.info.height },
+            sha256: sha256(input),
+            sourceSha256: sha256(input),
+            dhash: await dhashOf(raster.data),
+        };
+    } catch {
+        return { ok: false, code: 'pics.not_an_image', detail: 'That drawing could not be read. Is the SVG complete?' };
+    }
+}
+
+module.exports = { prepare, dhashOf, distance, sha256, EXTS, FORMATS, THUMB, SVG, SVG_MAX_BYTES };
