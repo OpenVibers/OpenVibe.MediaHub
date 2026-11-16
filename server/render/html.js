@@ -2,28 +2,13 @@
 
 /** Escaping and small building blocks for server-rendered pages. Everything dynamic goes through esc(). */
 
-const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// The shared core (escaping, the html`` template) is openvibe-sdk/html's, the one implementation every site uses
+// (the consolidation of 2026-11-16); the rest of this file is this site's own.
+const { esc, Raw, raw, html, render, code } = require('openvibe-sdk/html');
 
 /** Tagged template: interpolations are escaped unless wrapped in raw(). Arrays are joined. */
-class Raw { constructor(s) { this.s = String(s); } toString() { return this.s; } }
-const raw = (s) => new Raw(s);
-function html(strings, ...values) {
-    let out = strings[0];
-    values.forEach((v, i) => {
-        out += render(v) + strings[i + 1];
-    });
-    return raw(out);
-}
-function render(v) {
-    if (v == null || v === false) return '';
-    if (v instanceof Raw) return v.s;
-    if (Array.isArray(v)) return v.map(render).join('');
-    return esc(v);
-}
 
 const kit = require('openvibe-shared/kit');
-
-const code = (s) => html`<code>${s}</code>`;
 
 /**
  * The Share button: the one share sheet every OpenVibe site opens (openvibe-shared 4.114.0). The navbar fetches
