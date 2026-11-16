@@ -38,7 +38,7 @@ const rows = (items) => kit.list(items, { flush: true });
 function exifSteps(cfg) {
     return [
         ['Your browser sends the file', 'It goes to OpenVibe.Pics over HTTPS, whole, with everything inside it. Nobody can strip what they never receive, so the file with its GPS reaches us first.'],
-        ['We check what it really is', `It has to decode as a JPEG, PNG, GIF, WebP or AVIF picture, within ${size(cfg.maxImageBytes)} and ${mega(cfg.maxPixels)}. A renamed script, an SVG or a half-written file is refused, and nothing is stored.`],
+        ['We check what it really is', `It has to decode as a JPEG, PNG, GIF, WebP, AVIF or SVG picture, within ${size(cfg.maxImageBytes)} and ${mega(cfg.maxPixels)}. A renamed script or a half-written file is refused, and nothing is stored. A drawing (SVG) is shown under a policy that runs nothing inside it.`],
         ['We make a new picture from it', 'The picture is decoded and saved again in the same format. The EXIF orientation is applied, so a photo taken sideways is shown upright, and the colour profile becomes sRGB. Every metadata block — EXIF with its GPS and camera, XMP, IPTC, comments — is dropped on the way out. The file we keep has none of them.'],
         ['We keep the new picture, not your file', 'The new picture is stored as a private object in OpenVibe.Media, with a 640-pixel thumbnail beside it. Your uploaded file is never stored. One thing of it is kept: a SHA-256 hash, so that a picture which was taken down cannot be uploaded again — even resized or re-compressed.'],
         ['Every other size comes from the new picture', 'The other widths and formats are made from the picture we keep, so they carry no metadata either.'],

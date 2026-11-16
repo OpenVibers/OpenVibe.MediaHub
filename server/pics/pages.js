@@ -246,8 +246,8 @@ function createPicsRoutes(ctx) {
 <div class="ovp-drop-inner">
 <span class="ovp-drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="40" height="40"><path fill="currentColor" d="M19 5v14H5V5h14m0-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm-4.86 8.86-3 3.87L9 13.14 6 17h12l-3.86-5.14Z"/></svg></span>
 <p class="ovp-drop-title">Drop pictures here, paste one, or choose files</p>
-<p class="ovp-drop-hint">JPEG, PNG, GIF, WebP or AVIF, up to ${formatBytes(max)} each. Location and camera details are removed.</p>
-<label class="ovp-btn ovp-btn--primary ovp-file" data-ov-guide="pics.upload"><input type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif" required data-pics-input>${glyph('upload', 18)}<span>Choose a picture</span></label>
+<p class="ovp-drop-hint">JPEG, PNG, GIF, WebP, AVIF or SVG, up to ${formatBytes(max)} each. Location and camera details are removed.</p>
+<label class="ovp-btn ovp-btn--primary ovp-file" data-ov-guide="pics.upload"><input type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif,image/svg+xml" required data-pics-input>${glyph('upload', 18)}<span>Choose a picture</span></label>
 <div class="ovp-drop-fields"><label for="up-title">Title (optional)</label><input id="up-title" name="title" type="text" maxlength="120" placeholder="What is it?"></div>
 ${signedIn(req) ? html`<label>Who can open it <select name="audience">${audienceOptions(defaultAudience)}</select></label>` : ''}
 <button class="ovp-btn ovp-btn--primary ovp-nojs-submit" type="submit">Upload</button>
@@ -260,7 +260,7 @@ ${signedIn(req) ? html`<label>Who can open it <select name="audience">${audience
     // Pictures here are unlisted (nobody's picture is ever listed), so the home shows no gallery of other people's
     // pictures. It shows how it works, the links a picture gets, the sizes and formats, the API, the limits this
     // service enforces (from config) and questions; a signed-in person also sees their own latest pictures.
-    const FORMAT_NAMES = 'JPEG, PNG, GIF, WebP or AVIF';
+    const FORMAT_NAMES = 'JPEG, PNG, GIF, WebP, AVIF or SVG';
     const sizeText = (b) => formatBytes(b).replace(/\.0 /, ' ');
     const homeFaq = () => [
         { q: 'Is OpenVibe.Pics free?', a: `Yes. A free OpenVibe account can upload ${cfg.imagesPerDay} pictures a day, each up to ${sizeText(cfg.maxImageBytes)}, and keep up to ${sizeText(cfg.quotaBytes)}.` },

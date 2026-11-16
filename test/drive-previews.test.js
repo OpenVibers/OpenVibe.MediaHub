@@ -25,8 +25,8 @@ const { bytes, upload, share } = require('./helpers/drive');
         // The drive's cards (2026-11-07): an image is its own picture, anything else a tile of its kind with its extension.
         assert.ok(page.text.includes(`<span class="dr-thumb is-pic" data-kind="image"><img src="/files/${photo.id}/preview?w=640" alt="" loading="lazy" decoding="async"></span>`));
         assert.match(page.text, /<span class="dr-thumb" data-kind="doc"><svg[^>]*>.*?<\/svg><b>txt<\/b><\/span>/);
-        assert.match(page.text, /<span class="dr-thumb" data-kind="image"><svg[^>]*>.*?<\/svg><b>svg<\/b><\/span>/, 'an SVG is never rendered: its type, not a picture');
-        assert.ok(!page.text.includes(`/files/${vector.id}/preview`), 'and no preview is asked for');
+        // 2026-11-16: an SVG has a picture too: Media draws it to a WebP (never the drawing's own markup).
+        assert.ok(page.text.includes(`/files/${vector.id}/preview?w=640`), 'an SVG shows its picture');
         const one = await t.get(`/files/${photo.id}`, { as: kim });
         assert.ok(one.text.includes(`<figure class="fv-stage is-pic" data-kind="image"><img src="/files/${photo.id}/preview?w=640" alt="holiday.png" decoding="async"></figure>`));
         assert.ok(!(await t.get(`/files/${notes.id}`, { as: kim })).text.includes('/preview?w=640'));
@@ -46,11 +46,11 @@ const { bytes, upload, share } = require('./helpers/drive');
         assert.match(odd.buffer.toString(), /^variant:96:webp:/, 'only the two sizes the pages use');
     });
 
-    await check('no preview for other people\'s files, for files that are not images, or for SVG', async () => {
+    await check('no preview for other people\'s files or for files that are not pictures; an SVG has one (2026-11-16)', async () => {
         const secret = (await upload(t, kim, bytes(257, 'secret png'), { name: 'secret.png', contentType: 'image/png', audience: 'private' })).json().file;
         assert.strictEqual((await t.get(`/files/${secret.id}/preview?w=96`, { as: sam })).status, 404);
         assert.strictEqual((await t.get(`/files/${notes.id}/preview?w=96`, { as: kim })).status, 404);
-        assert.strictEqual((await t.get(`/files/${vector.id}/preview?w=96`, { as: kim })).status, 404);
+        assert.strictEqual((await t.get(`/files/${vector.id}/preview?w=96`, { as: kim })).status, 200, 'an SVG: Media draws its picture');
         assert.strictEqual((await t.get(`/files/${secret.id}/preview?w=96`)).status, 404);
         assert.strictEqual((await t.get(`/files/${photo.id}/preview?w=96`, { as: sam })).status, 200);
     });

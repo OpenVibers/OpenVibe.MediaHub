@@ -58,17 +58,21 @@ function normalizeType(value) {
 }
 
 /**
- * The content types a download keeps when it is served: a short, safe list. Everything else — HTML, SVG, XML,
- * anything executable — is served as application/octet-stream, so a browser never treats an upload as a document
- * of its own. SVG is deliberately out: it is a script container wearing an image's type.
+ * Images a preview is made of: Media's variants of JPEG, PNG, WebP, GIF's first frame, AVIF and, since 2026-11-16, SVG
+ * (the owner: "Media should support svg and all other file formats and also .download and all files"). Media draws an
+ * SVG to pixels from its bytes, so a preview is always a WebP, never the drawing's own markup.
  */
-/** Images a preview is made of (Media's variants: JPEG, PNG, WebP, GIF's first frame, AVIF); never SVG. */
 function isPreviewable(type) {
-    return /^image\/(jpeg|png|webp|gif|avif)$/.test(normalizeType(type) || '');
+    return /^image\/(jpeg|png|webp|gif|avif|svg\+xml)$/.test(normalizeType(type) || '');
 }
 /** The preview widths the pages ask for: a list thumbnail and the file page's picture. */
 const PREVIEW_WIDTHS = [96, 640];
 
+/**
+ * The content types a download keeps when it is served: a short, safe list. Everything else (HTML, SVG, XML, anything
+ * executable) is served as application/octet-stream, so a browser never treats an upload as a document of its own.
+ * Every file still downloads, whatever it is, and opens as what it is: a saved file is opened by its name, not its type.
+ */
 function safeContentType(type) {
     const t = normalizeType(type);
     if (!t) return null;

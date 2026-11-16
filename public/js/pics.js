@@ -44,7 +44,7 @@
     var input = form.querySelector('[data-pics-input]');
     var results = form.querySelector('[data-pics-results]');
     var max = Number(form.getAttribute('data-max')) || 0;
-    var TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif'];
+    var TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/svg+xml'];
     var queue = [];
     var busy = false;
     var seq = 0;
@@ -163,7 +163,7 @@
     function add(files) {
         Array.prototype.forEach.call(files, function (file) {
             var r = row(file);
-            if (TYPES.indexOf(file.type) === -1) return fail(r, 'Pictures can be JPEG, PNG, GIF, WebP or AVIF.');
+            if (TYPES.indexOf(file.type) === -1) return fail(r, 'Pictures can be JPEG, PNG, GIF, WebP, AVIF or SVG.');
             if (max && file.size > max) return fail(r, 'This picture is larger than ' + Math.round(max / 1048576) + ' MB.');
             queue.push({ file: file, r: r });
             return undefined;
