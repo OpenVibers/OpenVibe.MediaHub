@@ -483,20 +483,23 @@ ${files.length ? html`<ul class="dr-files" data-items>${files.map((row) => ui.fi
         const kind = ui.kindOf(row);
         const ext = ui.extOf(row.name);
         const pic = rules.isPreviewable(row.content_type);
+        const font = !pic && rules.fontType(row.content_type, row.name);
         const radioTrack = /^audio\/(mpeg|mp4|ogg|webm|wav|flac)$/.test(row.content_type)
             ? await s.db.maybe('SELECT id FROM mh_radio_tracks WHERE file_id = $1 AND revoked_at IS NULL', [row.id]) : null;
         const choices = [...labels.entries()].sort((a, b) => a[1].localeCompare(b[1], 'en', { numeric: true, sensitivity: 'base' }));
         return page(req, res, {
             title: row.name,
             styles: ['kit.css'],
-            scripts: ['js/upload.js'],
+            scripts: font ? ['js/upload.js', 'js/font-specimen.js'] : ['js/upload.js'],
             css: ['css/drive.css'],
             body: html`<div class="fv" data-drive>
 ${pathBar(path, row.name)}
 <div class="fv-grid">
-<figure class="fv-stage${pic ? ' is-pic' : ''}" data-kind="${kind}">${pic
+<figure class="fv-stage${pic ? ' is-pic' : ''}${font ? ' is-font' : ''}" data-kind="${kind}">${pic
                 ? html`<img src="/files/${row.id}/preview?w=640" alt="${row.name}" decoding="async">`
-                : html`<span class="fv-tile">${ui.icon(ui.KINDS[kind].icon)}${ext ? html`<b>${ext.slice(0, 6)}</b>` : ''}</span>`}</figure>
+                : font
+                    ? html`<div class="fv-font" data-font="/files/${row.id}/font" aria-label="${row.name}, a sample in the font"><p class="fv-font-big">Aa Gg</p><p class="fv-font-line">The quick brown fox jumps over the lazy dog</p><p class="fv-font-small">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789 &amp; @ ? !</p></div>`
+                    : html`<span class="fv-tile">${ui.icon(ui.KINDS[kind].icon)}${ext ? html`<b>${ext.slice(0, 6)}</b>` : ''}</span>`}</figure>
 <div class="fv-side">
 <h1 class="fv-name">${row.name}</h1>
 <p class="fv-sub"><span class="fv-kind" data-kind="${kind}">${ui.icon(ui.KINDS[kind].icon)}${ui.kindWord(row)}</span><span>${fileSize(row)}</span><span>Added ${ui.when(row.created_at)}</span></p>
@@ -822,6 +825,26 @@ ${agentGrants.length ? html`<h3 class="fv-h3">Agent grants for this file</h3><ul
         return undefined;
     }
 
+    /** A font file, for this drive's own specimen: the bytes in their font type, to whoever may open the file. */
+    async function sendFont(req, res, row) {
+        const type = row && rules.fontType(row.content_type, row.name);
+        if (!type) return res.status(404).type('text/plain').send('Not a font.');
+        const got = await media.bytes(row.object_id);
+        if (!got.ok) return res.status(got.status === 404 || got.status === 410 ? 404 : 502).type('text/plain').send('No font.');
+        res.status(200).set({
+            'Content-Type': type,
+            'X-Content-Type-Options': 'nosniff',
+            'Content-Security-Policy': "default-src 'none'; sandbox",
+            'X-Robots-Tag': 'noindex',
+            'Cache-Control': 'private, max-age=300',
+        });
+        const len = got.res.headers.get('content-length');
+        if (len) res.set('Content-Length', len);
+        if (!got.res.body) return res.end();
+        try { await pipeline(Readable.fromWeb(got.res.body), res); } catch { res.destroy(); }
+        return undefined;
+    }
+
     async function fileForRead(req) {
         const id = String(req.params.id || '');
         const row = rules.isFileId(id) ? await ctx.store.getFile(s, id) : null;
@@ -833,6 +856,12 @@ ${agentGrants.length ? html`<h3 class="fv-h3">Agent grants for this file</h3><ul
     r.get('/files/:id/preview', async (req, res) => {
         const row = await fileForRead(req);
         return sendPreview(req, res, row);
+    });
+
+    r.get('/files/:id/font', async (req, res) => {
+        const row = await fileForRead(req);
+        if (!row) return res.status(404).type('text/plain').send('Not found.');
+        return sendFont(req, res, row);
     });
 
     r.get('/files/:id/download', async (req, res) => {

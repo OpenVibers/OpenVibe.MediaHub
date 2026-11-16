@@ -326,3 +326,13 @@
   .fv-actions .dr-btn { flex: 1; }
 }
 html[data-ov-motion=off] .dr-file:hover{transform: none}
+
+/* A font file's specimen (2026-11-16): the sample in the font itself, large, then a line and the alphabet. */
+.fv-stage.is-font { display: grid; place-items: stretch; padding: clamp(16px, 4vw, 32px); }
+.fv-font { display: grid; gap: 10px; min-width: 0; overflow-wrap: anywhere; opacity: .55; transition: opacity .3s ease; }
+.fv-font.is-loaded { opacity: 1; }
+.fv-font.is-failed::after { content: "This font could not be read."; font: 13px/1.4 system-ui, sans-serif; color: var(--text-secondary, #9aa8c0); }
+.fv-font p { margin: 0; }
+.fv-font-big { font-size: clamp(56px, 14vw, 120px); line-height: 1; }
+.fv-font-line { font-size: clamp(20px, 4.5vw, 30px); line-height: 1.25; }
+.fv-font-small { font-size: 15px; line-height: 1.5; color: var(--text-secondary, #9aa8c0); }

@@ -63,7 +63,23 @@ function normalizeType(value) {
  * SVG to pixels from its bytes, so a preview is always a WebP, never the drawing's own markup.
  */
 function isPreviewable(type) {
-    return /^image\/(jpeg|png|webp|gif|avif|svg\+xml)$/.test(normalizeType(type) || '');
+    // 2026-11-16 ("fonts and icons and all that"): icons, BMP and TIFF too. Media draws a TIFF to WebP; an icon or a
+    // BMP comes back as it is, which every browser shows.
+    return /^image\/(jpeg|png|webp|gif|avif|svg\+xml|x-icon|vnd\.microsoft\.icon|bmp|tiff)$/.test(normalizeType(type) || '');
+}
+
+/**
+ * A font file's type, from its content type or (when that says nothing) its name: font/woff2, font/woff, font/ttf or
+ * font/otf; null for anything else. The drive shows a font's specimen and serves it to its own page in that type.
+ */
+const FONT_EXT = { woff2: 'font/woff2', woff: 'font/woff', ttf: 'font/ttf', otf: 'font/otf' };
+function fontType(type, name = '') {
+    const t = normalizeType(type) || '';
+    const m = /^font\/(woff2|woff|ttf|otf)$/.exec(t) || /^application\/(?:font-|x-font-)(woff2|woff|ttf|otf)$/.exec(t);
+    if (m) return FONT_EXT[m[1]];
+    if (t && t !== 'application/octet-stream' && !/^font\//.test(t)) return null;
+    const ext = /\.([a-z0-9]{2,5})$/i.exec(String(name || ''));
+    return ext ? FONT_EXT[ext[1].toLowerCase()] || null : null;
 }
 /** The preview widths the pages ask for: a list thumbnail and the file page's picture. */
 const PREVIEW_WIDTHS = [96, 640];
@@ -149,7 +165,7 @@ function formatBytes(n) {
     return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
 }
 
-module.exports = {
+module.exports = { fontType, FONT_EXT,
     isPreviewable, PREVIEW_WIDTHS,
     ID_RE, SLUG_RE, isFileId, isFolderId, isUploadId, isSlug, isUsername,
     NAME_MAX, FOLDER_NAME_MAX, REASONS, REASON_TEXT, SUSPEND_AT_REPORTS, SUSPEND_IMMEDIATELY,

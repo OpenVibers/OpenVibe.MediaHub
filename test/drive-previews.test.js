@@ -66,5 +66,30 @@ const { bytes, upload, share } = require('./helpers/drive');
         assert.strictEqual(shares.find((x) => x.slug === slug).downloads, 0, 'looking is not downloading');
     });
 
+    // Fonts and icons (2026-11-16; the owner: "And fonts and icons And all that").
+    await check('a font\'s page shows a sample in the font itself, read from the drive to whoever may open it', async () => {
+        const font = await put('Brand Sans.ttf', bytes(300, 'ttf'), 'font/ttf');
+        const blob = await put('Other.woff2', bytes(120, 'woff2'), 'application/octet-stream');
+        const page = await t.get(`/files/${font.id}`, { as: kim });
+        assert.ok(page.text.includes(`<div class="fv-font" data-font="/files/${font.id}/font"`), 'the specimen');
+        assert.match(page.text, /js\/font-specimen\.js/, 'and the script that sets the font');
+        const f = await t.get(`/files/${font.id}/font`, { as: kim });
+        assert.deepStrictEqual([f.status, f.headers.get('content-type'), f.headers.get('x-content-type-options')], [200, 'font/ttf', 'nosniff']);
+        assert.strictEqual((await t.get(`/files/${blob.id}/font`, { as: kim })).headers.get('content-type'), 'font/woff2', 'a generic blob named .woff2 is a font');
+        const secret = (await upload(t, kim, bytes(200, 'secret ttf'), { name: 'Secret.ttf', contentType: 'font/ttf', audience: 'private' })).json().file;
+        assert.strictEqual((await t.get(`/files/${secret.id}/font`, { as: kim })).status, 200, 'its owner reads a private font');
+        const theirs = (await t.get(`/files/${secret.id}/font`, { as: sam })).status;
+        assert.ok([403, 404].includes(theirs), `a private font is not another person's (${theirs})`);
+        assert.strictEqual((await t.get(`/files/${notes.id}/font`, { as: kim })).status, 404, 'not a font');
+    });
+
+    await check('an icon has a picture like any image', async () => {
+        const icon = await put('favicon.ico', bytes(64, 'ico'), 'image/x-icon');
+        const page = await t.get('/files', { as: kim });
+        assert.ok(page.text.includes(`/files/${icon.id}/preview?w=640`), 'its picture in the list');
+        const pv = await t.get(`/files/${icon.id}/preview?w=96`, { as: kim });
+        assert.deepStrictEqual([pv.status, pv.headers.get('content-type')], [200, 'image/x-icon']);
+    });
+
     done();
 })();
