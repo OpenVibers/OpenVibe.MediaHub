@@ -582,3 +582,9 @@ current public visibility on every read. Studio's image-tool adapter requires `S
 and returns an explicit unavailable state until a worker is configured. No image worker was invoked in
 this change. Cam already posts captured pictures to the existing upload endpoint. Shared `ov-upload`
 is not in the pinned Shared release yet; Pics retains its existing drop/paste/choose uploader.
+
+<!-- versions:start -->
+- openvibe-contracts: v0.443.0
+- openvibe-sdk: v0.177.0
+- openvibe-shared: v4.290.0
+<!-- versions:end -->
