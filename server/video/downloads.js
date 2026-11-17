@@ -256,7 +256,7 @@ function downloadMenu({ kind, id, item, has }) {
     if (item.thumbnail_url) rows.push(row({ icon: 'image', label: 'Cover picture', about: null, links: [{ href: `${at}/thumbnail`, ext: 'jpg', text: 'Image' }] }));
     rows.push(row({ icon: 'info', label: 'Details', about: 'Title, channel, dates, summary', links: [{ href: `${at}/info.json`, ext: 'json' }] }));
     const everything = html`<li class="ovv-dl-row ovv-dl-row--all"><i class="ovg-fill" data-ov-icon="archive" aria-hidden="true"></i><span class="ovv-dl-what"><span class="ovv-dl-label">Everything</span><span class="ovv-dl-about">All of the above but the video, in one .zip</span></span><span class="ovv-dl-formats"><a class="ovv-dl-format ovv-dl-format--main" href="${at}/all.zip" download rel="nofollow" title="${FORMAT_HELP.zip}" aria-label="Everything: ZIP (${FORMAT_HELP.zip})">ZIP</a></span></li>`;
-    return html`<details class="ovv-dl" data-ovv-dl><summary class="ovv-btn"><i class="ovg-fill" data-ov-icon="download" aria-hidden="true"></i> Download</summary>
+    return html`<details class="ovv-dl" id="download" data-ovv-dl><summary class="ovv-btn"><i class="ovg-fill" data-ov-icon="download" aria-hidden="true"></i> Download</summary>
 <div class="ovv-dl-menu" role="group" aria-label="Download this ${kind === 'clip' ? 'clip' : 'recording'}">
 <div class="ovv-dl-head"><span>Download this ${kind === 'clip' ? 'clip' : 'recording'}</span><button type="button" class="ovv-dl-close" data-ovv-dl-close aria-label="Close"><i class="ovg-fill" data-ov-icon="close" aria-hidden="true"></i></button></div>
 <ul class="ovv-dl-list">${rows}${everything}</ul>

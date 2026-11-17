@@ -87,14 +87,21 @@ function vreq(base, path, { method = 'GET', cookie, form, same = true } = {}) {
         const mine = await vreq(t.base, '/v/101', { cookie: kimCookie });
         assert.strictEqual(mine.status, 200);
         assert.ok(mine.text.includes('Edit this recording') && mine.text.includes('action="/v/101/manage"'), 'the owner panel');
-        // Owner tools live in More, with the panel under the player.
-        assert.ok(/class="ovv-more-actions"[\s\S]*class="ovv-btn ovv-btn--edit" href="#manage" data-ovv-open="manage"/.test(mine.text), 'Edit is in More');
+        // The owner's own bar under the title, Edit and Delete in plain sight (11-17, Maticus: "the 'edit' button is
+        // buried … and delete below that"): never in More, and before the action row.
+        assert.ok(/class="ovv-ownerbar"[^>]*aria-label="Your recording"[\s\S]*?class="ovv-btn ovv-btn--edit" href="#manage" data-ovv-open="manage"[\s\S]*?class="ovv-pop ovv-deleter"/.test(mine.text), 'Edit and Delete in the owner bar');
+        assert.ok(mine.text.indexOf('class="ovv-ownerbar"') < mine.text.indexOf('class="ovv-actions"'), 'the bar is above the action row');
+        const more = mine.text.slice(mine.text.indexOf('class="ovv-more-actions"'));
+        assert.ok(!/ovv-btn--edit|ovv-deleter/.test(more.slice(0, more.indexOf('</details>'))), 'not in More');
+        // The row never scrolls: Watch together and Ask your agent are in More, Download is also a row of it.
+        assert.ok(/class="ovv-more-dl" href="#download" data-ovv-more-dl/.test(more) && /<details class="ovv-dl" id="download"/.test(mine.text), 'More opens Download');
         assert.ok(mine.text.indexOf('id="manage"') < mine.text.indexOf('id="about"'), 'the panel sits under the player, before About');
         assert.strictEqual((mine.text.match(/<input type="radio" name="visibility" value="(public|unlisted|private)"/g) || []).length, 3, 'three visibility choices');
         assert.ok(/class="ovv-vis-badge ovv-vis-badge--/.test(mine.text), 'the owner sees who can see it');
         assert.ok(mine.text.includes('value="Kim stream"') && mine.text.includes('<input type="radio" name="visibility" value="public" checked>'), 'prefilled');
         const other = await vreq(t.base, '/v/101', { cookie: samCookie });
         assert.ok(!other.text.includes('Edit this recording'), 'not for someone else');
+        assert.ok(!other.text.includes('class="ovv-ownerbar"'), 'no owner bar for someone else');
         assert.ok(!other.text.includes('ovv-btn--edit'), 'no Edit for someone else');
         const anon = await vreq(t.base, '/v/101');
         assert.ok(!anon.text.includes('Edit this recording'), 'not signed out');

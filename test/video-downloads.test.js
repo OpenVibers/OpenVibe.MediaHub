@@ -156,10 +156,11 @@ function unzip(buf) {
         assert.ok(panel('transcript').includes('href="/v/6026/download/transcript.srt"'), 'the transcript panel\'s corner menu');
         assert.ok(panel('chapters').includes('data-ovv-copy="/v/6026/download/chapters.txt"') && panel('chapters').includes('href="/v/6026/download/chapters.vtt"'), 'the chapters panel\'s, with Copy for YouTube');
         assert.ok(!r.text.includes('ovv-panel-dl'), 'no line of links under a panel any more');
-        // The layout: tabs beside the player, one action row, the stream's parts in About.
+        // The layout: tabs beside the player, one action row, the stream's parts under the title (11-17).
         assert.strictEqual((r.text.match(/role="tab"/g) || []).length, 3, 'Chat, Chapters, Transcript');
         assert.ok(r.text.includes('data-ov-share-sheet data-url="https://openvibe.video/v/6026"') && r.text.includes('aria-label="More"'), 'Share and More');
-        assert.ok(r.text.includes('<a href="/v/6025">Part 1</a>') && r.text.includes('<b>Part 2 (this one)</b>'), 'the other part of the stream');
+        assert.ok(/<a class="ovv-part" href="\/v\/6025">Part 1/.test(r.text) && /<span class="ovv-part is-here" aria-current="page">Part 2/.test(r.text), 'the other part of the stream');
+        assert.ok(r.text.indexOf('class="ovv-parts"') < r.text.indexOf('class="ovv-actions"'), 'the parts are under the title, not folded into About');
         // Chat replay sits in the part's own time: 12 s in, not 721 s.
         assert.ok(r.text.includes('data-ovv-at="12"') && !r.text.includes('in part one'), 'chat in part 2\'s time');
     });

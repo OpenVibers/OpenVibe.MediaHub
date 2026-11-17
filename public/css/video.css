@@ -891,3 +891,61 @@ html[data-ov-motion=off] .ovv-stat:hover{transform: none}
 @media (max-width: 1099px) { .ovv-watch .ovv-actions-shell { padding-block: 6px; margin-block: -6px; } }
 /* Nothing on a watch page reaches past the screen's side (the player's glow did, 11-14). */
 .ovv-page:has(.ovv-watch) { overflow-x: clip; }
+
+/* ── The action row never scrolls; the owner's tools in plain sight (2026-11-17) ──────────────────────────────────────
+   Maticus, a streamer, on his own recording: "the 'edit' button is buried … and delete button below that … some weird
+   horizontal scroll bar with a bunch of shit in it". Eight buttons scrolled sideways (cut off even at 1280 px), with Edit
+   and Delete inside the last. Now: Like · Share · Save · Download · Clip · More, wrapping, never scrolling; on a phone
+   five even tiles (Download moves into More); the owner's Edit and Delete in their own bar under the title. */
+.ovv-watch .ovv-actions-shell { overflow: visible !important; }
+.ovv-watch .ovv-head-row::after { content: none !important; display: none !important; }
+.ovv-watch .ovv-actions { width: auto; flex-wrap: wrap; }
+.ovv-watch .ovv-more-actions > .ovv-more-dl { display: none; }
+.ovv-watch .ovv-more-actions > .ovk-ask { justify-content: flex-start; width: 100%; min-height: 44px; padding: 10px 12px; border: 0; border-radius: 9px; background: transparent; font-size: .9rem; }
+@media (max-width: 760px) {
+  .ovv-watch .ovv-head-row { display: block; }
+  .ovv-watch .ovv-actions { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; width: 100%; margin-top: 12px; }
+  .ovv-watch .ovv-actions > * { min-width: 0; }
+  .ovv-watch .ovv-actions > .ovv-btn, .ovv-watch .ovv-actions > details > summary.ovv-btn { flex-direction: column; gap: 5px; width: 100%; min-height: 58px; padding: 8px 2px; border-radius: 14px; font-size: .74rem; }
+}
+@media (max-width: 600px) {
+  /* Download's own button leaves the row (its menu stays, opened from More as a sheet). */
+  .ovv-watch .ovv-actions > details.ovv-dl { position: absolute; width: 0; height: 0; }
+  .ovv-watch .ovv-actions > details.ovv-dl > summary.ovv-btn { display: none; }
+  .ovv-watch .ovv-more-actions > .ovv-more-dl { display: flex; }
+}
+
+/* The owner's bar: whose it is, who can see it, Edit and Delete. */
+.ovv-watch .ovv-ownerbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 12px 0 14px; padding: 8px 8px 8px 14px; border: 1px solid color-mix(in srgb, var(--ovv-accent) 38%, var(--ovv-line)); border-radius: 16px; background: color-mix(in srgb, var(--ovv-accent) 9%, var(--ovv-card)); animation: ovv-ownerbar-in .32s cubic-bezier(.2, .8, .2, 1) both; }
+.ovv-watch .ovv-ownerbar-who { display: inline-flex; align-items: center; gap: 8px; font-size: .9rem; font-weight: 800; }
+.ovv-watch .ovv-ownerbar-who i { display: grid; place-items: center; width: 20px; height: 20px; font-size: 20px; color: var(--ovv-accent); }
+.ovv-watch .ovv-ownerbar .ovv-vis-badge { min-height: 26px; }
+.ovv-watch .ovv-ownerbar-tools { display: flex; gap: 8px; margin-left: auto; }
+.ovv-watch .ovv-ownerbar-tools > .ovv-btn, .ovv-watch .ovv-ownerbar-tools > details > summary.ovv-btn { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 999px; font-size: .88rem; font-weight: 800; white-space: nowrap; cursor: pointer; transition: transform .18s ease, background .18s ease, box-shadow .18s ease; }
+.ovv-watch .ovv-ownerbar-tools :is(.ovv-btn, summary) i { display: grid; place-items: center; width: 20px; height: 20px; font-size: 20px; }
+.ovv-watch .ovv-ownerbar .ovv-btn--edit { background: var(--accent-strong, #2563eb); border-color: var(--accent-strong, #2563eb); color: var(--on-accent-strong, #fff) !important; }
+.ovv-watch .ovv-ownerbar .ovv-btn--edit:hover { background: var(--accent-dark, #1d4ed8); transform: translateY(-1px); box-shadow: 0 6px 16px -8px var(--accent-strong, #2563eb); }
+.ovv-watch .ovv-ownerbar .ovv-deleter > summary.ovv-btn { color: var(--live-red, #ef4444); border-color: color-mix(in srgb, var(--live-red, #ef4444) 40%, var(--ovv-line)); }
+.ovv-watch .ovv-ownerbar .ovv-deleter > summary.ovv-btn:hover { background: color-mix(in srgb, var(--live-red, #ef4444) 12%, transparent); }
+.ovv-watch .ovv-ownerbar .ovv-deleter .ovv-pop-panel { left: auto; right: 0; }
+.ovv-watch .ovv-ownerbar-tools > .ovv-btn:active, .ovv-watch .ovv-ownerbar-tools > details > summary.ovv-btn:active { transform: scale(.97); }
+@keyframes ovv-ownerbar-in { from { opacity: 0; transform: translateY(calc(6px * var(--ov-move, 1))); } }
+html[data-ov-motion=off] .ovv-watch .ovv-ownerbar { animation: none; }
+@media (max-width: 600px) {
+  .ovv-watch .ovv-ownerbar { padding: 10px; }
+  .ovv-watch .ovv-ownerbar-tools { flex: 1 1 100%; margin-left: 0; }
+  .ovv-watch .ovv-ownerbar-tools > * { flex: 1 1 0; min-width: 0; }
+  .ovv-watch .ovv-ownerbar-tools > .ovv-btn, .ovv-watch .ovv-ownerbar-tools > details > summary.ovv-btn { width: 100%; }
+}
+
+/* A stream recorded in parts: the parts under the title, each with its length. */
+.ovv-watch .ovv-parts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 10px 0 0; }
+.ovv-watch .ovv-parts-label { display: inline-flex; align-items: center; gap: 6px; margin-right: 2px; font-size: .82rem; font-weight: 700; color: var(--ovv-dim); }
+.ovv-watch .ovv-parts-label i { width: 18px; height: 18px; font-size: 18px; }
+.ovv-watch .ovv-part { box-sizing: border-box; display: inline-flex; align-items: baseline; gap: 7px; min-height: 38px; padding: 9px 14px; border: 1px solid var(--ovv-line-strong); border-radius: 999px; color: var(--text-primary, #e6edf7); font-size: .86rem; font-weight: 800; line-height: 1.2; text-decoration: none; transition: background .18s ease, border-color .18s ease, transform .18s ease; }
+.ovv-watch .ovv-part small { font-size: .8rem; font-weight: 600; color: var(--ovv-dim); font-variant-numeric: tabular-nums; }
+.ovv-watch .ovv-part.is-here { border-color: var(--ovv-accent); background: color-mix(in srgb, var(--ovv-accent) 16%, transparent); }
+.ovv-watch a.ovv-part:hover { background: var(--bg-hover, #1c2a44); transform: translateY(-1px); }
+@media (pointer: coarse) { .ovv-watch .ovv-part { min-height: 44px; } }
+.ovv-watch .ovv-like-word { white-space: nowrap; }
+@media (max-width: 600px) { .ovv-watch .ovv-parts-label { flex: 1 1 100%; } }
