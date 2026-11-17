@@ -820,14 +820,27 @@ function createVideoRoutes(ctx) {
     /** The owner's Edit link in More opens the panel under the player. */
     const editButton = (what) => html`<a class="ovv-btn ovv-btn--edit" href="#manage" data-ovv-open="manage" title="Edit this ${what}: title, description, who can see it"><i class="ovg-fill" data-ov-icon="pencil" aria-hidden="true"></i> Edit</a>`;
     const titleLine = (kind, title) => html`<div class="ovv-title-line"><span class="ovv-kind">${kind}</span><h1 class="ovv-title">${title}</h1></div>`;
-    const likeButton = (state, kind, id) => html`<button class="ovv-btn ovv-like" type="button" data-ovv-like="${kind}:${id}" aria-pressed="${state.liked ? 'true' : 'false'}" title="Like this ${kind === 'clip' ? 'clip' : 'recording'}"><i data-ov-icon="heart" aria-hidden="true"></i> Like <span class="ovv-like-count">${state.count}</span></button>`;
+    const likeButton = (state, kind, id) => html`<button class="ovv-btn ovv-like" type="button" data-ovv-like="${kind}:${id}" aria-pressed="${state.liked ? 'true' : 'false'}" title="Like this ${kind === 'clip' ? 'clip' : 'recording'}"><i data-ov-icon="heart" aria-hidden="true"></i> <span class="ovv-like-word">Like <span class="ovv-like-count">${state.count}</span></span></button>`;
     const channelRow = (username, name, followers) => {
         if (!username) return '';
         const channel = `${livePublic}/@${username}`;
         const count = Number(followers);
         return html`<div class="ovv-byline"><a class="ovv-avatar" href="${channel}" aria-hidden="true" tabindex="-1">${String(name || username).slice(0, 1).toUpperCase()}${live.isUsername(String(username)) ? html`<img src="${config.networkUrl}/avatar/${username}" alt="" loading="lazy">` : ''}</a><div class="ovv-byline-text"><a class="ovv-channel-name" href="${channel}">@${username}</a>${Number.isSafeInteger(count) && count >= 0 ? html`<span class="ovv-meta">${count.toLocaleString('en-US')} ${count === 1 ? 'follower' : 'followers'}</span>` : ''}</div><a class="ovv-btn ovv-follow" href="${channel}" title="Follow ${name || username} on OpenVibe.Live"><i class="ovg-fill" data-ov-icon="plus" aria-hidden="true"></i> Follow</a></div>`;
     };
-    const watchMore = ({ path, manageable, kind, id, items }) => actionMenu({ icon: 'more', label: 'More', iconOnly: true, cls: 'ovv-more-menu', body: html`<div class="ovv-more-actions"><button type="button" data-ovv-copy-time="${base}${path}"><i data-ov-icon="copy" aria-hidden="true"></i> Copy link at time</button><button type="button" data-ovv-pip hidden><i data-ov-icon="window-restore" aria-hidden="true"></i> Picture in picture</button><a href="mailto:report@openvibe.network?subject=${encodeURIComponent(`Report ${kind} ${base}${path}`)}"><i data-ov-icon="flag" aria-hidden="true"></i> Report</a>${manageable ? html`${editButton(kind === 'clip' ? 'clip' : 'recording')}${deleteAction({ action: `/${kind === 'clip' ? 'c' : 'v'}/${id}`, what: kind === 'clip' ? 'clip' : 'recording' })}` : ''}${menuLinks(items)}</div>` });
+    // More: what the row has no room for (11-17, Maticus: "some weird horizontal scroll bar with a bunch of shit in it";
+    // eight buttons scrolled sideways, cut off even at 1280 px). Download is a row of its own here on a phone, where the
+    // row keeps five tiles; Watch together and Ask your agent live here at every width. The owner's Edit and Delete are
+    // not here any more: they have their own bar under the title (ownerBar).
+    const watchMore = ({ path, kind, items, extras = '', download = false }) => actionMenu({ icon: 'more', label: 'More', cls: 'ovv-more-menu', body: html`<div class="ovv-more-actions">${download ? html`<a class="ovv-more-dl" href="#download" data-ovv-more-dl><i data-ov-icon="download" aria-hidden="true"></i> Download</a>` : ''}${extras}<button type="button" data-ovv-copy-time="${base}${path}"><i data-ov-icon="copy" aria-hidden="true"></i> Copy link at time</button><button type="button" data-ovv-pip hidden><i data-ov-icon="window-restore" aria-hidden="true"></i> Picture in picture</button><a href="mailto:report@openvibe.network?subject=${encodeURIComponent(`Report ${kind} ${base}${path}`)}"><i data-ov-icon="flag" aria-hidden="true"></i> Report</a>${menuLinks(items)}</div>` });
+    /**
+     * The owner's own bar, under the title: whose it is, who can see it, Edit and Delete in plain sight (11-17, Maticus:
+     * "the 'edit' button is buried … and delete button below that": both were in More, the last of eight buttons in a
+     * row that scrolled sideways). Edit opens the panel under the player; Delete asks once in its own small menu.
+     */
+    const ownerBar = (kind, id, item) => {
+        const what = kind === 'vod' ? 'recording' : 'clip';
+        return html`<div class="ovv-ownerbar" role="group" aria-label="Your ${what}"><span class="ovv-ownerbar-who"><i class="ovg-fill" data-ov-icon="user" aria-hidden="true"></i> Your ${what}</span>${visibilityBadge(item.visibility)}<span class="ovv-ownerbar-tools">${editButton(what)}${deleteAction({ action: `/${kind === 'vod' ? 'v' : 'c'}/${id}`, what })}</span></div>`;
+    };
     const watchFacts = (views, date, duration, visibility) => {
         const count = Math.max(0, Number(views) || 0);
         const stamp = date instanceof Date ? date.getTime() : Date.parse(String(date || ''));
@@ -1580,7 +1593,12 @@ ${found ? sections.map((x) => (x.cards.length || kind ? html`<section class="ovv
         // ("Part 1 (this one) · Part 2 · Part 1", 2026-10-27).
         const seenParts = new Set();
         const parts = vod.part && hist && hist !== fail && Array.isArray(hist.parts) ? hist.parts.filter((p) => p && live.isId(p.vod_id) && !seenParts.has(String(p.vod_id)) && seenParts.add(String(p.vod_id))) : [];
-        const partNav = parts.length > 1 ? html`<p class="ovv-about-parts"><i class="ovg-fill" data-ov-icon="layers" aria-hidden="true"></i> The stream was recorded in ${parts.length} parts: ${parts.map((p, i) => [i ? ' · ' : '', String(p.vod_id) === id ? html`<b>Part ${i + 1} (this one)</b>` : html`<a href="/v/${p.vod_id}">Part ${i + 1}</a>`])}</p>` : '';
+        // Under the title, not folded into the description (11-17, Maticus: "the way it splits up shit is weird"): which
+        // part this is and how long each runs, one tap to the next. A joined recording plays every part, so it has none.
+        const partLen = (p) => (Number(p.end) > Number(p.at) ? Number(p.end) - Number(p.at) : 0);
+        const partNav = parts.length > 1 && !(rec && rec.joined) ? html`<nav class="ovv-parts" aria-label="The stream was recorded in ${parts.length} parts"><span class="ovv-parts-label"><i class="ovg-fill" data-ov-icon="layers" aria-hidden="true"></i> Recorded in ${parts.length} parts</span>${parts.map((p, i) => (String(p.vod_id) === id
+            ? html`<span class="ovv-part is-here" aria-current="page">Part ${i + 1}${partLen(p) ? html` <small>${clock(partLen(p))}</small>` : ''}</span>`
+            : html`<a class="ovv-part" href="/v/${p.vod_id}">Part ${i + 1}${partLen(p) ? html` <small>${clock(partLen(p))}</small>` : ''}</a>`))}</nav>` : '';
         const ar = hist && hist !== fail ? startAspect(hist, vod) : null;
         const shapeAttr = ar ? html` style="--ovv-ar: ${String(ar)}" data-ovv-ar="${String(ar)}"` : '';
         // The More menu: where else this lives, and the owner's tools.
@@ -1614,15 +1632,17 @@ ${savedNotice(req)}${ownOnly ? notice('Private: only you (and OpenVibe staff) ca
 <div class="ovv-head">
 ${titleLine('Stream recording', vod.title || 'Stream recording')}
 ${labelsUi.chips(labelsUi.inForce(vod))}
+${partNav}
+${manageable ? ownerBar('vod', id, vod) : ''}
 <div class="ovv-head-row">
 ${channelRow(vod.username, channelName, vod.follower_count)}
-<div class="ovv-actions-shell"><div class="ovv-actions">${likeButton(likes, 'vod', id)}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: vod.title || 'Stream recording', text: about, image: httpsUrl(vod.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${saveForm}${downloadMenu({ kind: 'vod', id, item: vod, has: { transcript: segs.length, chat: chatRows ? chatRows.rows.length + chatRows.leftOut : 0, chapters: mems.length } })}${partyLink(watchPath, vod.title || 'Stream recording', vod)}${raw(askAgent({ text: `About the video “${vod.title || 'Stream recording'}” on OpenVibe.Video (${base}${watchPath}): ` }))}${ownOnly ? '' : clipAction(req, id, vod)}${watchMore({ path: watchPath, manageable, kind: 'vod', id, items: moreItems })}</div></div>
+<div class="ovv-actions-shell"><div class="ovv-actions">${likeButton(likes, 'vod', id)}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: vod.title || 'Stream recording', text: about, image: httpsUrl(vod.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${saveForm}${downloadMenu({ kind: 'vod', id, item: vod, has: { transcript: segs.length, chat: chatRows ? chatRows.rows.length + chatRows.leftOut : 0, chapters: mems.length } })}${ownOnly ? '' : clipAction(req, id, vod)}${watchMore({ path: watchPath, kind: 'vod', items: moreItems, download: true, extras: html`${partyLink(watchPath, vod.title || 'Stream recording', vod)}${raw(askAgent({ text: `About the video “${vod.title || 'Stream recording'}” on OpenVibe.Video (${base}${watchPath}): ` }))}` })}</div></div>
 </div>
 ${vod.is_recording ? html`<p class="ovv-recording" role="status"><i class="ovg-fill" data-ov-icon="circle" aria-hidden="true"></i> This recording is still in progress. <a href="${liveChannel}">Watch the live channel</a>.</p>` : ''}
 </div>
 </div>
 ${manageable ? ownerPanel('vod', id, vod) : ''}
-${watchAbout({ facts, description: vod.description || about, ai: vod.ai_overview, parts: partNav, chapters: side && mems && mems.length ? [] : mems, path: watchPath, tags: Array.isArray(vod.tags) ? vod.tags : [], from: channelName ? html`<p class="ovv-about-from">Streamed live on <a href="${liveChannel}">${channelName}'s OpenVibe.Live channel</a>${vod.stream_category ? html`, in ${String(vod.stream_category).charAt(0).toUpperCase()}${String(vod.stream_category).slice(1)}` : ''}.</p>` : '' })}
+${watchAbout({ facts, description: vod.description || about, ai: vod.ai_overview, chapters: side && mems && mems.length ? [] : mems, path: watchPath, tags: Array.isArray(vod.tags) ? vod.tags : [], from: channelName ? html`<p class="ovv-about-from">Streamed live on <a href="${liveChannel}">${channelName}'s OpenVibe.Live channel</a>${vod.stream_category ? html`, in ${String(vod.stream_category).charAt(0).toUpperCase()}${String(vod.stream_category).slice(1)}` : ''}.</p>` : '' })}
 <section class="ovv-panel ovv-comments">${commentsHtml}</section>
 </div>
 <aside class="ovv-col ovv-col--side">
@@ -1740,9 +1760,10 @@ ${cutting ? html`<div class="ovv-player-wrap ovv-cutting" role="status" data-ovv
 <div class="ovv-head">
 ${titleLine(aiClip ? 'AI clip' : 'Clip', clip.title || 'Clip')}
 ${labelsUi.chips(labelsUi.inForce(clip))}
+${manageable ? ownerBar('clip', id, clip) : ''}
 <div class="ovv-head-row">
 ${channelRow(clip.source_streamer_username || clip.username, clip.source_streamer_display_name || clip.display_name || clip.username, clip.follower_count)}
-<div class="ovv-actions-shell"><div class="ovv-actions">${likeButton(likes, 'clip', id)}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: clip.title || 'Clip', text: clip.ai_overview || attribution, image: httpsUrl(clip.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${saveForm}${cutting ? '' : downloadMenu({ kind: 'clip', id, item: clip, has: { transcript: segs.length } })}${cutting ? '' : partyLink(watchPath, clip.title || 'Clip', clip)}${raw(askAgent({ text: `About the clip “${clip.title || 'Clip'}” on OpenVibe.Video (${base}${watchPath}): ` }))}${fullRecording ? html`<a class="ovv-btn" href="${fullRecording}" title="Watch the recording it was cut from, from this moment"><i class="ovg-fill" data-ov-icon="film" aria-hidden="true"></i> Full recording</a>` : ''}${watchMore({ path: watchPath, manageable, kind: 'clip', id, items: moreItems })}</div></div>
+<div class="ovv-actions-shell"><div class="ovv-actions">${likeButton(likes, 'clip', id)}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: clip.title || 'Clip', text: clip.ai_overview || attribution, image: httpsUrl(clip.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${saveForm}${cutting ? '' : downloadMenu({ kind: 'clip', id, item: clip, has: { transcript: segs.length } })}${fullRecording ? html`<a class="ovv-btn" href="${fullRecording}" title="Watch the recording it was cut from, from this moment"><i class="ovg-fill" data-ov-icon="film" aria-hidden="true"></i> Full recording</a>` : ''}${watchMore({ path: watchPath, kind: 'clip', items: moreItems, download: !cutting, extras: html`${cutting ? '' : partyLink(watchPath, clip.title || 'Clip', clip)}${raw(askAgent({ text: `About the clip “${clip.title || 'Clip'}” on OpenVibe.Video (${base}${watchPath}): ` }))}` })}</div></div>
 </div>
 </div>
 </div>

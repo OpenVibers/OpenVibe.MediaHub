@@ -221,6 +221,23 @@
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') all.forEach(function (d) { if (d.open) close(d, true); });
         });
+        // More's Download row (on a phone Download's own button leaves the row, 11-17): More closes and the download
+        // sheet opens in its place, without the click that opened it also closing it, and without scrolling the page.
+        document.querySelectorAll('[data-ovv-more-dl]').forEach(function (a) {
+            a.addEventListener('click', function (e) {
+                const dl = document.getElementById('download');
+                if (!dl) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const more = a.closest('details');
+                if (more) more.open = false;
+                setTimeout(function () {
+                    dl.open = true;
+                    const first = dl.querySelector('.ovv-dl-menu a, .ovv-dl-menu button');
+                    if (first) first.focus({ preventScroll: true });
+                }, 0);
+            });
+        });
     }
 
     function watchActions() {
@@ -312,7 +329,7 @@
         const b = document.createElement('button');
         b.type = 'button'; b.setAttribute('role', 'tab'); b.id = 'ovv-tab-more'; b.setAttribute('aria-controls', 'ovv-tp-more');
         b.setAttribute('aria-selected', 'false'); b.tabIndex = -1; b.setAttribute('data-ovv-tab', 'more');
-        b.append('More ');
+        b.append('Videos ');
         const n = document.createElement('span'); n.className = 'ovv-tab-count'; n.textContent = String(count); b.append(n);
         const panel = document.createElement('section');
         panel.className = 'ovv-tp ovv-tp--more'; panel.id = 'ovv-tp-more'; panel.setAttribute('role', 'tabpanel');

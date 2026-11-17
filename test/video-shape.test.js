@@ -78,7 +78,9 @@ assert.ok(css.indexOf('aspect-ratio: var(--ovv-ar') < css.indexOf('video.ovv-pla
     tall.videoWidth = 1280; tall.videoHeight = 720; (l3.resize || []).forEach((f) => f());
     assert.strictEqual(marks['is-upright'], false, 'turned on its side mid-stream, the mark goes');
 }
-const phone = css.slice(css.lastIndexOf('@media (max-width: 600px) {'));
+// The phone block that holds the player's rules (later phone blocks, such as the action row's of 11-17, come after it).
+const stickyAt = css.indexOf('.ovv-watch .ovv-player-wrap:not(.is-upright) { position: sticky');
+const phone = css.slice(css.lastIndexOf('@media (max-width: 600px) {', stickyAt));
 assert.match(phone, /\.ovv-watch \.ovv-player-wrap:not\(\.is-upright\) \{ position: sticky; top: var\(--ovnav-real-h, 52px\);/, 'a phone pins a wide player under the bar');
 assert.match(phone, /html:has\(\.openvibe-navbar\.ovnav-hide\) \.ovv-watch \.ovv-player-wrap:not\(\.is-upright\) \{ top: 0; \}/, 'and at the top once the bar has stepped away');
 assert.ok(!/\.is-upright\) \{[^}]*position: sticky[^}]*\}/.test(phone.replace(/:not\(\.is-upright\)/g, '')), 'an upright player is never pinned');
