@@ -949,3 +949,5 @@ html[data-ov-motion=off] .ovv-watch .ovv-ownerbar { animation: none; }
 @media (pointer: coarse) { .ovv-watch .ovv-part { min-height: 44px; } }
 .ovv-watch .ovv-like-word { white-space: nowrap; }
 @media (max-width: 600px) { .ovv-watch .ovv-parts-label { flex: 1 1 100%; } }
+/* The part chips sit clear of the byline under them (no owner bar between them for a visitor, 11-17). */
+.ovv-watch .ovv-parts + .ovv-head-row { margin-top: 14px; }
