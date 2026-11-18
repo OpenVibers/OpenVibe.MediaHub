@@ -832,7 +832,7 @@ function createVideoRoutes(ctx) {
         if (!username) return '';
         const channel = `${livePublic}/@${username}`;
         const count = Number(followers);
-        return html`<div class="ovv-byline"><a class="ovv-avatar" href="${channel}" aria-hidden="true" tabindex="-1">${String(name || username).slice(0, 1).toUpperCase()}${live.isUsername(String(username)) ? html`<img src="${config.networkUrl}/avatar/${username}" alt="" loading="lazy">` : ''}</a><div class="ovv-byline-text"><a class="ovv-channel-name" href="${channel}">@${username}</a>${Number.isSafeInteger(count) && count >= 0 ? html`<span class="ovv-meta">${count.toLocaleString('en-US')} ${count === 1 ? 'follower' : 'followers'}</span>` : ''}</div><a class="ovv-btn ovv-follow" href="${channel}" title="Follow ${name || username} on OpenVibe.Live"><i class="ovg-fill" data-ov-icon="plus" aria-hidden="true"></i> Follow</a></div>`;
+        return html`<div class="ovv-byline"><a class="ovv-avatar" href="${channel}" aria-hidden="true" tabindex="-1">${String(name || username).slice(0, 1).toUpperCase()}${live.isUsername(String(username)) ? html`<img src="${config.networkUrl}/avatar/${username}" alt="" loading="lazy">` : ''}</a><div class="ovv-byline-text"><a class="ovv-channel-name" href="${channel}">@${username}</a>${Number.isSafeInteger(count) && count >= 0 ? html`<span class="ovv-meta">${count.toLocaleString('en-US')} ${count === 1 ? 'follower' : 'followers'}</span>` : ''}</div><a class="ovv-btn ovv-follow" href="${channel}" data-ovv-follow="${username}" aria-pressed="false" title="Follow ${name || username}"><i class="ovg-fill" data-ov-icon="plus" aria-hidden="true"></i> <span class="ovv-follow-w">Follow</span></a></div>`;
     };
     // More: what the row has no room for (11-17, Maticus: "some weird horizontal scroll bar with a bunch of shit in it";
     // eight buttons scrolled sideways, cut off even at 1280 px). Download is a row of its own here on a phone, where the
@@ -1082,6 +1082,46 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
             return res.redirect(303, `/${req.params.kind}/${id}?sort=${commentSort(req)}#comments`);
         } catch (err) { return ownerRefused(req, res, err, `/${req.params.kind}/${id}#comments`); }
     });
+    // ── Follow a channel from openvibe.video (11-18: the owner asked for a real Follow on the watch page) ──
+    //   GET  /watch/follow?channel=<name>            { followers, following } (following only when signed in)
+    //   POST /watch/follow  channel, follow=1|0      follows or unfollows as the viewer → the same
+    // Network owns the follow graph (server/identity/follows.js there: channel by username); the page stays cacheable and
+    // its script asks for the viewer's state.
+    const CHANNEL_RE = /^[A-Za-z0-9_]{1,64}$/;
+    const followUrl = (name, mine) => `${String(config.networkInternalUrl || 'http://127.0.0.1:4000').replace(/\/+$/, '')}/api/v1/${mine ? 'me/' : ''}follows/channel/${encodeURIComponent(name)}`;
+    const netFetch = ctx.fetchImpl || globalThis.fetch;
+    async function followRead(token, name) {
+        const res = await netFetch(followUrl(name, false), { headers: { Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, signal: AbortSignal.timeout(4000) });
+        if (!res.ok) throw Object.assign(new Error(`Network answered ${res.status}`), { status: res.status });
+        const j = await res.json();
+        return { followers: Math.max(0, Number(j.followers) || 0), following: j.following === true };
+    }
+    r.get('/watch/follow', async (req, res) => {
+        const name = String(req.query.channel || '');
+        if (!CHANNEL_RE.test(name)) return res.status(400).json({ error: 'Invalid channel.' });
+        res.set('Cache-Control', 'private, no-store');
+        try { return res.json(signedIn(req) ? await asPerson(req, res, (token) => followRead(token, name)) : await followRead(null, name)); }
+        catch { return res.status(502).json({ error: 'Follows are unavailable right now.' }); }
+    });
+    r.post('/watch/follow', async (req, res) => {
+        if (!signedIn(req)) return res.status(401).json({ error: 'Sign in to follow.' });
+        if (!sameSite(req, res, '/')) return undefined;
+        const name = String((req.body && req.body.channel) || '');
+        if (!CHANNEL_RE.test(name)) return res.status(400).json({ error: 'Invalid channel.' });
+        const on = String((req.body && req.body.follow) || '1') !== '0';
+        res.set('Cache-Control', 'private, no-store');
+        try {
+            return res.json(await asPerson(req, res, async (token) => {
+                const w = await netFetch(followUrl(name, true), { method: on ? 'PUT' : 'DELETE', headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, ...(on ? { 'Content-Type': 'application/json' } : {}) },
+                    ...(on ? { body: '{}' } : {}), signal: AbortSignal.timeout(4000) });
+                if (!w.ok) throw Object.assign(new Error(`Network answered ${w.status}`), { status: w.status });
+                return await followRead(token, name);
+            }));
+        } catch (err) {
+            return res.status(err && err.status === 400 ? 400 : 502).json({ error: err && err.status === 400 ? 'You cannot follow your own channel.' : 'The follow was not saved. Try again.' });
+        }
+    });
+
     r.post('/watch/like', async (req, res) => {
         if (!signedIn(req)) return res.status(401).json({ error: 'Sign in to like this video.' });
         if (!sameSite(req, res, '/')) return undefined;

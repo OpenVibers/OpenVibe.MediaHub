@@ -240,6 +240,41 @@
         });
     }
 
+    // Follow (11-18): the viewer's state and the count from Network's follow graph, toggled in place. Without this script
+    // the button is a link to the channel's page, where following works too.
+    function followButtons() {
+        document.querySelectorAll('[data-ovv-follow]').forEach(function (button) {
+            const name = button.getAttribute('data-ovv-follow');
+            const count = document.querySelector('[data-ovv-followers="' + name + '"]');
+            const word = button.querySelector('.ovv-follow-w');
+            const paint = function (s) {
+                button.setAttribute('aria-pressed', String(!!s.following));
+                button.classList.toggle('is-on', !!s.following);
+                if (word) word.textContent = s.following ? 'Following' : 'Follow';
+                if (count && typeof s.followers === 'number') { count.hidden = false; count.textContent = ' · ' + s.followers.toLocaleString('en-US') + (s.followers === 1 ? ' follower' : ' followers'); }
+            };
+            fetch('/watch/follow?channel=' + encodeURIComponent(name), { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (s) { if (s) { button.dataset.ready = '1'; paint(s); } })
+                .catch(function () { /* the link still works */ });
+            button.addEventListener('click', async function (e) {
+                if (button.dataset.ready !== '1') return;
+                e.preventDefault();
+                if (button.dataset.busy) return;
+                button.dataset.busy = '1';
+                try {
+                    const on = button.getAttribute('aria-pressed') !== 'true';
+                    const r = await fetch('/watch/follow', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body: new URLSearchParams({ channel: name, follow: on ? '1' : '0' }) });
+                    if (r.status === 401) { location.href = '/auth/login?next=' + encodeURIComponent(location.pathname + location.search); return; }
+                    if (!r.ok) throw new Error('follow');
+                    paint(await r.json());
+                    if (on) { button.classList.remove('ovv-follow--pop'); void button.offsetWidth; button.classList.add('ovv-follow--pop'); }
+                } catch (_) { button.title = 'The follow was not saved. Try again.'; }
+                finally { delete button.dataset.busy; }
+            });
+        });
+    }
+
     function watchActions() {
         document.querySelectorAll('[data-ovv-like]').forEach(function (button) {
             const count = button.querySelector('.ovv-like-count');
@@ -461,6 +496,7 @@
 
         menus();
         watchActions();
+        followButtons();
         copyButtons();
         moreTab();
         tabs();

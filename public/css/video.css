@@ -1012,3 +1012,9 @@ html[data-ov-motion=off] .ovv-about::details-content { transition: none; }
 html[data-ov-motion=off] :is(.ovv-actions .ovv-btn, .ovv-ownerbar .ovv-btn, .ovv-follow, .ovv-also .ovv-card) { transition: none; }
 /* A guest's Report box comes after the comments on a phone (it had no place in the order, so it came first). */
 @media (max-width: 1000px) { .ovv-watch .ovv-report { order: 8; } }
+/* Follow (11-18): Following is the quiet state; following pops once. */
+.ovv-follow.is-on { background: transparent; color: var(--text-secondary, #b6b6c0) !important; border-color: var(--ovv-line-strong); }
+.ovv-follow.is-on i { transform: rotate(45deg); }
+.ovv-follow--pop { animation: ovv-follow-pop .32s cubic-bezier(.3, 1.6, .4, 1); }
+@keyframes ovv-follow-pop { 50% { transform: scale(1.06); } }
+html[data-ov-motion=off] .ovv-follow--pop { animation: none; }

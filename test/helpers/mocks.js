@@ -257,6 +257,21 @@ async function startNetwork({ sandboxAudiences = ['openvibe.events', 'openvibe.m
             return json(200, { services: [{ id: 'network', name: 'OpenVibe.Network', status: 'stable', domains: ['openvibe.network'], capabilities: [], runtime: { status: 'up', basis: 'ready', checked_at: new Date().toISOString() } }] });
         }
         if (url.pathname === '/oauth/revoke') return json(200, {});
+        // Network's follow graph (server/identity/follows.js), channels only: follows kept here, the caller read from the
+        // token's sub; GET answers the count and, signed in, whether the caller follows.
+        if (/^\/api\/v1\/(me\/)?follows\/channel\/[A-Za-z0-9_]{1,64}$/.test(url.pathname)) {
+            const target = decodeURIComponent(url.pathname.split('/').pop()).toLowerCase();
+            const tok = String(req.headers.authorization || '').replace(/^Bearer\s+/, '');
+            let sub = null;
+            try { sub = JSON.parse(Buffer.from(tok.split('.')[1] || '', 'base64url').toString('utf8')).sub || null; } catch { sub = null; }
+            const mine = url.pathname.startsWith('/api/v1/me/');
+            if (mine && !sub) return json(401, { error: 'sign in' });
+            st.follows = st.follows || new Map();
+            if (mine && req.method === 'PUT') st.follows.set(`${sub}:${target}`, true);
+            if (mine && req.method === 'DELETE') st.follows.delete(`${sub}:${target}`);
+            const followers = [...st.follows.keys()].filter((k) => k.endsWith(`:${target}`)).length;
+            return json(200, { target_type: 'channel', target_id: target, followers, ...(sub ? { following: st.follows.has(`${sub}:${target}`) } : {}) });
+        }
         // ADR-033: the internal routes a service's account export and deletion answers come back to
         // (openvibe-sdk/account-data). Recorded in `.accountParts` and `.accountConfirmations`, as Events' side is
         // what a service test needs to see.
