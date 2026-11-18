@@ -73,7 +73,7 @@ const VERSE = 'Got some ashwagandha. Got me some magnesium. Got me some daba. Go
         assert.ok(/class="ovv-ownerbar"[\s\S]*?Your video[\s\S]*?ovv-vis-badge--unlisted[\s\S]*?data-ovv-open="manage"/.test(page.text), 'Your video · Unlisted · Edit');
         assert.ok(page.text.includes(`action="/u/${main}/delete"`), 'Delete');
         assert.ok(/<details class="ovv-panel ovv-owner" id="manage"/.test(page.text) && /name="visibility" value="unlisted" checked/.test(page.text), 'Edit opens the panel, the current choice picked');
-        assert.ok(!page.text.includes('ovv-follow'), 'no Follow on your own video');
+        assert.ok(!page.text.includes('class="ovv-btn ovv-follow"'), 'no Follow on your own video');
     });
 
     await check('a guest: one row of actions, the channel with its videos and Follow; no owner tools', async () => {
@@ -82,7 +82,7 @@ const VERSE = 'Got some ashwagandha. Got me some magnesium. Got me some daba. Go
         assert.ok(!page.text.includes('class="ovv-ownerbar') && !page.text.includes('id="manage"'), 'no owner tools');
         assert.ok(/class="ovv-actions"[\s\S]*?Share[\s\S]*?ovv-more-menu/.test(page.text), 'Share and More in the row');
         assert.ok(/Watch together|Ask your agent/.test(page.text), 'in More');
-        assert.ok(/@kim<\/a><span class="ovv-meta">1 video on OpenVibe.Video<\/span>/.test(page.text), 'how many public videos the channel has');
+        assert.ok(/@kim<\/a><span class="ovv-meta">1 video<span data-ovv-followers="kim" hidden><\/span><\/span>/.test(page.text), 'how many public videos the channel has, the followers filled in by the script');
         assert.ok(page.text.includes('href="https://openvibe.live/@kim"') && page.text.includes('ovv-follow'), 'Follow');
         assert.ok(!/<[^>]+\son[a-z]+="/i.test(page.text.split('<body')[1] || ''), 'no inline handlers (the CSP refuses them: script-src-attr none)');
     });
@@ -125,6 +125,28 @@ const VERSE = 'Got some ashwagandha. Got me some magnesium. Got me some daba. Go
         assert.deepStrictEqual(JSON.parse((await like(samCookie, seq)).text), { count: 0, liked: false }, 'a second press takes it back');
         assert.strictEqual((await like(samCookie, await seqOf(kimPrivate))).status, 404, 'a private upload is not someone else\'s to like');
         assert.strictEqual((await like(kimCookie, await seqOf(kimPrivate))).status, 200, 'its owner may');
+    });
+
+    await check('Follow: the button carries the channel; a viewer follows and unfollows through Network; a guest sees the count', async () => {
+        const page = await vreq(t.base, path, { cookie: samCookie });
+        assert.ok(page.text.includes('data-ovv-follow="kim"') && page.text.includes('data-ovv-followers="kim"'), 'the button and the count\'s place');
+        const form = (cookie, body) => new Promise((resolve, reject) => {
+            const u = new URL(t.base + '/watch/follow');
+            const data = Buffer.from(new URLSearchParams(body).toString());
+            const rq = http.request({ hostname: u.hostname, port: u.port, path: u.pathname, method: 'POST', headers: { Host: 'openvibe.video', cookie, 'sec-fetch-site': 'same-origin', 'content-type': 'application/x-www-form-urlencoded', 'content-length': data.length } }, (res) => {
+                const c = []; res.on('data', (x) => c.push(x)); res.on('end', () => resolve({ status: res.statusCode, json: () => JSON.parse(Buffer.concat(c).toString('utf8')) }));
+            });
+            rq.on('error', reject); rq.write(data); rq.end();
+        });
+        const on = await form(samCookie, { channel: 'kim', follow: '1' });
+        assert.strictEqual(on.status, 200);
+        assert.deepStrictEqual(on.json(), { followers: 1, following: true });
+        const state = await vreq(t.base, '/watch/follow?channel=kim', { cookie: samCookie });
+        assert.deepStrictEqual(state.json(), { followers: 1, following: true }, 'the viewer\'s own state');
+        assert.deepStrictEqual((await vreq(t.base, '/watch/follow?channel=kim')).json(), { followers: 1, following: false }, 'a guest: the count');
+        assert.deepStrictEqual((await form(samCookie, { channel: 'kim', follow: '0' })).json(), { followers: 0, following: false }, 'unfollowed');
+        assert.strictEqual((await form('', { channel: 'kim' })).status, 401, 'a guest signs in first');
+        assert.strictEqual((await form(samCookie, { channel: 'not a name' })).status, 400);
     });
 
     await check('the measurements are asked again: 30 minutes after, then later each time; captions and chapters stay meanwhile', async () => {
