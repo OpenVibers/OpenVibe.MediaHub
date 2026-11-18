@@ -218,7 +218,7 @@ function createUploadApi({ ctx, config }) {
 /** The pages; `h` carries the video site's helpers (page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, cards). */
 function mountUploadPages(r, h) {
     const { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt, playlistForm, upNext, whatItIs, shareButton, renderVod, renderClip,
-        titleLine, watchFacts, watchAbout, watchMore, visibilityChoices, visibilityBadge, editButton, partyLink } = h;
+        titleLine, watchFacts, watchAbout, watchMore, visibilityChoices, visibilityBadge, editButton, partyLink, likeButton, likesOf } = h;
     const up = ctx.videoUploads;
     const comments = createCommentsClient({ config: ctx.config, fetchImpl: ctx.fetchImpl || globalThis.fetch });
     const commentLimit = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
@@ -540,6 +540,8 @@ ${fresh.length ? html`<ul class="ovv-mylist">${fresh.map(myVideoRow)}</ul>` : ht
         // channel and related videos down the side. Edit opens the panel under the player: title, description, who can see
         // it, the AI's edited copies and Studio.
         const staffOnly = manage && !own;
+        // Likes (11-18): an upload is liked like a recording, by its number.
+        const likes = ready && likeButton && likesOf ? await likesOf(req, 'upload', row.seq).catch(() => null) : null;
         const aiSummary = aiDone && ai.overview && !isFactsOverview(ai.overview) ? String(ai.overview).trim() : '';
         const chapterList = aiDone ? chapterRows(ai.chapters) : [];
         const lines = aiDone ? transcriptLines(ai.segments) : [];
@@ -597,7 +599,7 @@ ${titleLine('Upload', row.title)}
 ${ownerBar}
 <div class="ovv-head-row">
 ${channel ? html`<div class="ovv-byline"><a class="ovv-avatar" href="/@${channel}" aria-hidden="true" tabindex="-1">${channel.slice(0, 1).toUpperCase()}${/^[A-Za-z0-9_]{1,32}$/.test(channel) ? html`<img src="${ctx.config.networkUrl}/avatar/${channel}" alt="" loading="lazy">` : ''}</a><div class="ovv-byline-text"><a class="ovv-channel-name" href="/@${channel}">@${channel}</a><span class="ovv-meta">${channelCount > 48 ? '48+ videos' : `${channelCount} ${channelCount === 1 ? 'video' : 'videos'}`} on OpenVibe.Video</span></div>${own ? '' : html`<a class="ovv-btn ovv-follow" href="${livePublic}/@${channel}" title="Follow @${channel} on OpenVibe.Live"><i class="ovg-fill" data-ov-icon="plus" aria-hidden="true"></i> Follow</a>`}</div>` : ''}
-${ready ? html`<div class="ovv-actions-shell"><div class="ovv-actions">${saveForm}${raw(shareButton({ cls: 'ovv-btn', url: `${ctx.config.video.url}${watchPath}`, title: row.title, text: about, image: thumb || '', timeFrom: vod ? '.ovv-player' : null, kind: 'video', id: row.id }))}${watchMore({ path: watchPath, kind: 'video', items: [], extras: html`${vod ? partyLink(watchPath, row.title, vod) : ''}${raw(askAgent({ text: `About the video “${row.title}” on OpenVibe.Video (${ctx.config.video.url}${watchPath}): ` }))}` })}</div></div>` : ''}
+${ready ? html`<div class="ovv-actions-shell"><div class="ovv-actions">${likes ? likeButton(likes, 'upload', row.seq) : ''}${saveForm}${raw(shareButton({ cls: 'ovv-btn', url: `${ctx.config.video.url}${watchPath}`, title: row.title, text: about, image: thumb || '', timeFrom: vod ? '.ovv-player' : null, kind: 'video', id: row.id }))}${watchMore({ path: watchPath, kind: 'video', items: [], extras: html`${vod ? partyLink(watchPath, row.title, vod) : ''}${raw(askAgent({ text: `About the video “${row.title}” on OpenVibe.Video (${ctx.config.video.url}${watchPath}): ` }))}` })}</div></div>` : ''}
 </div>
 </div>
 </div>
