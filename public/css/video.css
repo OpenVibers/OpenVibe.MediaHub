@@ -376,6 +376,10 @@ a.ovv-channel-name:hover { text-decoration: underline; }
 /* Chat replay, chapters and the transcript beside the player (server/video/watch-ui.js companion). */
 .ovv-companion { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--ovv-line); border-radius: 14px; background: var(--ovv-card); overflow: hidden; }
 .ovv-companion--tabs, .ovv-companion--one { height: min(680px, calc(100vh - 110px)); height: min(680px, calc(100dvh - 110px)); }
+/* 11-18 (the owner's phone: two transcript lines in a box as tall as the screen, "waste"): one panel is as tall as what it
+   holds, up to the same cap; on a phone the tabs are too. */
+.ovv-companion--one { height: auto; max-height: min(680px, calc(100vh - 110px)); max-height: min(680px, calc(100dvh - 110px)); }
+@media (max-width: 1000px) { .ovv-companion--tabs { height: auto; max-height: min(560px, 70vh); max-height: min(560px, 70svh); } }
 .ovv-tabs { display: flex; gap: 2px; padding: 4px 8px 0; border-bottom: 1px solid var(--ovv-line); overflow-x: auto; scrollbar-width: none; }
 .ovv-tabs[hidden] { display: none; }
 .ovv-tabs [role=tab] { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; padding: 11px 12px 9px; border-bottom: 2px solid transparent; font-size: .9rem; font-weight: 700; color: var(--ovv-dim); cursor: pointer; white-space: nowrap; }

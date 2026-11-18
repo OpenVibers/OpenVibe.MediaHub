@@ -103,6 +103,13 @@ function vreq(base, path, { method = 'GET', cookie, form, same = true } = {}) {
         assert.ok(!other.text.includes('Edit this recording'), 'not for someone else');
         assert.ok(!other.text.includes('class="ovv-ownerbar"'), 'no owner bar for someone else');
         assert.ok(!other.text.includes('ovv-btn--edit'), 'no Edit for someone else');
+        // 11-18 (the owner's phone: "this ain't my clip"): staff may manage anyone's, and the bar says so, never "Your".
+        const ada = t.network.addUser('ada-staff', { role: 'admin' });
+        const staff = await vreq(t.base, '/v/101', { cookie: t.signIn(ada) });
+        assert.ok(/class="ovv-ownerbar is-staff"[^>]*aria-label="Staff tools on this recording"/.test(staff.text), 'the staff bar');
+        assert.ok(/As staff · @kim(&#x27;|&#39;|')s recording/.test(staff.text), 'whose it is');
+        assert.ok(!/Your recording/.test(staff.text), 'never Your recording, as staff');
+        assert.ok(staff.text.includes('ovv-btn--edit'), 'staff keep Edit');
         const anon = await vreq(t.base, '/v/101');
         assert.ok(!anon.text.includes('Edit this recording'), 'not signed out');
     });

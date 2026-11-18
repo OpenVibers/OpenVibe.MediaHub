@@ -19,7 +19,8 @@ assert.match(out, /Delete for good<\/button>/, 'one button says what happens');
 const pages = fs.readFileSync(path.join(__dirname, '..', 'server', 'video', 'pages.js'), 'utf8');
 // The owner's own bar under the title, on both watch pages (11-17, Maticus: Edit and Delete were buried in More).
 assert.ok(pages.includes('deleteAction({ action: `/${kind === \'vod\' ? \'v\' : \'c\'}/${id}`, what })'), 'Delete is in the owner bar');
-assert.ok(pages.includes("${manageable ? ownerBar('vod', id, vod) : ''}") && pages.includes("${manageable ? ownerBar('clip', id, clip) : ''}"), 'on both watch pages');
+// 11-18: staff's bar says it is staff's ("As staff"), so each page says whether the viewer owns it.
+assert.ok(pages.includes("${manageable ? ownerBar('vod', id, vod, !owns(req, 'vod', vod)) : ''}") && pages.includes("${manageable ? ownerBar('clip', id, clip, !owns(req, 'clip', clip)) : ''}"), 'on both watch pages');
 const more = pages.slice(pages.indexOf('const watchMore = '), pages.indexOf('const ownerBar = '));
 assert.ok(!/deleteAction|editButton/.test(more), 'not in More');
 const panel = pages.slice(pages.indexOf('function ownerPanel('), pages.indexOf('// The shell\'s navbar/footer scripts'));
