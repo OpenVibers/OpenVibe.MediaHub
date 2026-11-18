@@ -755,6 +755,13 @@ function createVideoRoutes(ctx) {
     const VISIBILITIES = ['public', 'unlisted', 'private'];
     const sameName = (a, b) => Boolean(a && b && String(a).toLowerCase() === String(b).toLowerCase());
     const isStaff = (req) => ['admin', 'global_mod'].includes(String((req.viewer && req.viewer.role) || ''));
+    /** The viewer's own (never staff's reach): a recording on their channel, a clip they made or cut from their stream. */
+    function owns(req, kind, item) {
+        if (!signedIn(req) || !item) return false;
+        const me = req.viewer.username;
+        if (kind === 'vod') return sameName(me, item.username);
+        return sameName(me, item.username) || sameName(me, item.source_streamer_username) || sameName(me, item.channel_username);
+    }
     function mayManage(req, kind, item) {
         if (!signedIn(req) || !item) return false;
         if (isStaff(req)) return true;
@@ -837,9 +844,15 @@ function createVideoRoutes(ctx) {
      * "the 'edit' button is buried … and delete button below that": both were in More, the last of eight buttons in a
      * row that scrolled sideways). Edit opens the panel under the player; Delete asks once in its own small menu.
      */
-    const ownerBar = (kind, id, item) => {
+    // 11-18 (the owner's phone: "this ain't my clip" on someone else's clip): staff manage anyone's, and then the bar says
+    // so ("As staff · @name's clip") instead of calling it theirs.
+    const ownerBar = (kind, id, item, staff = false) => {
         const what = kind === 'vod' ? 'recording' : 'clip';
-        return html`<div class="ovv-ownerbar" role="group" aria-label="Your ${what}"><span class="ovv-ownerbar-who"><i class="ovg-fill" data-ov-icon="user" aria-hidden="true"></i> Your ${what}</span>${visibilityBadge(item.visibility)}<span class="ovv-ownerbar-tools">${editButton(what)}${deleteAction({ action: `/${kind === 'vod' ? 'v' : 'c'}/${id}`, what })}</span></div>`;
+        const whose = String(item.channel_username || item.source_streamer_username || item.username || '').slice(0, 40);
+        const who = staff
+            ? html`<span class="ovv-ownerbar-who is-staff"><i class="ovg-fill" data-ov-icon="key" aria-hidden="true"></i> As staff${whose ? html` · @${whose}'s ${what}` : ''}</span>`
+            : html`<span class="ovv-ownerbar-who"><i class="ovg-fill" data-ov-icon="user" aria-hidden="true"></i> Your ${what}</span>`;
+        return html`<div class="ovv-ownerbar${staff ? ' is-staff' : ''}" role="group" aria-label="${staff ? `Staff tools on this ${what}` : `Your ${what}`}">${who}${visibilityBadge(item.visibility)}<span class="ovv-ownerbar-tools">${editButton(what)}${deleteAction({ action: `/${kind === 'vod' ? 'v' : 'c'}/${id}`, what })}</span></div>`;
     };
     const watchFacts = (views, date, duration, visibility) => {
         const count = Math.max(0, Number(views) || 0);
@@ -1633,7 +1646,7 @@ ${savedNotice(req)}${ownOnly ? notice('Private: only you (and OpenVibe staff) ca
 ${titleLine('Stream recording', vod.title || 'Stream recording')}
 ${labelsUi.chips(labelsUi.inForce(vod))}
 ${partNav}
-${manageable ? ownerBar('vod', id, vod) : ''}
+${manageable ? ownerBar('vod', id, vod, !owns(req, 'vod', vod)) : ''}
 <div class="ovv-head-row">
 ${channelRow(vod.username, channelName, vod.follower_count)}
 <div class="ovv-actions-shell"><div class="ovv-actions">${likeButton(likes, 'vod', id)}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: vod.title || 'Stream recording', text: about, image: httpsUrl(vod.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${saveForm}${downloadMenu({ kind: 'vod', id, item: vod, has: { transcript: segs.length, chat: chatRows ? chatRows.rows.length + chatRows.leftOut : 0, chapters: mems.length } })}${ownOnly ? '' : clipAction(req, id, vod)}${watchMore({ path: watchPath, kind: 'vod', items: moreItems, download: true, extras: html`${partyLink(watchPath, vod.title || 'Stream recording', vod)}${raw(askAgent({ text: `About the video “${vod.title || 'Stream recording'}” on OpenVibe.Video (${base}${watchPath}): ` }))}` })}</div></div>
@@ -1760,7 +1773,7 @@ ${cutting ? html`<div class="ovv-player-wrap ovv-cutting" role="status" data-ovv
 <div class="ovv-head">
 ${titleLine(aiClip ? 'AI clip' : 'Clip', clip.title || 'Clip')}
 ${labelsUi.chips(labelsUi.inForce(clip))}
-${manageable ? ownerBar('clip', id, clip) : ''}
+${manageable ? ownerBar('clip', id, clip, !owns(req, 'clip', clip)) : ''}
 <div class="ovv-head-row">
 ${channelRow(clip.source_streamer_username || clip.username, clip.source_streamer_display_name || clip.display_name || clip.username, clip.follower_count)}
 <div class="ovv-actions-shell"><div class="ovv-actions">${likeButton(likes, 'clip', id)}${raw(shareButton({ cls: 'ovv-btn', url: `${base}${watchPath}`, title: clip.title || 'Clip', text: clip.ai_overview || attribution, image: httpsUrl(clip.thumbnail_url) || '', timeFrom: '.ovv-player' }))}${saveForm}${cutting ? '' : downloadMenu({ kind: 'clip', id, item: clip, has: { transcript: segs.length } })}${fullRecording ? html`<a class="ovv-btn" href="${fullRecording}" title="Watch the recording it was cut from, from this moment"><i class="ovg-fill" data-ov-icon="film" aria-hidden="true"></i> Full recording</a>` : ''}${watchMore({ path: watchPath, kind: 'clip', items: moreItems, download: !cutting, extras: html`${cutting ? '' : partyLink(watchPath, clip.title || 'Clip', clip)}${raw(askAgent({ text: `About the clip “${clip.title || 'Clip'}” on OpenVibe.Video (${base}${watchPath}): ` }))}` })}</div></div>
