@@ -21,7 +21,26 @@ const { createServiceTokenClient } = require('openvibe-sdk/auth');
 // offered as the description.
 
 const MAX_ATTEMPTS = 4;
-const RETRY_SUMMARY = 8;   // attempts in all, a day apart, for a model-written summary
+const RETRY_SUMMARY = 12;   // attempts in all for a model-written summary
+
+/**
+ * A summary no model wrote (OpenVibe.AI's extractive fallback, "Length analysed: …": the model on the shared node did not
+ * answer) is asked for again: 30 minutes after, then 1, 2, 4, 8, 16 hours, then daily, up to RETRY_SUMMARY attempts in
+ * all (11-18: the owner's video showed the analyser's measurements; the local models run on the node via Link, so a
+ * blip there must not cost a day). The captions and chapters stay until the new run lands. → how many were queued.
+ */
+async function requeueSummaries(s) {
+    const rows = await s.db.many(`SELECT upload_id, attempts, updated_at FROM video_upload_ai
+                                   WHERE status = 'done' AND overview LIKE 'Length analysed:%' AND attempts < $1`, [RETRY_SUMMARY]);
+    let n = 0;
+    for (const r of rows) {
+        const wait = Math.min(24 * 60, 30 * 2 ** Math.max(0, Number(r.attempts || 1) - 1)) * 60_000;
+        if (Date.parse(r.updated_at) + wait > s.now()) continue;
+        await s.db.query("UPDATE video_upload_ai SET status = 'queued', next_at = NULL, updated_at = $1 WHERE upload_id = $2 AND status = 'done'", [s.iso(), r.upload_id]);
+        n++;
+    }
+    return n;
+}
 const parse = (v, d) => { if (v == null) return d; if (typeof v !== 'string') return v; try { return JSON.parse(v); } catch { return d; } };
 const clean = (v, max) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max);
 
@@ -131,12 +150,7 @@ function createAiEdit({ s, media, config, fetchImpl = globalThis.fetch, log = co
                               SELECT u.id, 'queued', $1 FROM video_uploads u LEFT JOIN video_upload_ai a ON a.upload_id = u.id
                                WHERE u.status = 'ready' AND u.state <> 'removed' AND a.upload_id IS NULL
                               ON CONFLICT DO NOTHING`, [s.iso()]);
-            // A summary no model wrote (OpenVibe.AI's extractive fallback, "Length analysed: …": its local model did not
-            // answer) is asked for again once a day, up to RETRY_SUMMARY attempts in all (11-18: the owner's video showed
-            // the analyser's measurements as "About this video"). The captions and chapters stay until the new run lands.
-            await s.db.query(`UPDATE video_upload_ai SET status = 'queued', next_at = NULL, updated_at = $1
-                               WHERE status = 'done' AND overview LIKE 'Length analysed:%' AND attempts < $2 AND updated_at < $3`,
-            [s.iso(), RETRY_SUMMARY, new Date(s.now() - 86400_000).toISOString()]);
+            await requeueSummaries(s);
             const due = await s.db.many(`SELECT * FROM video_upload_ai WHERE status IN ('queued', 'running') AND (next_at IS NULL OR next_at <= $1)
                                           ORDER BY updated_at LIMIT 2`, [s.iso()]);
             for (const ai of due) await work(ai);
@@ -153,4 +167,4 @@ function createAiEdit({ s, media, config, fetchImpl = globalThis.fetch, log = co
     };
 }
 
-module.exports = { createAiEdit, chaptersOf, highlightsOf };
+module.exports = { createAiEdit, chaptersOf, highlightsOf, requeueSummaries };

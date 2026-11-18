@@ -127,14 +127,20 @@ const VERSE = 'Got some ashwagandha. Got me some magnesium. Got me some daba. Go
         assert.strictEqual((await like(kimCookie, await seqOf(kimPrivate))).status, 200, 'its owner may');
     });
 
-    await check('the measurements are asked again for a model\'s summary, a day later; captions and chapters stay meanwhile', async () => {
-        t.ctx.videoAi.enabled || assert.ok(true);
-        await db.query(`UPDATE video_upload_ai SET status = 'queued', next_at = NULL, updated_at = $1
-                        WHERE status = 'done' AND overview LIKE 'Length analysed:%' AND attempts < 8 AND updated_at < $2`, [new Date().toISOString(), new Date(Date.now() - 86400e3).toISOString()]);
-        const row = await t.ctx.videoAi.forUpload({ id: main });
-        assert.strictEqual(row.status, 'queued', 'queued again (the same rule the sweep runs)');
+    await check('the measurements are asked again: 30 minutes after, then later each time; captions and chapters stay meanwhile', async () => {
+        const { requeueSummaries } = require('../server/video/ai-edit');
+        const at = (ms) => new Date(Date.now() - ms).toISOString();
+        await db.query("UPDATE video_upload_ai SET status = 'done', attempts = 1, updated_at = $1 WHERE upload_id = $2", [at(10 * 60e3), main]);
+        assert.strictEqual(await requeueSummaries(t.ctx.s), 0, 'not before 30 minutes');
+        await db.query('UPDATE video_upload_ai SET updated_at = $1 WHERE upload_id = $2', [at(31 * 60e3), main]);
+        assert.strictEqual(await requeueSummaries(t.ctx.s), 1, 'after 30 minutes');
+        assert.strictEqual((await t.ctx.videoAi.forUpload({ id: main })).status, 'queued');
         const page = await vreq(t.base, path, { cookie: samCookie });
         assert.ok(page.text.includes('<track kind="captions"') && page.text.includes('Got some ashwagandha (2)'), 'the first run\'s captions and chapters stay while it is asked again');
+        await db.query("UPDATE video_upload_ai SET status = 'done', attempts = 3, updated_at = $1 WHERE upload_id = $2", [at(90 * 60e3), main]);
+        assert.strictEqual(await requeueSummaries(t.ctx.s), 0, 'the third: two hours after, not one and a half');
+        await db.query("UPDATE video_upload_ai SET attempts = 12, updated_at = $1 WHERE upload_id = $2", [at(3 * 86400e3), main]);
+        assert.strictEqual(await requeueSummaries(t.ctx.s), 0, 'twelve attempts in all');
     });
 
     await t.close();
