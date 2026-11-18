@@ -84,6 +84,7 @@ const VERSE = 'Got some ashwagandha. Got me some magnesium. Got me some daba. Go
         assert.ok(/Watch together|Ask your agent/.test(page.text), 'in More');
         assert.ok(/@kim<\/a><span class="ovv-meta">1 video on OpenVibe.Video<\/span>/.test(page.text), 'how many public videos the channel has');
         assert.ok(page.text.includes('href="https://openvibe.live/@kim"') && page.text.includes('ovv-follow'), 'Follow');
+        assert.ok(!/<[^>]+\son[a-z]+="/i.test(page.text.split('<body')[1] || ''), 'no inline handlers (the CSP refuses them: script-src-attr none)');
     });
 
     await check('chapters have short names; one long segment is read as lines; the measurements are never the summary', async () => {
