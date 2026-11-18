@@ -24,6 +24,57 @@ const rateLimit = require('express-rate-limit');
 const cache = require('openvibe-shared/cache-policy');
 const { sameOrigin } = require('../http/principal');
 const { html, raw, notice, askAgent } = require('../render/html');
+const { companion, deleteAction } = require('./watch-ui');
+
+/** An AI overview that is the analyser's own measurements (no model wrote it: "Length analysed: 2:13. Streams: …"),
+ *  never shown as the video's summary (the owner's phone, 11-18). ai-edit.js asks for a model's summary again. */
+const isFactsOverview = (t) => /^Length analysed:/.test(String(t || '').trim());
+
+/** A chapter's name as a list says it: its first sentence, at most seven words (the AI names a chapter by the words said
+ *  there, which ran to a whole verse: "Got some ashwagandha. Got me some magnesium. Got me some daba. Got me"). */
+function chapterName(title, i) {
+    const t = String(title || '').replace(/\s+/g, ' ').trim();
+    if (!t || /^(highlight|start)$/i.test(t)) return i === 0 ? 'Start' : 'Highlight';
+    const first = ((t.match(/^.*?[.!?](?=\s|$)/) || [t])[0]).replace(/[.!?]+$/, '').trim() || t;
+    const words = first.split(' ');
+    return words.length > 7 ? `${words.slice(0, 7).join(' ')}…` : first;
+}
+/** The AI's chapters → the rows the chapter list draws ({ offset_seconds, description }); a repeated name is numbered. */
+function chapterRows(list) {
+    const seen = new Map();
+    return (Array.isArray(list) ? list : []).filter((c) => c && Number.isFinite(Number(c.start))).map((c, i) => {
+        let name = chapterName(c.title, i);
+        const n = (seen.get(name) || 0) + 1;
+        seen.set(name, n);
+        if (n > 1) name = `${name} (${n})`;
+        return { offset_seconds: Math.max(0, Math.floor(Number(c.start))), description: name };
+    });
+}
+/**
+ * The transcript as lines a person reads (11-18: one 133-second segment showed as "1 lines"): a long segment is split at
+ * its sentences, short ones joined to about a line, each line timed in proportion to where its words fall.
+ */
+function transcriptLines(segments) {
+    const out = [];
+    for (const g of Array.isArray(segments) ? segments : []) {
+        const text = String((g && g.text) || '').replace(/\s+/g, ' ').trim();
+        if (!text) continue;
+        const start = Math.max(0, Number(g.start) || 0);
+        const end = Number(g.end) > start ? Number(g.end) : start;
+        const parts = text.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) || [text];
+        if (parts.length < 2 || end - start < 8) { out.push({ start, text }); continue; }
+        let at = 0, buf = '', from = 0;
+        for (const part of parts) {
+            if (!buf) from = at;
+            buf = buf ? `${buf} ${part.trim()}` : part.trim();
+            at += part.length;
+            if (buf.length >= 44) { out.push({ start: start + (end - start) * (from / text.length), text: buf }); buf = ''; }
+        }
+        if (buf) out.push({ start: start + (end - start) * (from / text.length), text: buf });
+    }
+    return out.slice(0, 5000);
+}
+const RELATED_STOP = new Set(['this', 'that', 'with', 'from', 'your', 'have', 'what', 'when', 'into', 'about', 'video', 'videos', 'just', 'like', 'more', 'some']);
 const { UploadError } = require('./uploads');
 const { ShareError } = require('openvibe-sdk/share');
 const { createCommentsClient, CommentError } = require('./comments-client');
@@ -166,7 +217,8 @@ function createUploadApi({ ctx, config }) {
 
 /** The pages; `h` carries the video site's helpers (page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, cards). */
 function mountUploadPages(r, h) {
-    const { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt, playlistForm, upNext, whatItIs, shareButton, renderVod, renderClip } = h;
+    const { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt, playlistForm, upNext, whatItIs, shareButton, renderVod, renderClip,
+        titleLine, watchFacts, watchAbout, watchMore, visibilityChoices, visibilityBadge, editButton, partyLink } = h;
     const up = ctx.videoUploads;
     const comments = createCommentsClient({ config: ctx.config, fetchImpl: ctx.fetchImpl || globalThis.fetch });
     const commentLimit = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
@@ -175,6 +227,7 @@ function mountUploadPages(r, h) {
     const cfg = ctx.config.videoUploads;
     const whoOf = (req) => ({ requester: signedIn(req) ? ownerOf(req) : null, staff: isStaff(req) });
     const GB = 1024 ** 3;
+    const VIS = ['public', 'unlisted', 'private'];
     const audienceOptions = (current) => [['public', 'Everyone'], ['link', 'Anyone with the link'], ['people', 'Specific people'], ['private', 'Only me']]
         .map(([value, label]) => html`<option value="${value}"${value === current ? raw(' selected') : ''}>${label}</option>`);
 
@@ -441,7 +494,8 @@ ${fresh.length ? html`<ul class="ovv-mylist">${fresh.map(myVideoRow)}</ul>` : ht
         const ready = row.status === 'ready';
         const vod = ready ? await up.playback(row) : null;
         const ai = ready ? await ctx.videoAi.forUpload(row) : null;
-        const aiDone = Boolean(ai && ai.status === 'done');
+        // Done, or asked again for a summary with its first run's captions and chapters kept (ai-edit.js).
+        const aiDone = Boolean(ai && (ai.status === 'done' || (Array.isArray(ai.segments) && ai.segments.length)));
         const tracks = aiDone ? html`${ai.segments.length ? html`<track kind="captions" label="Captions (AI)" src="/u/${row.id}/captions.vtt" default>` : ''}${ai.chapters.length ? html`<track kind="chapters" src="/u/${row.id}/chapters.vtt">` : ''}` : '';
         if (ready && !own) await up.view(row);
         const listed = ready && row.state === 'active' && row.visibility === 'public';
@@ -477,7 +531,45 @@ ${fresh.length ? html`<ul class="ovv-mylist">${fresh.map(myVideoRow)}</ul>` : ht
         const { lengthWords, dayLabel } = require('./watch-ui');
         const madeBy = `A video by @${channel || 'someone'} on OpenVibe.Video${dayLabel(row.created_at) ? `, uploaded ${dayLabel(row.created_at)}` : ''}${lengthWords(row.duration_seconds) ? `, ${lengthWords(row.duration_seconds)} long` : ''}.`;
         const about = said.length >= 50 ? said.slice(0, 300)
-            : [said ? `${said.replace(/[\s.!?…]+$/u, '')}.` : '', aiDone && ai.overview ? String(ai.overview).trim() : madeBy].filter(Boolean).join(' ').slice(0, 300);
+            : [said ? `${said.replace(/[\s.!?…]+$/u, '')}.` : '', aiDone && ai.overview && !isFactsOverview(ai.overview) ? String(ai.overview).trim() : madeBy].filter(Boolean).join(' ').slice(0, 300);
+        // 4.x (the owner's phone, 11-18: "Unlisted or public?", "so much crap", "can't edit", "not sleek like YouTube",
+        // "needs … more from this user … sections that help SEO and discovery", "transcripts and AI overview and chapters …
+        // should apply to all videos"): the upload's page is the recording's page. The title with who can see it and Edit
+        // under it for the owner; one row of actions (Save, Share, More: Watch together, Ask your agent); the description
+        // box with the facts, the words and the AI summary; chapters and the transcript beside the player; More from the
+        // channel and related videos down the side. Edit opens the panel under the player: title, description, who can see
+        // it, the AI's edited copies and Studio.
+        const staffOnly = manage && !own;
+        const aiSummary = aiDone && ai.overview && !isFactsOverview(ai.overview) ? String(ai.overview).trim() : '';
+        const chapterList = aiDone ? chapterRows(ai.chapters) : [];
+        const lines = aiDone ? transcriptLines(ai.segments) : [];
+        const side = ready ? companion({ kind: 'upload', id: row.id, watchId: row.watch_id || null, chat: null, chapters: chapterList.length > 1 ? chapterList : [],
+            transcript: lines, long: Number(row.duration_seconds) >= 3600, downloads: false,
+            notes: { chapters: 'Made by AI from the video', transcript: 'Written by AI from the audio — it can be wrong' } }) : null;
+        const channelRows = ready && channel ? await up.channel(channel, 49).catch(() => []) : [];
+        const channelCount = channelRows.length + (channelRows.some((x) => x.id === row.id) || !listed ? 0 : 1);
+        const moreRows = channelRows.filter((x) => x.id !== row.id).slice(0, 8);
+        // What the box says when nobody wrote a description: the summary, else the video's first words, in quotes.
+        const firstWords = lines.length ? lines.slice(0, 3).map((l) => l.text).join(' ').replace(/\s+/g, ' ').trim() : '';
+        const opening = firstWords ? `“${firstWords.length > 170 ? `${firstWords.slice(0, 168).replace(/\s+\S*$/, '')}…` : firstWords}”` : '';
+        const livePublic = String((ctx.config.video && ctx.config.video.livePublicUrl) || 'https://openvibe.live').replace(/\/+$/, '');
+        const relatedRows = ready ? await relatedTo(row, moreRows, 8).catch(() => []) : [];
+        const sideCards = (id, title, rows, link) => (rows.length ? html`<section class="ovv-panel ovv-also" aria-labelledby="${id}"><header class="ovv-panel-head"><h2 id="${id}">${title}</h2>${link || ''}</header><div class="ovv-grid ovv-grid--side ovv-rail">${rows.map(uploadCard)}</div></section>` : '');
+        const ownerBar = manage ? html`<div class="ovv-ownerbar${staffOnly ? ' is-staff' : ''}" role="group" aria-label="${staffOnly ? 'Staff tools on this video' : 'Your video'}">${staffOnly
+            ? html`<span class="ovv-ownerbar-who is-staff"><i class="ovg-fill" data-ov-icon="key" aria-hidden="true"></i> As staff${channel ? html` · @${channel}'s video` : ''}</span>`
+            : html`<span class="ovv-ownerbar-who"><i class="ovg-fill" data-ov-icon="user" aria-hidden="true"></i> Your video</span>`}<a class="ovv-vis-link" href="#manage" data-ovv-open="manage" title="Change who can see it">${visibilityBadge(row.visibility)}</a><span class="ovv-ownerbar-tools">${editButton('video')}${deleteAction({ action: `/u/${row.id}`, what: 'video' })}</span></div>` : '';
+        const studio = own && ready && row.state === 'active' && studioVideoEdit ? html`<a class="ovv-btn" href="${studioEditUrl(row)}"><i class="ovg-fill" data-ov-icon="scissors" aria-hidden="true"></i> Trim and cover in Studio</a>` : '';
+        const ownerPanel = manage ? html`<details class="ovv-panel ovv-owner" id="manage"${req.query.edit === '1' ? raw(' open') : ''}><summary><h2 id="h-owner"><i class="ovg-fill" data-ov-icon="pencil" aria-hidden="true"></i> Edit this video</h2><span class="ovv-fine">Title, description, who can see it</span></summary>
+<form class="ovv-owner-form" method="post" action="/u/${row.id}/manage">
+<label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="120" value="${row.title}" required></label>
+<label class="ovv-field"><span>Description</span><textarea name="description" rows="4" maxlength="5000" placeholder="What is it about? Words people search for help them find it.">${row.description}</textarea></label>
+${own && currentAudience === 'people' ? html`<label class="ovv-field"><span>Who can see it</span><select name="audience">${audienceOptions(currentAudience)}</select></label>` : visibilityChoices(VIS.includes(row.visibility) ? row.visibility : 'public')}
+<button class="ovv-btn ovv-btn--primary" type="submit">Save changes</button>
+</form>
+${aiSummary && aiSummary !== row.description ? html`<form class="ovv-owner-ai" method="post" action="/u/${row.id}/manage"><input type="hidden" name="description" value="${aiSummary}"><p class="ovv-fine"><span class="ovv-ai-chip">AI summary</span> ${aiSummary}</p><button class="ovv-btn ovv-btn--small" type="submit">Use it as the description</button></form>` : ''}
+${studio ? html`<p class="ovv-owner-studio">${studio}</p>` : ''}
+${cutsOn ? cutPanel(row, cuts, cutBusy, reel) : ''}
+</details>` : '';
         return page(req, res, {
             index: listed, noindex: !listed,
             ...(listed ? {} : { cache: cache.htmlHeaders({ private: true }) }),
@@ -489,8 +581,9 @@ ${fresh.length ? html`<ul class="ovv-mylist">${fresh.map(myVideoRow)}</ul>` : ht
             ...(listed && thumb ? { image: thumb, ogType: 'video.other' } : {}),
             scripts: ready ? ['js/video.js', 'js/comments.js'] : [],
             player: !!(ready && vod),
-            body: html`<div class="ovv-watch">
-<div class="ovv-main">
+            body: html`<div class="ovv-watch ovv-watch--vod ovv-watch--upload">
+<div class="ovv-col ovv-col--main">
+<div class="ovv-stage">
 ${req.query.saved === '1' ? notice('Saved.', 'ok') : ''}${req.query.reported === '1' ? notice('Thanks: the report reached OpenVibe staff.', 'ok') : ''}
 ${row.state === 'hidden' ? notice('Hidden after reports: only you and OpenVibe staff can see it until staff decide.', 'warn') : ''}
 ${row.visibility === 'private' && ready ? notice('Private: only you (and OpenVibe staff) can see this video.', 'info') : ''}
@@ -499,44 +592,49 @@ ${ready && vod ? html`<div class="ovv-player-wrap"><video class="ovv-player" dat
         : html`<div class="ovv-player-wrap ovv-processing" role="status">${row.status === 'processing' ? html`<p><span class="ov-mark" data-state="busy" data-size="18" data-tone="ink" aria-hidden="true"></span> Processing: OpenVibe.Media is making it playable. This page reloads by itself.</p>`
             : row.status === 'failed' ? html`<p>This upload could not be processed. ${row.error || ''}</p>`
                 : html`<p>The upload stopped before the end (${row.parts_received} of ${row.parts_expected} parts). Upload the file again from <a href="/upload">Upload</a>.</p>`}</div>`}
-<h1 class="ovv-title">${row.title}</h1>
-${what}
-<div class="ovv-byline">
-${channel ? html`<a class="ovv-avatar" href="/@${channel}" aria-hidden="true" tabindex="-1">${channel.slice(0, 1).toUpperCase()}${/^[A-Za-z0-9_]{1,32}$/.test(channel) ? html`<img src="${ctx.config.networkUrl}/avatar/${channel}" alt="" loading="lazy">` : ''}</a>` : ''}
-<div class="ovv-byline-text">${channel ? html`<a class="ovv-channel-name" href="/@${channel}">@${channel}</a>` : ''}
+<div class="ovv-head">
+${titleLine('Upload', row.title)}
+${ownerBar}
+<div class="ovv-head-row">
+${channel ? html`<div class="ovv-byline"><a class="ovv-avatar" href="/@${channel}" aria-hidden="true" tabindex="-1">${channel.slice(0, 1).toUpperCase()}${/^[A-Za-z0-9_]{1,32}$/.test(channel) ? html`<img src="${ctx.config.networkUrl}/avatar/${channel}" alt="" loading="lazy" onerror="this.remove()">` : ''}</a><div class="ovv-byline-text"><a class="ovv-channel-name" href="/@${channel}">@${channel}</a><span class="ovv-meta">${channelCount > 48 ? '48+ videos' : `${channelCount} ${channelCount === 1 ? 'video' : 'videos'}`} on OpenVibe.Video</span></div>${own ? '' : html`<a class="ovv-btn ovv-follow" href="${livePublic}/@${channel}" title="Follow @${channel} on OpenVibe.Live"><i class="ovg-fill" data-ov-icon="plus" aria-hidden="true"></i> Follow</a>`}</div>` : ''}
+${ready ? html`<div class="ovv-actions-shell"><div class="ovv-actions">${saveForm}${raw(shareButton({ cls: 'ovv-btn', url: `${ctx.config.video.url}${watchPath}`, title: row.title, text: about, image: thumb || '', timeFrom: vod ? '.ovv-player' : null, kind: 'video', id: row.id }))}${watchMore({ path: watchPath, kind: 'video', items: [], extras: html`${vod ? partyLink(watchPath, row.title, vod) : ''}${raw(askAgent({ text: `About the video “${row.title}” on OpenVibe.Video (${ctx.config.video.url}${watchPath}): ` }))}` })}</div></div>` : ''}
 </div>
-<div class="ovv-byline-actions">${saveForm}${ready && vod && fileOf(vod) ? html`<a class="ovv-btn" href="https://openvibe.party/new?media=${encodeURIComponent(fileOf(vod))}&source_url=${encodeURIComponent(`${String(ctx.config.video.url).replace(/\/+$/, '')}${watchPath}`)}&title=${encodeURIComponent(String(row.title || 'Watch party'))}"><i class="ovg-fill" data-ov-icon="members" aria-hidden="true"></i> Watch together</a>` : ''}${own && ready && row.state === 'active' && studioVideoEdit ? html`<a class="ovk-btn ovk-btn--quiet" href="${studioEditUrl(row)}">Edit in Studio</a>` : ''}${raw(shareButton({ cls: 'ovv-btn', url: `${ctx.config.video.url}${watchPath}`, title: row.title, text: about, image: thumb || '', timeFrom: ready && vod ? '.ovv-player' : null, kind: 'video', id: row.id }))}${raw(askAgent({ text: `About the video “${row.title}” on OpenVibe.Video (${ctx.config.video.url}${watchPath}): ` }))}</div>
 </div>
-${row.description ? html`<section class="ovv-panel ovv-description"><p>${row.description}</p></section>` : ''}
-${aiDone && ai.overview ? html`<section class="ovv-panel" aria-labelledby="h-ai"><h2 id="h-ai">About this video</h2><p>${ai.overview}</p><p class="ovv-fine">Written by AI from the video's sound and pictures (OpenVibe.AI, run on OpenVibe's own servers).</p>
-${manage && ai.overview !== row.description ? html`<form method="post" action="/u/${row.id}/manage"><input type="hidden" name="description" value="${ai.overview}"><button class="ovv-btn" type="submit">Use this as the description</button></form>` : ''}</section>` : ''}
-${aiDone && ai.segments.length ? html`<details class="ovv-panel ovv-transcript"><summary>Transcript <span class="ovv-fine">(AI, ${ai.segments.length} lines)</span></summary><div class="ovv-transcript-body">${ai.segments.map((x) => html`<p><button type="button" class="ovv-seek" data-ovv-seek="${x.start}">${vttTime(x.start).slice(0, 8)}</button> <span>${x.text}</span></p>`)}</div></details>` : ''}
-${manage && ready && ai && (ai.status === 'queued' || ai.status === 'running') ? html`<p class="ovv-fine">Captions, chapters and a summary are being made by OpenVibe.AI.</p>` : ''}
+</div>
+${ownerPanel}
+${watchAbout({ facts: watchFacts(row.views, row.created_at, row.duration_seconds, row.visibility), description: said || aiSummary || opening || (manage ? 'No description yet: add one with Edit.' : 'No description yet.'), ai: said ? aiSummary : '', path: watchPath, chapters: [],
+        from: html`${!said && manage ? html`<p class="ovv-about-from"><a href="#manage" data-ovv-open="manage">Add a description</a>: the words people search for help them find it.</p>` : ''}${manage && ready && ai && (ai.status === 'queued' || ai.status === 'running') ? html`<p class="ovv-about-from">Captions, chapters and a summary are being made by OpenVibe.AI.</p>` : ''}` })}
 <section class="ovv-panel ovv-comments">${commentsHtml}</section>
-</div>
-<aside class="ovv-side">
-${inList.html}
-${manage ? html`<section class="ovv-panel ovv-owner" aria-labelledby="h-owner"><h2 id="h-owner">Manage this video</h2>
-<form class="ovv-owner-form" method="post" action="/u/${row.id}/manage">
-<label class="ovv-field"><span>Title</span><input name="title" type="text" maxlength="120" value="${row.title}" required></label>
-<label class="ovv-field"><span>Description</span><textarea name="description" rows="3" maxlength="5000">${row.description}</textarea></label>
-${own ? html`<label class="ovv-field"><span>Who can see it</span><select name="audience">${audienceOptions(currentAudience)}</select></label>`
-    : html`<label class="ovv-field"><span>Visibility</span><select name="visibility">${visibilityOptions(row.visibility)}</select></label>`}
-<button class="ovv-btn ovv-btn--primary" type="submit">Save changes</button></form>
-<details class="ovv-danger"><summary>Delete this video</summary>
-<form class="ovv-owner-delete" method="post" action="/u/${row.id}/delete"><label class="ovv-confirm"><input type="checkbox" name="confirm" value="1" required> I want to delete it for good</label> <button class="ovv-btn ovv-btn--danger" type="submit">Delete</button></form>
-</details></section>` : ''}
-${cutsOn ? cutPanel(row, cuts, cutBusy, reel) : ''}
-${aiDone && ai.chapters.length > 1 ? html`<section class="ovv-panel ovv-chapters" aria-labelledby="h-chapters"><h2 id="h-chapters">Chapters</h2><ol>${ai.chapters.map((c) => html`<li><a href="${watchPath}?t=${c.start}" data-ovv-chapter="${c.start}"><span class="ovv-time">${vttTime(c.start).slice(0, 8)}</span><span>${c.title}</span></a></li>`)}</ol><p class="ovv-fine">From the video's highlights (AI).</p></section>` : ''}
 ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report this video</summary>
 <form method="post" action="/u/${row.id}/report">
 <fieldset><legend>What is wrong?</legend>${Object.entries(REASON_TEXT).map(([k, t]) => html`<label class="ovv-radio"><input type="radio" name="reason" value="${k}" required> ${t}</label>`)}</fieldset>
 <label class="ovv-field"><span>Anything staff should know (optional)</span><textarea name="note" rows="2" maxlength="1000"></textarea></label>
 <button class="ovv-btn" type="submit">Send the report</button>
 <p class="ovv-fine">A child-safety report hides the video at once; three reports hide it until staff decide.</p></form></details>` : ''}
+</div>
+<aside class="ovv-col ovv-col--side">
+${side || ''}
+${inList.html}
+${sideCards('h-more', channel ? `More from @${channel}` : 'More from this channel', moreRows, channel ? html`<a class="ovv-panel-link" href="/@${channel}">All videos</a>` : '')}
+${sideCards('h-related', 'Related videos', relatedRows, html`<a class="ovv-panel-link" href="/">More</a>`)}
 </aside>
 </div>`,
         });
+    }
+
+    /** Videos like this one for its side (anyone may see them): public ones whose titles share its words, most watched
+     *  first, then the newest; never this one, nor those already under More from the channel. */
+    async function relatedTo(row, already = [], limit = 8) {
+        const skip = new Set([row.id, ...already.map((x) => x.id)]);
+        const words = [...new Set((String(row.title || '').toLowerCase().match(/[a-z0-9]{4,}/g) || []).filter((w) => !RELATED_STOP.has(w)))].slice(0, 6);
+        const out = [];
+        if (words.length) {
+            const hits = await ctx.s.db.many(`SELECT * FROM video_uploads WHERE visibility = 'public' AND status = 'ready' AND state = 'active' AND id <> $1
+                AND (${words.map((_, i) => `lower(title) LIKE $${i + 2}`).join(' OR ')}) ORDER BY views DESC, id DESC LIMIT ${limit * 2}`, [row.id, ...words.map((w) => `%${w}%`)]);
+            for (const x of hits) if (!skip.has(x.id) && out.length < limit) { out.push(x); skip.add(x.id); }
+        }
+        if (out.length < limit) for (const x of await up.latest(limit * 3)) if (!skip.has(x.id) && out.length < limit) { out.push(x); skip.add(x.id); }
+        return out;
     }
 
     // The AI's transcript and chapters as WebVTT tracks, for whoever may see the video.
@@ -544,7 +642,7 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
         const row = await up.byId(req.params.id);
         if (!await maySeeUpload(req, row) || row.status !== 'ready') return null;
         const ai = await ctx.videoAi.forUpload(row);
-        return ai && ai.status === 'done' ? { row, ai } : null;
+        return ai && (ai.status === 'done' || (Array.isArray(ai.segments) && ai.segments.length)) ? { row, ai } : null;
     }
     r.get('/u/:id/captions.vtt', async (req, res) => {
         const x = await aiOf(req);
@@ -647,15 +745,17 @@ ${!own && ready ? html`<details class="ovv-panel ovv-report"><summary>Report thi
         return res.redirect(303, `/u/${row.id}?reported=1`);
     });
 
-    /** A card for an upload (home, channel). */
-    return function uploadCard(x) {
+    return uploadCard;
+
+    /** A card for an upload (home, channel, the watch page's side). */
+    function uploadCard(x) {
         return card({
             href: x.watch_id ? `/watch?v=${x.watch_id}` : `/u/${x.id}`, thumb: httpsUrl(x.thumbnail_url), title: x.title,
             channel: x.owner_username || null, channelHref: x.owner_username ? `/@${x.owner_username}` : null,
             duration: x.duration_seconds ? durationLabel(x.duration_seconds) : null,
             date: dateLabel(x.ready_at || x.created_at) || null, iso: x.ready_at || x.created_at || null,
         });
-    };
+    }
 }
 
 module.exports = { createUploadApi, mountUploadPages, REASON_TEXT };

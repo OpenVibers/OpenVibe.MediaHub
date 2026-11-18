@@ -21,6 +21,7 @@ const { createServiceTokenClient } = require('openvibe-sdk/auth');
 // offered as the description.
 
 const MAX_ATTEMPTS = 4;
+const RETRY_SUMMARY = 8;   // attempts in all, a day apart, for a model-written summary
 const parse = (v, d) => { if (v == null) return d; if (typeof v !== 'string') return v; try { return JSON.parse(v); } catch { return d; } };
 const clean = (v, max) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max);
 
@@ -112,8 +113,11 @@ function createAiEdit({ s, media, config, fetchImpl = globalThis.fetch, log = co
                 language: out.transcript.language ? clean(out.transcript.language, 8) : null,
             });
         } catch (err) {
-            const done = attempt >= MAX_ATTEMPTS;
             log.warn(`[OpenVibe.Video] AI edit of ${ai.upload_id} (attempt ${attempt}):`, err.message);
+            // Asked again only for a model's summary (the first run's was the analyser's facts): a failure keeps what that
+            // run made (captions, chapters) and waits for the next day's ask.
+            if (ai.segments != null && /^Length analysed:/.test(String(ai.overview || ''))) return save(ai.upload_id, { status: 'done', error: clean(err.message, 300), next_at: null });
+            const done = attempt >= MAX_ATTEMPTS;
             return save(ai.upload_id, { status: done ? 'failed' : 'queued', error: clean(err.message, 300), next_at: done ? null : later(2 ** attempt * 5) });
         }
     }
@@ -127,6 +131,12 @@ function createAiEdit({ s, media, config, fetchImpl = globalThis.fetch, log = co
                               SELECT u.id, 'queued', $1 FROM video_uploads u LEFT JOIN video_upload_ai a ON a.upload_id = u.id
                                WHERE u.status = 'ready' AND u.state <> 'removed' AND a.upload_id IS NULL
                               ON CONFLICT DO NOTHING`, [s.iso()]);
+            // A summary no model wrote (OpenVibe.AI's extractive fallback, "Length analysed: …": its local model did not
+            // answer) is asked for again once a day, up to RETRY_SUMMARY attempts in all (11-18: the owner's video showed
+            // the analyser's measurements as "About this video"). The captions and chapters stay until the new run lands.
+            await s.db.query(`UPDATE video_upload_ai SET status = 'queued', next_at = NULL, updated_at = $1
+                               WHERE status = 'done' AND overview LIKE 'Length analysed:%' AND attempts < $2 AND updated_at < $3`,
+            [s.iso(), RETRY_SUMMARY, new Date(s.now() - 86400_000).toISOString()]);
             const due = await s.db.many(`SELECT * FROM video_upload_ai WHERE status IN ('queued', 'running') AND (next_at IS NULL OR next_at <= $1)
                                           ORDER BY updated_at LIMIT 2`, [s.iso()]);
             for (const ai of due) await work(ai);

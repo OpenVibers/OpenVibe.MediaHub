@@ -145,9 +145,11 @@ function startLive() {
             [id]);
             const up = await get(`/u/${id}`);
             assert.strictEqual(up.status, 200);
-            const uline = /<p class="ovv-what">([\s\S]*?)<\/p>/.exec(up.text)[1];
-            assert.ok(uline.includes('Upload') && uline.includes('Uploaded on') && uline.includes('Oct 20, 2026'), uline);
-            assert.ok(uline.includes('2 minutes'), 'its length: ' + uline);
+            // 11-18: an upload's page is a recording's: its kind beside the title, the facts in the description box.
+            assert.ok(up.text.includes('<span class="ovv-kind">Upload</span>'), 'it says it is an upload');
+            const uline = /<div class="ovv-about-facts">([\s\S]*?)<\/div>/.exec(up.text)[1];
+            assert.ok(uline.includes('0 views') && /ago|2026/.test(uline), uline);
+            assert.ok(uline.includes('2 min'), 'its length: ' + uline);
         });
 
         await check('outcome 2: a clip credits the recording it was cut from and links back to it', async () => {

@@ -166,10 +166,10 @@ function downloadsFor(kind, id, what) {
  * null; `chapters` = [{ offset_seconds, description }]; `transcript` = [{ start, text }]; `long` = the video is an
  * hour or longer. Null when there is none of the three.
  */
-function companion({ kind, id, watchId = null, chat, chapters, transcript, long }) {
+function companion({ kind, id, watchId = null, chat, chapters, transcript, long, downloads = true, notes = {} }) {
     // A chapter is a moment on the item's watch page: /watch?v=<watch id>&t=<seconds>, or the numbered page until it has
     // an id (which redirects). The downloads below stay the numeric routes the files are served on.
-    const at = watchId ? `/watch?v=${watchId}` : `/${kind === 'clip' ? 'c' : 'v'}/${id}`;
+    const at = watchId ? `/watch?v=${watchId}` : `/${kind === 'clip' ? 'c' : kind === 'upload' ? 'u' : 'v'}/${id}`;
     const tabs = [];
     if (chat && chat.rows.length) {
         const total = chat.rows.length + chat.leftOut;
@@ -182,14 +182,14 @@ function companion({ kind, id, watchId = null, chat, chapters, transcript, long 
     if (chapters && chapters.length) {
         tabs.push({
             key: 'chapters', tab: 'Chapters', title: 'Chapters', count: chapters.length,
-            note: 'Made by AI from the stream',
+            note: notes.chapters || 'Made by AI from the stream',
             body: html`<ol class="ovv-tp-body ovv-chapter-list">${chapters.map((m) => html`<li><a href="${at}?t=${m.offset_seconds}" data-ovv-chapter="${m.offset_seconds}" title="${m.description}"><span class="ovv-time">${clockOf(m.offset_seconds, long)}</span><span class="ovv-chapter-title">${m.description}</span></a></li>`)}</ol>`,
         });
     }
     if (transcript && transcript.length) {
         tabs.push({
             key: 'transcript', tab: 'Transcript', title: 'Transcript', count: transcript.length,
-            note: 'Written by AI from the audio — it can be wrong',
+            note: notes.transcript || 'Written by AI from the audio — it can be wrong',
             search: true,
             body: html`<div class="ovv-tp-body ovv-transcript-body" data-ovv-transcript>${transcript.map((s) => html`<p class="ovv-line" data-ovv-at="${Math.floor(s.start)}"><button type="button" class="ovv-seek" data-ovv-seek="${s.start}" title="Play from here">${clockOf(s.start, long)}</button> <span>${s.text}</span></p>`)}<p class="ovv-tp-empty" hidden data-ovv-search-empty>No line has that.</p></div>`,
         });
@@ -199,7 +199,7 @@ function companion({ kind, id, watchId = null, chat, chapters, transcript, long 
     return html`<section class="ovv-companion${one ? ' ovv-companion--one' : ''}" data-ovv-tabs aria-label="${tabs.map((t) => t.title).join(', ')}">
 ${one ? '' : html`<div class="ovv-tabs" role="tablist" aria-label="${tabs.map((t) => t.title).join(', ')}" hidden data-ovv-tablist>${tabs.map((t, i) => html`<button type="button" role="tab" id="ovv-tab-${t.key}" aria-controls="ovv-tp-${t.key}" aria-selected="${i === 0 ? 'true' : 'false'}" tabindex="${i === 0 ? '0' : '-1'}" data-ovv-tab="${t.key}">${t.tab} <span class="ovv-tab-count">${t.count > 999 ? '999+' : t.count}</span></button>`)}</div>`}
 ${tabs.map((t) => html`<section class="ovv-tp" id="ovv-tp-${t.key}"${one ? '' : html` role="tabpanel" aria-labelledby="ovv-tab-${t.key}"`} data-ovv-tp="${t.key}">
-<header class="ovv-tp-head"><div class="ovv-tp-heading"><h2 class="ovv-tp-title">${t.title}</h2><span class="ovv-tp-note">${t.note}</span></div>${downloadsFor(kind, id, t.key)}</header>
+<header class="ovv-tp-head"><div class="ovv-tp-heading"><h2 class="ovv-tp-title">${t.title}</h2><span class="ovv-tp-note">${t.note}</span></div>${downloads ? downloadsFor(kind, id, t.key) : ''}</header>
 ${t.search ? html`<label class="ovv-tp-search" hidden data-ovv-search-wrap><i class="ovg-fill" data-ov-icon="search" aria-hidden="true"></i><input type="search" placeholder="Search the transcript" aria-label="Search the transcript" data-ovv-search></label>` : ''}
 ${t.body}
 </section>`)}
