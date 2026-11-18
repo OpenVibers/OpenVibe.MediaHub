@@ -106,6 +106,27 @@ const VERSE = 'Got some ashwagandha. Got me some magnesium. Got me some daba. Go
         assert.ok(rel && rel[1].includes(`/watch?v=${await watchOf(samMorning)}`), 'a public video whose title shares "morning"');
     });
 
+    await check('a viewer likes an upload and takes it back; a private one is nobody else\'s to like', async () => {
+        const seqOf = async (id) => String((await db.maybe('SELECT seq FROM video_uploads WHERE id = $1', [id])).seq);
+        const like = (cookie, id) => new Promise((resolve, reject) => {
+            const u = new URL(t.base + '/watch/like');
+            const body = Buffer.from(new URLSearchParams({ kind: 'upload', id }).toString());
+            const req = http.request({ hostname: u.hostname, port: u.port, path: u.pathname, method: 'POST', headers: { Host: 'openvibe.video', cookie, 'sec-fetch-site': 'same-origin', 'content-type': 'application/x-www-form-urlencoded', 'content-length': body.length } }, (res) => {
+                const c = []; res.on('data', (x) => c.push(x)); res.on('end', () => resolve({ status: res.statusCode, text: Buffer.concat(c).toString('utf8') }));
+            });
+            req.on('error', reject); req.write(body); req.end();
+        });
+        const seq = await seqOf(main);
+        const page = await vreq(t.base, path, { cookie: samCookie });
+        assert.ok(page.text.includes(`data-ovv-like="upload:${seq}"`) && page.text.includes('aria-pressed="false"'), 'the Like button, not pressed');
+        const on = await like(samCookie, seq);
+        assert.strictEqual(on.status, 200, on.text);
+        assert.deepStrictEqual(JSON.parse(on.text), { count: 1, liked: true });
+        assert.deepStrictEqual(JSON.parse((await like(samCookie, seq)).text), { count: 0, liked: false }, 'a second press takes it back');
+        assert.strictEqual((await like(samCookie, await seqOf(kimPrivate))).status, 404, 'a private upload is not someone else\'s to like');
+        assert.strictEqual((await like(kimCookie, await seqOf(kimPrivate))).status, 200, 'its owner may');
+    });
+
     await check('the measurements are asked again for a model\'s summary, a day later; captions and chapters stay meanwhile', async () => {
         t.ctx.videoAi.enabled || assert.ok(true);
         await db.query(`UPDATE video_upload_ai SET status = 'queued', next_at = NULL, updated_at = $1

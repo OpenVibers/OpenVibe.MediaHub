@@ -827,7 +827,7 @@ function createVideoRoutes(ctx) {
     /** The owner's Edit link in More opens the panel under the player. */
     const editButton = (what) => html`<a class="ovv-btn ovv-btn--edit" href="#manage" data-ovv-open="manage" title="Edit this ${what}: title, description, who can see it"><i class="ovg-fill" data-ov-icon="pencil" aria-hidden="true"></i> Edit</a>`;
     const titleLine = (kind, title) => html`<div class="ovv-title-line"><span class="ovv-kind">${kind}</span><h1 class="ovv-title">${title}</h1></div>`;
-    const likeButton = (state, kind, id) => html`<button class="ovv-btn ovv-like" type="button" data-ovv-like="${kind}:${id}" aria-pressed="${state.liked ? 'true' : 'false'}" title="Like this ${kind === 'clip' ? 'clip' : 'recording'}"><i data-ov-icon="heart" aria-hidden="true"></i> <span class="ovv-like-word">Like <span class="ovv-like-count">${state.count}</span></span></button>`;
+    const likeButton = (state, kind, id) => html`<button class="ovv-btn ovv-like" type="button" data-ovv-like="${kind}:${id}" aria-pressed="${state.liked ? 'true' : 'false'}" title="Like this ${kind === 'clip' ? 'clip' : kind === 'upload' ? 'video' : 'recording'}"><i data-ov-icon="heart" aria-hidden="true"></i> <span class="ovv-like-word">Like <span class="ovv-like-count">${state.count}</span></span></button>`;
     const channelRow = (username, name, followers) => {
         if (!username) return '';
         const channel = `${livePublic}/@${username}`;
@@ -1087,9 +1087,16 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
         if (!sameSite(req, res, '/')) return undefined;
         const kind = String(req.body.kind || '');
         const id = String(req.body.id || '');
-        if (!['vod', 'clip'].includes(kind) || !live.isId(id)) return res.status(400).json({ error: 'Invalid video.' });
-        const data = await (kind === 'vod' ? live.vod(id) : live.clip(id)) || await ownView(req, res, kind, id);
-        if (!data || !data[kind]) return res.status(404).json({ error: 'Video not found.' });
+        if (!['vod', 'clip', 'upload'].includes(kind) || !live.isId(id)) return res.status(400).json({ error: 'Invalid video.' });
+        if (kind === 'upload') {
+            // An upload, by its number: liked by whoever may watch it (public or unlisted, ready; private only its owner's).
+            const row = await ctx.videoUploads.bySeq(id);
+            const mine = row && row.owner === ownerOf(req);
+            if (!row || row.status !== 'ready' || row.state !== 'active' || (row.visibility === 'private' && !mine)) return res.status(404).json({ error: 'Video not found.' });
+        } else {
+            const data = await (kind === 'vod' ? live.vod(id) : live.clip(id)) || await ownView(req, res, kind, id);
+            if (!data || !data[kind]) return res.status(404).json({ error: 'Video not found.' });
+        }
         const owner = ownerOf(req);
         const existing = await ctx.s.db.maybe('SELECT 1 AS yes FROM video_likes WHERE kind = $1 AND item_id = $2 AND owner = $3', [kind, Number(id), owner]);
         if (existing) await ctx.s.db.exec('DELETE FROM video_likes WHERE kind = $1 AND item_id = $2 AND owner = $3', [kind, Number(id), owner]);
@@ -1099,7 +1106,7 @@ ${labelsUi.picker(item, { what: `the ${what}`, id: `labels-${kind}` })}
 
     // ── Uploads: /upload, /u/:id, /me/videos (server/video/upload-routes.js) ──
     const uploadCard = mountUploadPages(r, { ctx, page, notFound, signedIn, ownerOf, mustSignIn, sameSite, isStaff, visibilityOptions, visibilityLabel, durationLabel, dateLabel, httpsUrl, fileOf, hlsAttrs, grid, card, renderCaptionsVtt, renderChaptersVtt, vttTime, sendVtt, notFoundVtt, playlistForm, upNext, whatItIs, shareButton, renderVod, renderClip,
-        titleLine, watchFacts, watchAbout, watchMore, visibilityChoices, visibilityBadge, editButton, partyLink });
+        titleLine, watchFacts, watchAbout, watchMore, visibilityChoices, visibilityBadge, editButton, partyLink, likeButton, likesOf });
 
     // ── Downloads: /v/:id/download/:file and /c/:id/download/:file (server/video/downloads.js) ──
     mountDownloads(r, { live, chat, ownView, asPerson, notFound, base, httpsUrl, log, fetchImpl: ctx.fetchImpl || globalThis.fetch,
