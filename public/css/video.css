@@ -955,3 +955,60 @@ html[data-ov-motion=off] .ovv-watch .ovv-ownerbar { animation: none; }
 @media (max-width: 600px) { .ovv-watch .ovv-parts-label { flex: 1 1 100%; } }
 /* The part chips sit clear of the byline under them (no owner bar between them for a visitor, 11-17). */
 .ovv-watch .ovv-parts + .ovv-head-row { margin-top: 14px; }
+
+/* ── 11-18: the upload's watch page is the recording's (the owner's phone: "not sleek like YouTube", "improve … add
+   effects") ── */
+/* The panel beside the player fits what it holds on a phone (three chapters were a screen of empty card); a recording's
+   chat replay keeps the space under the player. */
+@media (max-width: 1000px) {
+  .ovv-watch--upload :is(.ovv-companion--tabs, .ovv-companion--one) { height: auto !important; max-height: max(320px, calc(100dvh - var(--ovnav-real-h, 52px) - 56.25vw - var(--ovnav-appbar-h, 0px) - 20px)); }
+  .ovv-watch--upload .ovv-companion .ovv-tp-body { flex: 0 1 auto; }
+  /* More from the channel and related videos: a row you swipe, two cards and a bit in view. */
+  .ovv-watch .ovv-also .ovv-rail { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 44%); grid-template-columns: none; gap: 12px; overflow-x: auto; overflow-y: hidden;
+    scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -18px; padding: 0 18px 4px; scroll-padding: 0 18px; }
+  .ovv-watch .ovv-also .ovv-rail::-webkit-scrollbar { display: none; }
+  .ovv-watch .ovv-also .ovv-rail > * { scroll-snap-align: start; }
+}
+/* The byline: the name, how many videos, and Follow at the end of its row. */
+.ovv-watch--upload .ovv-byline { flex-wrap: nowrap; padding-bottom: 0; border-bottom: 0; gap: 12px; }
+.ovv-watch--upload .ovv-byline-text { flex: 1 1 auto; }
+.ovv-watch--upload .ovv-byline .ovv-meta { font-size: .8rem; color: var(--ovv-dim); }
+.ovv-watch--upload .ovv-avatar { box-shadow: 0 0 0 2px var(--ovv-card), 0 0 0 4px color-mix(in srgb, var(--ovv-accent) 45%, transparent); }
+.ovv-follow { flex: none; border-radius: 999px; font-weight: 700; }
+.ovv-vis-link { text-decoration: none; border-radius: 999px; }
+.ovv-vis-link:hover .ovv-vis-badge, .ovv-vis-link:focus-visible .ovv-vis-badge { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 25%, transparent); }
+.ovv-owner .ovv-owner-ai { display: grid; gap: 8px; justify-items: start; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--ovv-line); }
+.ovv-owner .ovv-owner-ai p { margin: 0; }
+.ovv-owner .ovv-owner-studio { margin: 14px 0 0; }
+.ovv-owner .ovv-cut { margin: 14px 0 0; padding: 14px 0 0; border: 0; border-top: 1px solid var(--ovv-line); border-radius: 0; background: none; }
+
+/* Motion, on every watch page: the parts under the player come in once, in turn; a press gives; the description box
+   opens smoothly; a card lifts. Calm moves less (--ov-move); Off stops all of it. */
+@keyframes ovv-rise { from { opacity: 0; transform: translateY(calc(10px * var(--ov-move, 1))); } }
+.ovv-watch .ovv-head, .ovv-watch .ovv-about, .ovv-watch .ovv-comments, .ovv-watch .ovv-col--side > * { animation: ovv-rise .45s cubic-bezier(.2, .8, .2, 1) both; }
+.ovv-watch .ovv-about { animation-delay: 70ms; }
+.ovv-watch .ovv-comments { animation-delay: 140ms; }
+.ovv-watch .ovv-col--side > :nth-child(1) { animation-delay: 90ms; } .ovv-watch .ovv-col--side > :nth-child(2) { animation-delay: 160ms; } .ovv-watch .ovv-col--side > :nth-child(n+3) { animation-delay: 230ms; }
+.ovv-actions .ovv-btn, .ovv-actions summary.ovv-btn, .ovv-ownerbar .ovv-btn, .ovv-follow { transition: transform .16s cubic-bezier(.3, 1.4, .4, 1), background-color .15s, border-color .15s, box-shadow .2s; }
+.ovv-actions .ovv-btn:active, .ovv-actions summary.ovv-btn:active, .ovv-ownerbar .ovv-btn:active, .ovv-follow:active { transform: scale(.95); }
+.ovv-actions .ovv-btn i, .ovv-ownerbar .ovv-btn i, .ovv-follow i { transition: transform .25s cubic-bezier(.3, 1.6, .4, 1); }
+@media (hover: hover) {
+  .ovv-actions .ovv-btn:hover i, .ovv-actions summary.ovv-btn:hover i { transform: translateY(calc(-2px * var(--ov-move, 1))); }
+  .ovv-follow:hover i { transform: rotate(90deg); }
+  .ovv-ownerbar .ovv-btn--edit:hover i { transform: rotate(-12deg); }
+  .ovv-also .ovv-card { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
+  .ovv-also .ovv-card:hover { transform: translateY(calc(-3px * var(--ov-move, 1))); }
+}
+.ovv-ownerbar .ovv-btn--edit { position: relative; overflow: hidden; }
+.ovv-ownerbar .ovv-btn--edit::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .28) 50%, transparent 65%); transform: translateX(-120%); pointer-events: none; }
+@media (hover: hover) { .ovv-ownerbar .ovv-btn--edit:hover::after { transform: translateX(120%); transition: transform .7s ease; } }
+@supports (interpolate-size: allow-keywords) {
+  .ovv-about { interpolate-size: allow-keywords; }
+  .ovv-about::details-content { height: 0; overflow: clip; transition: height .32s cubic-bezier(.2, .8, .2, 1), content-visibility .32s allow-discrete; }
+  .ovv-about[open]::details-content { height: auto; }
+}
+html[data-ov-motion=off] .ovv-watch :is(.ovv-head, .ovv-about, .ovv-comments, .ovv-col--side > *) { animation: none; }
+html[data-ov-motion=off] .ovv-about::details-content { transition: none; }
+html[data-ov-motion=off] :is(.ovv-actions .ovv-btn, .ovv-ownerbar .ovv-btn, .ovv-follow, .ovv-also .ovv-card) { transition: none; }
+/* A guest's Report box comes after the comments on a phone (it had no place in the order, so it came first). */
+@media (max-width: 1000px) { .ovv-watch .ovv-report { order: 8; } }

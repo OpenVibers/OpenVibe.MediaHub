@@ -24,7 +24,8 @@ const hashOf = (doc) => crypto.createHash('sha256').update(JSON.stringify(doc)).
 /** An upload row (and its AI edit, when done) → the document body; identity and revision are added by the caller. */
 function documentFor(row, { videoUrl, ai = null }) {
     const channel = row.owner_username || null;
-    const overview = ai && ai.status === 'done' && ai.overview ? String(ai.overview) : '';
+    // The analyser's measurements ("Length analysed: …", no model wrote them) are not a summary to index (11-18).
+    const overview = ai && ai.status === 'done' && ai.overview && !/^Length analysed:/.test(String(ai.overview).trim()) ? String(ai.overview) : '';
     const transcript = ai && ai.status === 'done' && Array.isArray(ai.segments) ? ai.segments.map((x) => x.text).join(' ') : '';
     return {
         visibility: 'public',

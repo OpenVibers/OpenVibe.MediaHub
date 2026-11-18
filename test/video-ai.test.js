@@ -108,8 +108,9 @@ const OUTPUT = {
         const page = await vreq(t.base, `/u/${id}`, { cookie: kimCookie });
         assert.ok(page.text.includes(`<track kind="captions" label="Captions (AI)" src="/u/${id}/captions.vtt" default>`));
         assert.ok(page.text.includes(`<track kind="chapters" src="/u/${id}/chapters.vtt">`));
-        assert.ok(page.text.includes('A walk along the coast at sunset') && page.text.includes('Written by AI'));
-        assert.ok(page.text.includes('Use this as the description'));
+        // 11-18: the summary is the description box's words while the video has none, and the owner's Edit offers it.
+        assert.ok(page.text.includes('A walk along the coast at sunset') && page.text.includes('AI summary'));
+        assert.ok(page.text.includes('Use it as the description'));
         assert.ok(page.text.includes('The tide is coming in.'), 'the transcript');
         assert.ok(page.text.includes('Look at those birds over the water'), 'the chapters');
         const vtt = await vreq(t.base, `/u/${id}/captions.vtt`, { cookie: kimCookie });
