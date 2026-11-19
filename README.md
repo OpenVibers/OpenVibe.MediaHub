@@ -584,7 +584,7 @@ this change. Cam already posts captured pictures to the existing upload endpoint
 is not in the pinned Shared release yet; Pics retains its existing drop/paste/choose uploader.
 
 <!-- versions:start -->
-- openvibe-contracts: v0.443.0
+- openvibe-contracts: v0.449.0
 - openvibe-sdk: v0.188.0
 - openvibe-shared: v4.320.0
 <!-- versions:end -->
