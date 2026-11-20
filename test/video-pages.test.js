@@ -9,6 +9,7 @@
 const assert = require('assert');
 const http = require('http');
 const { boot, check, done } = require('./helpers/boot');
+let liveFeedSlowMs = 0;   // the fake Live's content feed answers this late while set (the sitemap's stale answer)
 
 function graphOf(html) {
     const scripts = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];
@@ -155,6 +156,7 @@ function startLive() {
         }
         if (p === '/api/content/feed') {
             const type = url.searchParams.get('type');
+            if (liveFeedSlowMs) return setTimeout(() => json(200, { items: type === 'vods' ? [vodFeedItem] : [], next: null }), liveFeedSlowMs);
             // Live's Top order: the most watched of the month, with their view counts.
             if (url.searchParams.get('sort') === 'top') {
                 if (type === 'vods') return json(200, { items: [{ ...vodFeedItem, views: 100 }], next: null });
@@ -637,6 +639,22 @@ function countOccurrences(haystack, needle) {
         assert.strictEqual((r.text.match(/<h1[\s>]/g) || []).length, 1);
         assert.match(r.text, /<script src="\/shared\/shipped\.js\?v=[0-9a-f]+" defer><\/script>/);
         assert.match((await getVideo('/sitemap.xml')).text, /<loc>[^<]+\/updates<\/loc>/);
+    });
+
+    // 11-20: the walk of Live's feed takes ~5 s and crawlers come every ~15 minutes, so nearly every one waited (p95 8.4 s).
+    await check('an expired sitemap is served at once while the next is built behind it', async () => {
+        const first = (await getVideo('/sitemap.xml')).text;
+        const realNow = Date.now;
+        liveFeedSlowMs = 1500;
+        Date.now = () => realNow() + 11 * 60 * 1000;   // past the sitemap's ten minutes and the Live client's stale window
+        try {
+            const t0 = realNow();
+            const r = await getVideo('/sitemap.xml');
+            const took = realNow() - t0;
+            assert.strictEqual(r.status, 200);
+            assert.strictEqual(r.text, first, 'the last one');
+            assert.ok(took < 1000, `not waiting for the walk (${took} ms)`);
+        } finally { Date.now = realNow; liveFeedSlowMs = 0; }
     });
 
     await check('the sitemap lists public items and leaves the unlisted VOD out', async () => {
