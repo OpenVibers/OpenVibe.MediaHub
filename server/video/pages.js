@@ -2196,11 +2196,26 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
         return catalogCache ? catalogCache.index : new Map();
     }
 
-    let sitemapCache = null;   // { at, xml }: Live's feed is walked page by page, so the answer is kept ten minutes
-    r.get('/sitemap.xml', async (req, res) => {
-        if (sitemapCache && Date.now() - sitemapCache.at < SITEMAP_TTL_MS) {
-            return res.type('application/xml').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(sitemapCache.xml);
+    // Live's feed is walked page by page (about 5 s for 1,400 items), so the answer is kept ten minutes, and an old one is
+    // served at once while the next is built behind it (11-20: crawlers come every ~15 minutes, so nearly every one
+    // waited for the walk: p95 8.4 s). Only the first ask after a restart waits.
+    let sitemapCache = null;     // { at, xml }
+    let sitemapBuilding = null;
+    function rebuildSitemap() {
+        if (!sitemapBuilding) {
+            sitemapBuilding = buildSitemap();
+            sitemapBuilding.catch(() => {}).finally(() => { sitemapBuilding = null; });
         }
+        return sitemapBuilding;
+    }
+    r.get('/sitemap.xml', async (req, res) => {
+        if (!sitemapCache || Date.now() - sitemapCache.at >= SITEMAP_TTL_MS) {
+            const next = rebuildSitemap();
+            if (!sitemapCache) await next;
+        }
+        return res.type('application/xml').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(sitemapCache.xml);
+    });
+    async function buildSitemap() {
         const [{ vods, clips }, uploaded, shelf] = await Promise.all([catalog(), ctx.videoUploads.latest(500), shelves.shelves()]);
         const day = (iso) => { const d = new Date(String(iso || '')); return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10); };
         const newest = (list) => list.map(day).filter(Boolean).sort().pop() || null;
@@ -2237,8 +2252,8 @@ ${isOwner ? html`<p class="ovv-fine">You can reorder items with the up and down 
             ...[...channels].map(([u, d]) => ({ loc: `${base}/@${u}`, lastmod: d })),
         ].map((u) => (u.lastmod ? u : { ...u, lastmod: undefined }));
         sitemapCache = { at: Date.now(), xml: seo.sitemapXml(urls) };
-        return res.type('application/xml').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 })).send(sitemapCache.xml);
-    });
+        return sitemapCache;
+    }
 
     r.get('/robots.txt', (_req, res) => {
         return res.type('text/plain').set('Cache-Control', cache.htmlHeaders({ maxAge: 3600 }))
