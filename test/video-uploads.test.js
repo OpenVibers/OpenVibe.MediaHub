@@ -225,7 +225,7 @@ function vreq(base, path, { method = 'GET', cookie, form, json, body, same = tru
         assert.ok(rec.text.includes('data-video-upload') && rec.text.includes('js/video-upload.js'), 'Cam returns a file to the existing upload path');
         assert.ok(rec.text.includes('data-record-open="video"') && rec.text.includes('data-record-open="screen"'));
         assert.ok(!rec.text.includes('ovv-record-preview'), 'the old recorder UI is gone');
-        assert.strictEqual((await vreq(t.base, '/record')).status, 401, 'signed out: sign in first');
+        assert.strictEqual((await vreq(t.base, '/record')).status, 200, 'signed out: a real page (the menu links here) that asks to sign in');
     });
 
     await check('delete removes the VOD in Media; the daily limit holds', async () => {

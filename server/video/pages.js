@@ -734,10 +734,12 @@ function createVideoRoutes(ctx) {
         return { count: Number(count.n) || 0, liked: Boolean(liked) };
     }
     const signInPrompt = (what, next) => html`<div class="notice signin-prompt"><p>${what}</p><p><a class="ovv-btn ovv-btn--primary" href="/auth/login?next=${encodeURIComponent(next)}">Sign in with OpenVibe</a></p></div>`;
-    const mustSignIn = (back, why) => (req, res, next) => (signedIn(req) ? next() : page(req, res, {
-        title: 'Sign in',
+    // `open`: a page the site's own menus link to (Upload, Record, Playlists) answers a signed-out GET with 200, noindex,
+    // saying what it is for (the owner, 11-21: a sign-in page is a real page for a crawler, not a 401). Anything else 401.
+    const mustSignIn = (back, why, { open = false } = {}) => (req, res, next) => (signedIn(req) ? next() : page(req, res, {
+        title: 'Sign in', noindex: true,
         body: html`<h1>Sign in first</h1>${signInPrompt(why, back === 'here' ? req.originalUrl : back)}`,
-    }, 401));
+    }, open && req.method === 'GET' ? 200 : 401));
     function sameSite(req, res, back) {
         if (sameOrigin(req, config.video.url)) return true;
         page(req, res, {
@@ -2001,7 +2003,7 @@ ${lists.length ? html`<section class="ovv-section" aria-labelledby="h-lists"><h2
     });
 
     // ── Playlists ──────────────────────────────────────────
-    r.get('/playlists', mustSignIn('/playlists', 'A playlist belongs to your OpenVibe account, so you can keep and share your saved recordings and clips.'), async (req, res) => {
+    r.get('/playlists', mustSignIn('/playlists', 'A playlist belongs to your OpenVibe account, so you can keep and share your saved recordings and clips.', { open: true }), async (req, res) => {
         const rows = await playlists.list(ownerOf(req));
         if (req.viewer && req.viewer.username) await playlists.refreshOwnerUsername(ownerOf(req), req.viewer.username);
         return page(req, res, {

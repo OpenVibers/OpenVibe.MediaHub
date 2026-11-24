@@ -27,7 +27,10 @@ const MB = 1024 * 1024;
     let key = null;
 
     await check('a signed-in person makes a key on /sync; it is shown once and only its hash is kept', async () => {
-        assert.strictEqual((await t.get('/sync')).status, 401, 'a guest is asked to sign in');
+        const guest = await t.get('/sync');
+        assert.strictEqual(guest.status, 200, 'a guest gets a real page (the menus link here), asked to sign in');
+        assert.match(guest.text || '', /backup goes into your own drive/, 'saying what Backups is for');
+        assert.match(guest.text || '', /noindex/, 'and kept out of the index');
         const pageBefore = await t.get('/sync', { as: kim });
         assert.ok(pageBefore.text.includes('No sync keys yet'));
         assert.strictEqual((await t.get('/sync/keys', { as: kim, form: { name: 'laptop' } })).status, 403, 'not from this site');
