@@ -161,13 +161,15 @@ ${notice(p && p.detail ? p.detail : 'You are over the limit for this.', 'warn')}
      * The signed-in gate. Every page that shows a file answers this to a guest — there is no anonymous anything.
      * `back` is where sign-in returns to: a fixed page, or the current URL for a share link.
      */
-    const mustSignIn = (back, why = 'A file belongs to your OpenVibe account, so you can share it, download it or delete it later.') =>
+    // `open`: a page the site's own menus link to (Backups) answers a signed-out GET with 200, noindex, saying what it is
+    // for (the owner, 11-21: a sign-in page is a real page for a crawler). A share link and the rest keep their 401.
+    const mustSignIn = (back, why = 'A file belongs to your OpenVibe account, so you can share it, download it or delete it later.', { open = false } = {}) =>
         (req, res, next) => (signedIn(req) ? next()
             : page(req, res, {
-                title: 'Sign in',
+                title: 'Sign in', noindex: true,
                 crumbs: [{ label: 'Home', href: '/' }, { label: 'Sign in' }],
                 body: html`<h1>Sign in first</h1>${signInPrompt(why, back === 'here' ? req.originalUrl : back)}`,
-            }, 401));
+            }, open && req.method === 'GET' ? 200 : 401));
 
     // ── Home ─────────────────────────────────────────────────
     // What the drive is, what a free account gets (the limits this service enforces, from config), how a backup runs
@@ -1239,7 +1241,7 @@ ${suspended ? '' : html`<section class="card" aria-labelledby="h-report"><h2 id=
     const syncCrumbs = [{ label: 'Home', href: '/' }, { label: 'Your files', href: '/files' }, { label: 'Back up a folder', href: '/sync' }];
     const keyState = (k) => (k.revoked_at ? `revoked ${time(k.revoked_at)}` : k.last_used_at ? html`last used ${time(k.last_used_at)}` : 'not used yet');
 
-    r.get('/sync', mustSignIn('/sync', 'A backup goes into your own drive, so it needs your OpenVibe account.'), async (req, res) => {
+    r.get('/sync', mustSignIn('/sync', 'A backup goes into your own drive, so it needs your OpenVibe account.', { open: true }), async (req, res) => {
         const keys = await syncKeys.list(requesterOf(req));
         return page(req, res, {
             title: 'Back up a folder',

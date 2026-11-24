@@ -297,7 +297,7 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
 </section>`;
     }
 
-    r.get('/upload', mustSignIn('/upload', 'Uploads belong to your OpenVibe account: sign in to upload a video.'), async (req, res) => page(req, res, {
+    r.get('/upload', mustSignIn('/upload', 'Uploads belong to your OpenVibe account: sign in to upload a video.', { open: true }), async (req, res) => page(req, res, {
         title: 'Upload a video',
         crumbs: [{ label: 'Home', href: '/' }, { label: 'Upload' }],
         styles: ['ov-upload.css'],
@@ -322,7 +322,7 @@ ${cuts.length ? html`<ul class="ovv-cuts">${cuts.map(cutLine)}</ul>` : ''}
 <p><a href="/record">Record from your camera or screen instead</a> · <a href="/me/videos">Your videos</a></p>`,
     }));
 
-    r.get('/record', mustSignIn('/record', 'Recordings belong to your OpenVibe account: sign in to record a video.'), async (req, res) => page(req, res, {
+    r.get('/record', mustSignIn('/record', 'Recordings belong to your OpenVibe account: sign in to record a video.', { open: true }), async (req, res) => page(req, res, {
         title: 'Record a video',
         crumbs: [{ label: 'Home', href: '/' }, { label: 'Record' }],
         scripts: ['js/video-upload.js', 'js/video-record.js'],
