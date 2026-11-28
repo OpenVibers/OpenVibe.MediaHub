@@ -183,7 +183,7 @@ function companion({ kind, id, watchId = null, chat, chapters, transcript, long,
         tabs.push({
             key: 'chapters', tab: 'Chapters', title: 'Chapters', count: chapters.length,
             note: notes.chapters || 'Made by AI from the stream',
-            body: html`<ol class="ovv-tp-body ovv-chapter-list">${chapters.map((m) => html`<li><a href="${at}?t=${m.offset_seconds}" data-ovv-chapter="${m.offset_seconds}" title="${m.description}"><span class="ovv-time">${clockOf(m.offset_seconds, long)}</span><span class="ovv-chapter-title">${m.description}</span></a></li>`)}</ol>`,
+            body: html`<ol class="ovv-tp-body ovv-chapter-list">${chapters.map((m) => html`<li><a href="${at}${at.includes('?') ? '&' : '?'}t=${m.offset_seconds}" data-ovv-chapter="${m.offset_seconds}" title="${m.description}"><span class="ovv-time">${clockOf(m.offset_seconds, long)}</span><span class="ovv-chapter-title">${m.description}</span></a></li>`)}</ol>`,
         });
     }
     if (transcript && transcript.length) {
