@@ -585,6 +585,6 @@ is not in the pinned Shared release yet; Pics retains its existing drop/paste/ch
 
 <!-- versions:start -->
 - openvibe-contracts: v0.454.0
-- openvibe-sdk: v0.190.0
+- openvibe-sdk: v0.191.0
 - openvibe-shared: v4.339.0
 <!-- versions:end -->
