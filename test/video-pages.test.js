@@ -424,6 +424,9 @@ function countOccurrences(haystack, needle) {
         assert.ok(!r.text.includes('Edit this recording'), 'owner tools only for the channel (video-owner.test.js)');
         assert.ok(r.text.includes('Discuss on OpenVibe.Community'));
         assert.ok(r.text.includes('data-ovv-chapter'));
+        // 11-28 (openvibe.report/traffic): chapter links were /watch?v=ID?t=31, whose id is "ID?t=31", a 404 for everyone.
+        const chapterLinks = r.text.match(/<a href="[^"]*" data-ovv-chapter/g) || [];
+        assert.ok(chapterLinks.length && chapterLinks.every((a) => (a.match(/\?/g) || []).length === 1), 'one ? in a chapter link: ' + chapterLinks[0]);
         assert.ok(r.text.includes('data-ovv-seek'));
         // The Ask your agent chip (openvibe-shared 4.135.0): beside Share, the video's title and public address.
         const asks = r.text.match(/<button[^>]*data-ov-ask[^>]*>/g) || [];
