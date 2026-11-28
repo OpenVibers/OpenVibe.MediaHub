@@ -255,8 +255,13 @@
             };
             fetch('/watch/follow?channel=' + encodeURIComponent(name), { credentials: 'same-origin', headers: { Accept: 'application/json' } })
                 .then(function (r) { return r.ok ? r.json() : null; })
-                .then(function (s) { if (s) { button.dataset.ready = '1'; paint(s); } })
+                // A link until the script knows the state; then a toggle button (11-28, axe on Run's check: aria-pressed
+                // is not allowed on a plain link, so the page markup carries none). Space presses it like a button.
+                .then(function (s) { if (s) { button.dataset.ready = '1'; button.setAttribute('role', 'button'); paint(s); } })
                 .catch(function () { /* the link still works */ });
+            button.addEventListener('keydown', function (e) {
+                if (e.key === ' ' && button.dataset.ready === '1') { e.preventDefault(); button.click(); }
+            });
             button.addEventListener('click', async function (e) {
                 if (button.dataset.ready !== '1') return;
                 e.preventDefault();

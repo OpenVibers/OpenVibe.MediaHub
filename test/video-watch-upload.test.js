@@ -84,6 +84,8 @@ const VERSE = 'Got some ashwagandha. Got me some magnesium. Got me some daba. Go
         assert.ok(/Watch together|Ask your agent/.test(page.text), 'in More');
         assert.ok(/@kim<\/a><span class="ovv-meta">1 video<span data-ovv-followers="kim" hidden><\/span><\/span>/.test(page.text), 'how many public videos the channel has, the followers filled in by the script');
         assert.ok(page.text.includes('href="https://openvibe.live/@kim"') && page.text.includes('ovv-follow'), 'Follow');
+        // 11-28 (axe on Run's check): a plain link carries no aria-pressed; the script makes it a toggle button.
+        assert.ok(/<a class="ovv-btn ovv-follow"[^>]*>/.test(page.text) && !/<a class="ovv-btn ovv-follow"[^>]*aria-pressed/.test(page.text), 'Follow is a link with no aria-pressed until the script makes it a button');
         assert.ok(!/<[^>]+\son[a-z]+="/i.test(page.text.split('<body')[1] || ''), 'no inline handlers (the CSP refuses them: script-src-attr none)');
     });
 
